@@ -1,17 +1,12 @@
 
 const express = require("express")
-const morgan = require("morgan");
 const cors = require("cors");
-const cookieParser = require("cookie-parser"); 
 const app = express(); 
-const { connectDB, sequelize } = require("./config/database");
-const { authLimiter, apiLimiter } = require("./middlewares/rateLimiters"); 
-const verifyToken = require("./middlewares/authMiddleware");
-const authRoutes = require("./routes/auth");
+const { connectDB, sequelize } = require("./src/config/database");
+const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
 
 
 // Middlewares
-app.use(morgan("dev"));
 app.use(express.json());
 app.use(
   cors({
@@ -19,25 +14,23 @@ app.use(
     credentials: true,
   })
 );
-app.use(cookieParser());
 
 
-// Importar Rutas
-const productRoutes = require("./routes/producto"); 
+// Importar Rutas 
 
 
 // Aplicar limitador estricto a rutas de autenticación
-app.use("/login", authLimiter, authRoutes);
+//app.use("/login", authLimiter, authRoutes);
 
 
 // Aplicar middleware de verificación de token y limitador de API a todas las demás rutas
-app.use("/productos", verifyToken, apiLimiter, productRoutes);
+//app.use("/productos", apiLimiter, verifyToken, productRoutes);
 
 
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, async () => {
+app.listen(PORT, async () => {
   await connectDB();
   console.log(` Servidor corriendo en http://localhost:${PORT}`);
 });
