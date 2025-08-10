@@ -13,7 +13,7 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(
   cors({
-    origin: "http://localhost:3000",//true, //process.env.NODE_ENV === "production" ? "https://prohogar.com" : true
+    origin: true, //"http://localhost:3000",//true, //process.env.NODE_ENV === "production" ? "https://prohogar.com" : true
     credentials: true,
   })
 );
@@ -31,9 +31,9 @@ app.use("/usuarios", userRoutes);
 
 
 
-// Iniciar servidor
+// Iniciar servidor PROBAR SERVERRRRRRR en lugar de app.liste
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   await connectDB();
-  console.log(` Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor corriendo en http://0.0.0.0:${PORT}`);
 });
