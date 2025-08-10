@@ -1,4 +1,6 @@
 const Usuario = require("../models/usuariosModel");
+const { Op } = require('sequelize');
+
 
 //Obtener todos los Usuarios
 const obtenerUsuarios = async (req, res) => {
@@ -9,29 +11,68 @@ const obtenerUsuarios = async (req, res) => {
         console.error("Error al obtener usuarios:", error);
         res.status(500).json({ error: "Error al obtener usuarios" });
     }
-};
+};  
 
-//Obtener Usuario por nombre
+//Obtener Usuario por nombre (búsqueda por aproximación)
 const obtenerUsuarioPorNombre = async (req, res) => {
     const { nombre } = req.params;
+    
+    if (!nombre || nombre.trim() === '') {
+        return res.status(400).json({ error: "Se requiere un término de búsqueda" });
+    }
+    
     try {
-        const usuario = await Usuario.findOne({ where: { nombre } });
-        res.json(usuario);
+        const usuarios = await Usuario.findAll({ 
+            where: { 
+                nombre: {
+                    [Op.like]: `%${nombre}%`
+                }
+            },
+            order: [['nombre', 'ASC']] // Ordenar por nombre
+        });
+        
+        if (!usuarios || usuarios.length === 0) {
+            return res.status(404).json({ 
+                mensaje: "No se encontraron usuarios que coincidan con la búsqueda",
+                terminoBuscado: nombre
+            });
+        }
+        
+        res.json(usuarios);
     } catch (error) {
-        console.error("Error al obtener usuario por nombre:", error);
-        res.status(500).json({ error: "Error al obtener usuario por nombre" });
+        console.error("Error al buscar usuarios por nombre:", error);
+        res.status(500).json({ 
+            error: "Error al buscar usuarios",
+            detalle: error.message 
+        });
     }
 };
 
 //Obtener Usuario por identidad
 const obtenerUsuarioPorIdentidad = async (req, res) => {
     const { identidad } = req.params;
+    
+    if (!identidad) {
+        return res.status(400).json({ error: "Se requiere el parámetro de identidad" });
+    }
+    
     try {
         const usuario = await Usuario.findOne({ where: { identidad } });
+        
+        if (!usuario) {
+            return res.status(404).json({ 
+                mensaje: "No se encontró ningún usuario con la identidad proporcionada",
+                identidadBuscada: identidad
+            });
+        }
+        
         res.json(usuario);
     } catch (error) {
         console.error("Error al obtener usuario por identidad:", error);
-        res.status(500).json({ error: "Error al obtener usuario por identidad" });
+        res.status(500).json({ 
+            error: "Error al obtener usuario por identidad",
+            detalle: error.message 
+        });
     }
 };
 
@@ -59,7 +100,7 @@ const crearUsuario = async (req, res) => {
 
 //Actualizar Usuario
 const actualizarUsuario = async (req, res) => {
-    const { id_usuario } = req.params;
+    const { id } = req.params; // Cambiado de id_usuario a id para que coincida con la ruta
     const { 
         nombre, 
         identidad, 
@@ -67,17 +108,29 @@ const actualizarUsuario = async (req, res) => {
         telefono, 
         password_hash 
     } = req.body;
+    
+    if (!id) {
+        return res.status(400).json({ error: "Se requiere el ID del usuario" });
+    }
+    
     try {
-        const usuario = await Usuario.findByPk(id_usuario);
+        const usuario = await Usuario.findByPk(id);
         if (!usuario) {
-            return res.status(404).json({ error: "Usuario no encontrado" });
+            return res.status(404).json({ 
+                error: "Usuario no encontrado",
+                idBuscado: id
+            });
         }
-        usuario.nombre = nombre;    
-        usuario.identidad = identidad;
-        usuario.email = email;
-        usuario.telefono = telefono;
-        usuario.password_hash = password_hash;
+        
+        // Actualizar solo los campos que se proporcionaron en el body
+        if (nombre) usuario.nombre = nombre;
+        if (identidad) usuario.identidad = identidad;
+        if (email) usuario.email = email;
+        if (telefono) usuario.telefono = telefono;
+        if (password_hash) usuario.password_hash = password_hash;
+        
         await usuario.save();
+        
         res.json({
             status: 200,
             message: "Usuario actualizado exitosamente",
@@ -85,26 +138,43 @@ const actualizarUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al actualizar usuario:", error);
-        res.status(500).json({ error: "Error al actualizar usuario" });
+        res.status(500).json({ 
+            error: "Error al actualizar usuario",
+            detalle: error.message 
+        });
     }
 };
 
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
-    const { id_usuario } = req.params;
+    const { id } = req.params; // Cambiado de id_usuario a id para que coincida con la ruta
+    
+    if (!id) {
+        return res.status(400).json({ error: "Se requiere el ID del usuario" });
+    }
+    
     try {
-        const usuario = await Usuario.findByPk(id_usuario);
+        const usuario = await Usuario.findByPk(id);
         if (!usuario) {
-            return res.status(404).json({ error: "Usuario no encontrado" });
+            return res.status(404).json({ 
+                error: "Usuario no encontrado",
+                idBuscado: id
+            });
         }
+        
         await usuario.destroy();
+        
         res.json({
             status: 200,
-            message: "Usuario eliminado exitosamente"
+            message: "Usuario eliminado exitosamente",
+            idEliminado: id
         });
     } catch (error) {
         console.error("Error al eliminar usuario:", error);
-        res.status(500).json({ error: "Error al eliminar usuario" });
+        res.status(500).json({ 
+            error: "Error al eliminar usuario",
+            detalle: error.message 
+        });
     }
 };
 

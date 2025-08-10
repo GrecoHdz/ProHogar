@@ -53,7 +53,7 @@ router.post("/",
 //Actualizar Usuario
 router.put("/:id", 
     [
-        param("id").isInt().withMessage("El ID debe ser un número entero"), 
+        param("id").isString().withMessage("El ID debe ser una cadena de caracteres"), 
         body("nombre").optional().isString().withMessage("El nombre debe ser una cadena de caracteres"), 
         body("identidad").optional().isString().withMessage("La identidad debe ser una cadena de caracteres"), 
         body("email").optional().isString().withMessage("El email debe ser una cadena de caracteres"), 
@@ -66,7 +66,7 @@ router.put("/:id",
 //Eliminar Usuario
 router.delete("/:id", 
     [
-        param("id").isInt().withMessage("El ID debe ser un número entero")
+        param("id").isString().withMessage("El ID debe ser una cadena de caracteres")
     ], 
     validarErrores, 
     eliminarUsuario);

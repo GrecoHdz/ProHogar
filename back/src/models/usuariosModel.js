@@ -9,7 +9,7 @@ const Usuario = sequelize.define("Usuario", {
     },
     id_rol: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
     },
     nombre: {
         type: DataTypes.STRING,
@@ -35,7 +35,7 @@ const Usuario = sequelize.define("Usuario", {
     },
     fecha_registro: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: true
     },
 }, {
     timestamps: false, // Desactiva los timestamps automáticos de Sequelize

@@ -1,14 +1,15 @@
 
 const express = require("express")
-
+const morgan = require("morgan");
 const cors = require("cors");
 const app = express(); 
-const { connectDB, sequelize } = require("./src/config/database");
+const { connectDB } = require("./src/config/database");
 //const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
 const userRoutes = require("./src/routes/UsuarioRoute");
 
 
 // Middlewares
+app.use(morgan("dev"));
 app.use(express.json());
 app.use(
   cors({
