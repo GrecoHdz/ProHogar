@@ -1,27 +1,80 @@
-const { sequelize } = require("../config/database");
+// Importa todos los modelos
+const Usuario = require('./usuariosModel');
+const Rol = require('./rolesModel');
+const Tecnico = require('./tecnicosModel');
+const Categoria = require('./categoriasModel');
+const Servicio = require('./asignacionServicioModel');
+const SolicitudServicio = require('./solicitudServicioModel');
+const Cotizacion = require('./cotizacionModel');
+const Pago = require('./pagoModel');
+const Membresia = require('./membresiasModel');
+const MembresiaBeneficio = require('./membresiaBeneficiosModel');
+const Referido = require('./referidosModel');
+const Ciudad = require('./ciudadesModel');
 
-// Importar modelos
-const MembresiaBeneficio = require("./membresiabeneficiosModel");
-const Membresia = require("./membresiasModel");
-const Usuario = require("./usuariosModel");
-const Rol = require("./rolesModel");
-const Referido = require("./referidosModel");
-const Tecnico = require("./tecnicosModel");
-const CategoriaServicio = require("./categoriasModel");
-const Ciudad = require("./ciudadesModel");
-const Membresia = require("./membresiasModel");
+// Función para configurar las asociaciones
+const setupAssociations = () => {
+  // Relación Usuario - Rol
+  Usuario.belongsTo(Rol, { foreignKey: 'rol_id' });
+  Rol.hasMany(Usuario, { foreignKey: 'rol_id' });
 
+  // Relación Usuario - Técnico
+  Usuario.hasOne(Tecnico, { foreignKey: 'usuario_id' });
+  Tecnico.belongsTo(Usuario, { foreignKey: 'usuario_id' });
 
-// Definir las asociaciones
-MembresiaBeneficio.belongsTo(Membresia, { foreignKey: "id_membresia" });
-MembresiaBeneficio.belongsTo(Membresia, { foreignKey: "id_beneficio" });
-Membresia.hasMany(MembresiaBeneficio, { foreignKey: "id_membresia" });
-MembresiaBeneficio.belongsTo(Membresia, { foreignKey: "id_membresia" });
+  // Relación Técnico - Categoría
+  Tecnico.belongsToMany(Categoria, { 
+    through: 'tecnicos_categorias',
+    foreignKey: 'tecnico_id'
+  });
+  Categoria.belongsToMany(Tecnico, { 
+    through: 'tecnicos_categorias',
+    foreignKey: 'categoria_id'
+  });
 
+  // Relación Usuario - Solicitud de Servicio (Cliente)
+  Usuario.hasMany(SolicitudServicio, { foreignKey: 'cliente_id' });
+  SolicitudServicio.belongsTo(Usuario, { foreignKey: 'cliente_id' });
 
-// Ejecutar las asociaciones
-setupAssociations();
+  // Relación Técnico - Solicitud de Servicio
+  Tecnico.hasMany(SolicitudServicio, { foreignKey: 'tecnico_id' });
+  SolicitudServicio.belongsTo(Tecnico, { foreignKey: 'tecnico_id' });
 
-module.exports = {
-  sequelize
+  // Relación Solicitud de Servicio - Cotización
+  SolicitudServicio.hasOne(Cotizacion, { foreignKey: 'solicitud_id' });
+  Cotizacion.belongsTo(SolicitudServicio, { foreignKey: 'solicitud_id' });
+
+  // Relación Cotización - Pago
+  Cotizacion.hasOne(Pago, { foreignKey: 'cotizacion_id' });
+  Pago.belongsTo(Cotizacion, { foreignKey: 'cotizacion_id' });
+
+  // Relación Usuario - Membresía
+  Usuario.belongsTo(Membresia, { foreignKey: 'membresia_id' });
+  Membresia.hasMany(Usuario, { foreignKey: 'membresia_id' });
+
+  // Relación Membresía - Beneficios
+  Membresia.hasMany(MembresiaBeneficio, { foreignKey: 'membresia_id' });
+  MembresiaBeneficio.belongsTo(Membresia, { foreignKey: 'membresia_id' });
+
+  // Relación Usuario - Referidos
+  Usuario.hasMany(Referido, { foreignKey: 'usuario_referidor_id' });
+  Referido.belongsTo(Usuario, { 
+    foreignKey: 'usuario_referidor_id',
+    as: 'Referidor'
+  });
+  
+  Usuario.hasMany(Referido, { foreignKey: 'usuario_referido_id' });
+  Referido.belongsTo(Usuario, {
+    foreignKey: 'usuario_referido_id',
+    as: 'Referido'
+  });
+
+  // Relación Usuario - Ciudad
+  Usuario.belongsTo(Ciudad, { foreignKey: 'ciudad_id' });
+  Ciudad.hasMany(Usuario, { foreignKey: 'ciudad_id' });
+
+  console.log('Asociaciones configuradas correctamente');
 };
+
+// Exporta la función de configuración
+module.exports = setupAssociations;

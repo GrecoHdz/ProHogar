@@ -15,9 +15,15 @@ const Usuario = sequelize.define("Usuario", {
         type: DataTypes.STRING,
         allowNull: false
     },
+    identidad: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true
+    },
     email: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: false,
+        unique: true
     },
     telefono: {
         type: DataTypes.STRING,
@@ -31,6 +37,9 @@ const Usuario = sequelize.define("Usuario", {
         type: DataTypes.DATE,
         allowNull: false
     },
+}, {
+    timestamps: false, // Desactiva los timestamps automáticos de Sequelize
+    tableName: "Usuario", // Nombre de la tabla en la base de datos
 });
 
 module.exports = Usuario;

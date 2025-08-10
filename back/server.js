@@ -1,9 +1,11 @@
 
 const express = require("express")
+
 const cors = require("cors");
 const app = express(); 
 const { connectDB, sequelize } = require("./src/config/database");
-const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
+//const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
+const userRoutes = require("./src/routes/UsuarioRoute");
 
 
 // Middlewares
@@ -17,7 +19,7 @@ app.use(
 
 
 // Importar Rutas 
-
+app.use("/usuarios", userRoutes);
 
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
