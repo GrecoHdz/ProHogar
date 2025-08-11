@@ -6,6 +6,8 @@ const app = express();
 const { connectDB } = require("./src/config/database");
 //const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
 const userRoutes = require("./src/routes/UsuarioRoute");
+const authRoutes = require("./src/routes/authRoute");
+const verifyToken = require("./src/middleware/authMiddleware");
 
 
 // Middlewares
@@ -21,6 +23,7 @@ app.use(
 
 // Importar Rutas 
 app.use("/usuarios", userRoutes);
+app.use("/auth", authRoutes);
 
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
