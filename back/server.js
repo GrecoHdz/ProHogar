@@ -8,6 +8,7 @@ const { connectDB } = require("./src/config/database");
 const userRoutes = require("./src/routes/UsuarioRoute");
 const authRoutes = require("./src/routes/authRoute");
 const verifyToken = require("./src/middleware/authMiddleware");
+const rolRoutes = require("./src/routes/RolRoute");
 
 
 // Middlewares
@@ -24,6 +25,7 @@ app.use(
 // Importar Rutas 
 app.use("/usuarios", userRoutes);
 app.use("/auth", authRoutes);
+app.use("/roles", rolRoutes);
 
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
