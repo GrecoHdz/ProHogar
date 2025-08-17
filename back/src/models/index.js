@@ -11,6 +11,7 @@ const Membresia = require('./membresiasModel');
 const MembresiaBeneficio = require('./membresiaBeneficiosModel');
 const Referido = require('./referidosModel');
 const Ciudad = require('./ciudadesModel');
+const RefreshToken = require('./refreshTokenModel');
 
 // Función para configurar las asociaciones
 const setupAssociations = () => {
@@ -47,6 +48,19 @@ const setupAssociations = () => {
   // Relación Cotización - Pago
   Cotizacion.hasOne(Pago, { foreignKey: 'cotizacion_id' });
   Pago.belongsTo(Cotizacion, { foreignKey: 'cotizacion_id' });
+
+  // Relación Usuario - RefreshToken
+  Usuario.hasMany(RefreshToken, { 
+    foreignKey: 'usuario_id',
+    as: 'refreshTokens',
+    sourceKey: 'id_usuario'
+  });
+  
+  RefreshToken.belongsTo(Usuario, { 
+    foreignKey: 'usuario_id',
+    as: 'usuario',
+    targetKey: 'id_usuario'
+  });
 
   // Relación Usuario - Membresía
   Usuario.belongsTo(Membresia, { foreignKey: 'membresia_id' });

@@ -1,5 +1,7 @@
 const Usuario = require("../models/usuariosModel");
 const { Op } = require('sequelize');
+const bcrypt = require('bcryptjs');
+const saltRounds = 10; // Número de rondas de hashing
 
 
 //Obtener todos los Usuarios
@@ -85,16 +87,78 @@ const crearUsuario = async (req, res) => {
         telefono, 
         password_hash 
     } = req.body;
+    
+    if (!password_hash) {
+        return res.status(400).json({ error: "La contraseña es requerida" });
+    }
+    
     try {
-        const usuario = await Usuario.create({ nombre, identidad, email, telefono, password_hash });
-        res.json({
+        // Hashear la contraseña
+        const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
+        
+        const usuario = await Usuario.create({ 
+            nombre, 
+            identidad, 
+            email, 
+            telefono, 
+            password_hash: hashedPassword 
+        });
+        
+        // No devolver la contraseña en la respuesta
+        const usuarioSinPassword = usuario.toJSON();
+        delete usuarioSinPassword.password_hash;
+        
+        res.status(201).json({
             status: 201,
             message: "Usuario creado exitosamente",
-            usuario
+            usuario: usuarioSinPassword
         });
     } catch (error) {
         console.error("Error al crear usuario:", error);
-        res.status(500).json({ error: "Error al crear usuario" });
+        
+        // Manejar errores de duplicado
+        if (error.name === 'SequelizeUniqueConstraintError' || error.name === 'SequelizeUniqueConstraintError [SequelizeUniqueConstraintError]') {
+            let field = '';
+            let value = '';
+            let message = 'Error de validación';
+            
+            // Verificar si es un error de restricción única estándar
+            if (error.errors && error.errors[0]) {
+                field = error.errors[0].path || '';
+                value = error.errors[0].value || '';
+                
+                console.log('Error de duplicado - Campo:', field, 'Valor:', value);
+                console.log('Todos los errores:', JSON.stringify(error.errors, null, 2));
+                
+                // Usar directamente los nombres de los campos del modelo
+                if (field === 'identidad' || field === 'identidad_unique') {
+                    message = `El número de identidad ${value} ya está registrado`;
+                    field = 'identidad'; // Estandarizar el nombre del campo
+                } else if (field === 'email' || field === 'email_unique') {
+                    message = `El correo electrónico ${value} ya está en uso`;
+                    field = 'email'; // Estandarizar el nombre del campo
+                } else if (field === 'telefono' || field === 'telefono_unique' || field === 'idx_usuario_telefono') {
+                    message = `El número de teléfono ${value} ya está registrado`;
+                    field = 'telefono'; // Estandarizar el nombre del campo
+                }
+            }
+            
+            return res.status(409).json({
+                status: 409,
+                error: 'Error de validación',
+                message: message,
+                field: field,
+                value: value
+            });
+        }
+        
+        // Para otros errores
+        res.status(500).json({ 
+            status: 500,
+            error: "Error al crear usuario",
+            message: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -127,9 +191,17 @@ const actualizarUsuario = async (req, res) => {
         if (identidad) usuario.identidad = identidad;
         if (email) usuario.email = email;
         if (telefono) usuario.telefono = telefono;
-        if (password_hash) usuario.password_hash = password_hash;
+        if (password_hash) {
+            // Si se proporciona una nueva contraseña, hashearla
+            const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
+            usuario.password_hash = hashedPassword;
+        }
         
-        await usuario.save();
+await usuario.save();
+        
+        // No devolver la contraseña en la respuesta
+        const usuarioActualizado = usuario.toJSON();
+        delete usuarioActualizado.password_hash;
         
         res.json({
             status: 200,
