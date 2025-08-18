@@ -276,8 +276,41 @@ const logout = async (req, res) => {
   });
 };
 
+// Obtener información del usuario actual
+const getCurrentUser = async (req, res) => {
+  try {
+    // El middleware authMiddleware ya adjuntó el usuario a req.user
+    const user = req.user;
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Obtener información del rol
+    const rol = await Rol.findByPk(user.id_rol, {
+      attributes: ['id_rol', 'nombre_rol']
+    });
+
+    // Crear respuesta con información segura del usuario
+    const userData = {
+      id: user.id_usuario,
+      identidad: user.identidad,
+      nombre: user.nombre,
+      email: user.email,
+      role: rol ? rol.nombre_rol.toLowerCase() : 'usuario',
+      rol_nombre: rol ? rol.nombre_rol : 'Usuario'
+    };
+
+    res.status(200).json(userData);
+  } catch (error) {
+    console.error('Error al obtener usuario actual:', error);
+    res.status(500).json({ message: 'Error del servidor al obtener información del usuario' });
+  }
+};
+
 module.exports = { 
   login, 
   refreshToken, 
-  logout 
+  logout,
+  getCurrentUser
 };

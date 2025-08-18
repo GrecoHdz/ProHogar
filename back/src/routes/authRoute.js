@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, refreshToken, logout } = require('../controllers/authController');
+const { login, refreshToken, logout, getCurrentUser } = require('../controllers/authController');
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require('../middleware/authMiddleware');
 
@@ -27,5 +27,11 @@ router.post('/logout',
         body('refreshToken', 'El refresh token es requerido').exists()
     ],
     logout);
+
+// Ruta para obtener información del usuario actual
+router.get('/me',
+    authMiddleware, // Requiere autenticación
+    getCurrentUser
+);
 
 module.exports = router;

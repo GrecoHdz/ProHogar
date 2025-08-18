@@ -82,6 +82,7 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
 const crearUsuario = async (req, res) => {
     const { 
         nombre, 
+        id_rol=1,
         identidad, 
         email, 
         telefono, 
@@ -98,6 +99,7 @@ const crearUsuario = async (req, res) => {
         
         const usuario = await Usuario.create({ 
             nombre, 
+            id_rol,
             identidad, 
             email, 
             telefono, 
