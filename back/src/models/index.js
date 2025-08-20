@@ -11,13 +11,13 @@ const Membresia = require('./membresiasModel');
 const MembresiaBeneficio = require('./membresiaBeneficiosModel');
 const Referido = require('./referidosModel');
 const Ciudad = require('./ciudadesModel');
-const RefreshToken = require('./refreshTokenModel');
+const RefreshToken = require('./refreshtokenModel');
 
 // Función para configurar las asociaciones
 const setupAssociations = () => {
   // Relación Usuario - Rol
-  Usuario.belongsTo(Rol, { foreignKey: 'rol_id' });
-  Rol.hasMany(Usuario, { foreignKey: 'rol_id' });
+  Usuario.belongsTo(Rol, { foreignKey: 'id_rol' });
+  Rol.hasMany(Usuario, { foreignKey: 'id_rol' });
 
   // Relación Usuario - Técnico
   Usuario.hasOne(Tecnico, { foreignKey: 'usuario_id' });
@@ -62,13 +62,9 @@ const setupAssociations = () => {
     targetKey: 'id_usuario'
   });
 
-  // Relación Usuario - Membresía
-  Usuario.belongsTo(Membresia, { foreignKey: 'membresia_id' });
-  Membresia.hasMany(Usuario, { foreignKey: 'membresia_id' });
-
-  // Relación Membresía - Beneficios
-  Membresia.hasMany(MembresiaBeneficio, { foreignKey: 'membresia_id' });
-  MembresiaBeneficio.belongsTo(Membresia, { foreignKey: 'membresia_id' });
+  // Relación Membresía - Beneficios (comentada ya que no tenemos el campo membresia_id en Usuario)
+  // Membresia.hasMany(MembresiaBeneficio, { foreignKey: 'membresia_id' });
+  // MembresiaBeneficio.belongsTo(Membresia, { foreignKey: 'membresia_id' });
 
   // Relación Usuario - Referidos
   Usuario.hasMany(Referido, { foreignKey: 'usuario_referidor_id' });
@@ -83,9 +79,9 @@ const setupAssociations = () => {
     as: 'Referido'
   });
 
-  // Relación Usuario - Ciudad
-  Usuario.belongsTo(Ciudad, { foreignKey: 'ciudad_id' });
-  Ciudad.hasMany(Usuario, { foreignKey: 'ciudad_id' });
+  // Relación Usuario - Ciudad (comentada ya que no tenemos el campo ciudad_id en Usuario)
+  // Usuario.belongsTo(Ciudad, { foreignKey: 'ciudad_id' });
+  // Ciudad.hasMany(Usuario, { foreignKey: 'ciudad_id' });
 
   console.log('Asociaciones configuradas correctamente');
 };

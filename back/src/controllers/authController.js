@@ -47,6 +47,11 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
     }
 
+    // Eliminar cualquier refresh token existente para este usuario
+    await RefreshToken.destroy({
+      where: { usuario_id: user.id_usuario }
+    });
+
     const accessToken = generateAccessToken(user);
     const refreshToken = await generateRefreshToken(user);
 
@@ -86,15 +91,16 @@ const login = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      path: '/auth/refresh-token' // Solo enviar en solicitudes a /auth/refresh-token
+      path: '/' // Disponible en todas las rutas
     });
 
-    // 2. Cookie con información básica del usuario (accesible desde JavaScript)
-    res.cookie('userData', JSON.stringify(userForCookie), {
+    // 2. Única cookie con información del usuario (accesible desde JavaScript)
+    // Duración extendida a 7 días (igual que el refresh token)
+    res.cookie('user', JSON.stringify(userForCookie), {
       httpOnly: false, // Accesible desde JavaScript
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 1 día
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días (igual que el refresh token)
       path: '/'
     });
 
