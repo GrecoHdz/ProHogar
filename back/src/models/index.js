@@ -16,8 +16,14 @@ const RefreshToken = require('./refreshtokenModel');
 // Función para configurar las asociaciones
 const setupAssociations = () => {
   // Relación Usuario - Rol
-  Usuario.belongsTo(Rol, { foreignKey: 'id_rol' });
-  Rol.hasMany(Usuario, { foreignKey: 'id_rol' });
+  Usuario.belongsTo(Rol, { 
+    foreignKey: 'id_rol',
+    as: 'rol'  // Añadimos el alias 'rol' para la relación
+  });
+  Rol.hasMany(Usuario, { 
+    foreignKey: 'id_rol',
+    as: 'usuarios'  // Añadimos el alias 'usuarios' para la relación inversa
+  });
 
   // Relación Usuario - Técnico
   Usuario.hasOne(Tecnico, { foreignKey: 'usuario_id' });
@@ -53,13 +59,10 @@ const setupAssociations = () => {
   Usuario.hasMany(RefreshToken, { 
     foreignKey: 'usuario_id',
     as: 'refreshTokens',
-    sourceKey: 'id_usuario'
   });
-  
   RefreshToken.belongsTo(Usuario, { 
     foreignKey: 'usuario_id',
-    as: 'usuario',
-    targetKey: 'id_usuario'
+    as: 'usuario'
   });
 
   // Relación Membresía - Beneficios (comentada ya que no tenemos el campo membresia_id en Usuario)

@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { sequelize } = require('../config/database');
 const Usuario = require('../models/usuariosModel');
 const Rol = require('../models/rolesModel');
-const RefreshToken = require('../models/refreshTokenModel');
+const RefreshToken = require('../models/refreshtokenModel');
 
 // Generar un token de acceso
 const generateAccessToken = (user) => {
@@ -14,21 +15,21 @@ const generateAccessToken = (user) => {
   }, process.env.JWT_SECRET, { expiresIn: '15m' }); // Token de acceso corto (15 minutos)
 };
 
-// Generar un refresh token
-const generateRefreshToken = async (user) => {
-  // Crear un token aleatorio
-  const refreshToken = crypto.randomBytes(40).toString('hex');
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // Expira en 7 días
-
-  // Guardar el refresh token en la base de datos
-  await RefreshToken.create({
-    token: refreshToken,
-    usuario_id: user.id_usuario,
-    expires_at: expiresAt
-  });
-
-  return refreshToken;
+// Generar un token de actualización (refresh token)
+const generateRefreshToken = async (usuario, transaction = null) => {
+    const token = crypto.randomBytes(40).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 días
+    
+    const options = transaction ? { transaction } : {};
+    
+    await RefreshToken.create({
+        token: token,
+        usuario_id: usuario.id_usuario,
+        expires_at: expiresAt
+    }, options);
+    
+    return token;
 };
 
 const login = async (req, res) => {
@@ -128,24 +129,19 @@ const login = async (req, res) => {
 
 // Endpoint para refrescar el token de acceso
 const refreshToken = async (req, res) => {
-  // Obtener el refresh token de las cookies
-  const refreshToken = req.cookies.refreshToken;
+  const t = await sequelize.transaction();
   
-  if (!refreshToken) {
-    return res.status(401).json({ 
-      success: false,
-      message: 'No se encontró el token de actualización' 
-    });
-  }
-
-  if (!refreshToken) {
-    return res.status(401).json({ 
-      success: false,
-      message: 'Sesión expirada o inválida. Por favor, inicie sesión nuevamente.' 
-    });
-  }
-
   try {
+    // Obtener el refresh token de las cookies
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'No se encontró el token de actualización. Por favor, inicie sesión nuevamente.'
+      });
+    }
+
     // Buscar el refresh token en la base de datos
     const storedToken = await RefreshToken.findOne({ 
       where: { token: refreshToken },
@@ -159,24 +155,44 @@ const refreshToken = async (req, res) => {
             attributes: ['id_rol', 'nombre_rol']
           }]
         }
-      ]
+      ],
+      transaction: t
     });
 
     if (!storedToken) {
-      return res.status(403).json({ message: 'Refresh token inválido' });
+      // Limpiar cookies si el token no es válido
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+      
+      return res.status(403).json({ 
+        success: false,
+        message: 'Sesión expirada. Por favor, inicie sesión nuevamente.' 
+      });
     }
 
     // Verificar si el token ha expirado
     if (new Date() > storedToken.expires_at) {
-      // Eliminar el token expirado
-      await storedToken.destroy();
-      return res.status(403).json({ message: 'Refresh token expirado' });
+      await storedToken.destroy({ transaction: t });
+      await t.rollback();
+      return res.status(403).json({ 
+        success: false,
+        message: 'Refresh token expirado' 
+      });
     }
 
     // Generar un nuevo token de acceso
     const user = storedToken.usuario;
     const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = await generateRefreshToken(user);
+    
+    // Eliminar el token antiguo ANTES de crear uno nuevo
+    await storedToken.destroy({ transaction: t });
+    
+    // Generar nuevo refresh token
+    const newRefreshToken = await generateRefreshToken(user, t);
 
     // Preparar datos del usuario para la respuesta
     const userData = user.get({ plain: true });
@@ -208,11 +224,11 @@ const refreshToken = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      path: '/auth/refresh-token'
+      path: '/' // <-- importante: mismo path que en login
     });
 
     // 2. Actualizar cookie con información del usuario
-    res.cookie('userData', JSON.stringify(userForCookie), {
+    res.cookie('user', JSON.stringify(userForCookie), {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
@@ -229,8 +245,8 @@ const refreshToken = async (req, res) => {
       path: '/'
     });
 
-    // Eliminar el refresh token antiguo
-    await storedToken.destroy();
+    // Confirmar la transacción
+    await t.commit();
 
     res.json({
       success: true,
@@ -240,8 +256,33 @@ const refreshToken = async (req, res) => {
     });
 
   } catch (error) {
+    // Hacer rollback en caso de error
+    if (t && !t.finished) {
+      await t.rollback();
+    }
+    
     console.error('Error al refrescar el token:', error);
-    res.status(500).json({ message: 'Error al refrescar el token' });
+    
+    // Limpiar cookies en caso de error
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/'
+    };
+    
+    res.clearCookie('refreshToken', cookieOptions);
+    res.clearCookie('token', { ...cookieOptions, httpOnly: false });
+    
+    const errorMessage = error.name === 'SequelizeUniqueConstraintError'
+      ? 'Error de unicidad en la base de datos. Intente nuevamente.'
+      : 'Sesión expirada. Por favor, inicie sesión nuevamente.';
+    
+    res.status(401).json({ 
+      success: false, 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -269,12 +310,12 @@ const logout = async (req, res) => {
   // Limpiar todas las cookies de autenticación
   res.clearCookie('refreshToken', { ...cookieOptions, path: '/auth/refresh-token' });
   res.clearCookie('token', { ...cookieOptions, httpOnly: false });
-  res.clearCookie('userData', { ...cookieOptions, httpOnly: false });
+  res.clearCookie('user', { ...cookieOptions, httpOnly: false });
   
   // Limpiar cookies en la raíz por si acaso
   res.clearCookie('refreshToken', { ...cookieOptions, path: '/' });
   res.clearCookie('token', { ...cookieOptions, path: '/', httpOnly: false });
-  res.clearCookie('userData', { ...cookieOptions, path: '/', httpOnly: false });
+  res.clearCookie('user', { ...cookieOptions, path: '/', httpOnly: false });
   
   res.json({ 
     success: true,
@@ -297,15 +338,55 @@ const getCurrentUser = async (req, res) => {
       attributes: ['id_rol', 'nombre_rol']
     });
 
+    // Buscar el refresh token actual del usuario
+    let refreshToken = await RefreshToken.findOne({
+      where: { usuario_id: user.id_usuario }
+    });
+
     // Crear respuesta con información segura del usuario
     const userData = {
-      id: user.id_usuario,
+      id_usuario: user.id_usuario, 
       identidad: user.identidad,
       nombre: user.nombre,
       email: user.email,
       role: rol ? rol.nombre_rol.toLowerCase() : 'usuario',
       rol_nombre: rol ? rol.nombre_rol : 'Usuario'
     };
+
+    // Siempre generamos un nuevo refresh token para mantener la sesión activa
+    console.log('🔄 Generando nuevo refresh token...');
+    
+    // Si existe un refresh token previo, lo eliminamos
+    if (refreshToken) {
+      console.log('🗑️ Eliminando refresh token anterior...');
+      await RefreshToken.destroy({
+        where: { id: refreshToken.id }
+      });
+    }
+    
+    // Generar un nuevo refresh token
+    const newRefreshToken = await generateRefreshToken(user);
+    
+    // Incluir el nuevo refresh token en la respuesta
+    userData.refreshToken = newRefreshToken;
+    
+    // Configuración de la cookie
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      path: '/'
+    };
+    
+    // Solo establecer el dominio en producción
+    if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+      cookieOptions.domain = process.env.DOMAIN;
+    }
+    
+    console.log('🍪 Estableciendo cookie de refresh token...');
+    res.cookie('refreshToken', newRefreshToken, cookieOptions);
+    console.log('✅ Nuevo refresh token generado y cookie establecida');
 
     res.status(200).json(userData);
   } catch (error) {

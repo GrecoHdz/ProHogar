@@ -9,57 +9,64 @@ const Usuario = sequelize.define("Usuario", {
     },
     id_rol: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+            model: 'roles', // Nombre de la tabla a la que hace referencia
+            key: 'id_rol'
+        }
     },
     nombre: {
         type: DataTypes.STRING,
         allowNull: false
     },
     identidad: {
-        type: DataTypes.STRING(20), // Especificar longitud máxima
+        type: DataTypes.STRING(20),
         allowNull: false,
-        unique: 'identidad_unique' // Nombre específico para la restricción única
+        unique: true
     },
     email: {
-        type: DataTypes.STRING(100), // Especificar longitud máxima
+        type: DataTypes.STRING(100),
         allowNull: false,
-        unique: 'email_unique' // Nombre específico para la restricción única
+        unique: true,
+        validate: {
+            isEmail: true
+        }
     },
     telefono: {
-        type: DataTypes.STRING(20), // Especificar longitud máxima
+        type: DataTypes.STRING(20),
         allowNull: false,
-        unique: 'telefono_unique' // Nombre específico para la restricción única (consistente con los demás)
+        unique: true
     },
     password_hash: {
-        type: DataTypes.STRING(255), // Longitud suficiente para hashes
+        type: DataTypes.STRING(255),
         allowNull: false
     },
     fecha_registro: {
         type: DataTypes.DATE,
         allowNull: true,
         defaultValue: DataTypes.NOW
-    },
+    }
 }, {
-    timestamps: false, // Desactiva los timestamps automáticos de Sequelize
-    tableName: "usuario", // Nombre de la tabla en minúsculas
+    timestamps: false,
+    tableName: "usuario",
     indexes: [
-        // Índices
-        {
-            name: 'idx_usuario_identidad',
-            unique: true,
-            fields: ['identidad']
-        },
-        {
-            name: 'idx_usuario_email',
-            unique: true,
-            fields: ['email']
-        },
+        // Solo índices realmente necesarios
+        // Los campos con unique: true ya crean índices automáticamente
         {
             name: 'idx_usuario_id_rol',
             fields: ['id_rol']
-        },
-        // Índice único para teléfono ya está definido en el campo
+        }
     ]
 });
+
+// Agregamos la relación con Rol después de definir el modelo
+Usuario.associate = function(models) {
+  Usuario.belongsTo(models.Rol, {
+    foreignKey: 'id_rol',
+    as: 'rol',
+    onDelete: 'SET NULL',
+    onUpdate: 'CASCADE'
+  });
+};
 
 module.exports = Usuario;

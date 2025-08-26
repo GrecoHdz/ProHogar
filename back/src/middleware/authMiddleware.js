@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
-const RefreshToken = require('../models/refreshTokenModel');
+const RefreshToken = require('../models/refreshtokenModel');
+const Usuario = require('../models/usuariosModel');
+const Rol = require('../models/rolesModel');
 
 const authMiddleware = async (req, res, next) => {
   // Obtener el token del encabezado Authorization
@@ -11,8 +13,8 @@ const authMiddleware = async (req, res, next) => {
     token = authHeader.split(' ')[1];
   } 
   // Si no hay token en el encabezado, verificar en las cookies (útil para SSR)
-  else if (req.cookies && req.cookies.accessToken) {
-    token = req.cookies.accessToken;
+  else if (req.cookies && (req.cookies.token || req.cookies.accessToken)) {
+    token = req.cookies.token || req.cookies.accessToken;
   }
   
   if (!token) {
@@ -24,11 +26,61 @@ const authMiddleware = async (req, res, next) => {
 
   try {
     // Verificar el token de acceso
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      console.error('Error al verificar el token JWT:', jwtError);
+      return res.status(401).json({ 
+        success: false,
+        message: 'Token inválido o expirado',
+        error: jwtError.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido'
+      });
+    }
+    
+    // Obtener información completa del usuario de la base de datos
+    let user;
+    try {
+      user = await Usuario.findByPk(decoded.id, {
+        include: [{
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre_rol']
+        }]
+      });
+
+      if (!user) {
+        console.error(`Usuario con ID ${decoded.id} no encontrado en la base de datos`);
+        return res.status(401).json({ 
+          success: false,
+          message: 'Usuario no encontrado',
+          error: 'El usuario asociado al token no existe'
+        });
+      }
+    } catch (dbError) {
+      console.error('Error al buscar el usuario en la base de datos:', dbError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Error al verificar la autenticación',
+        error: 'Error de base de datos'
+      });
+    }
+
+    // Adjuntar información del usuario a la solicitud
+    req.user = {
+      id_usuario: user.id_usuario,
+      identidad: user.identidad,
+      nombre: user.nombre,
+      email: user.email,
+      id_rol: user.id_rol,
+      rol: user.rol ? user.rol.nombre_rol : 'usuario'
+    };
+    
     next();
   } catch (error) {
-    // Si el token expiró, verificar si hay un refresh token
+    console.error('Error en autenticación:', error);
+    
+    // Si el token expiró, permitir que el frontend intente refrescarlo
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ 
         success: false,
@@ -40,7 +92,8 @@ const authMiddleware = async (req, res, next) => {
     // Para otros errores de token
     return res.status(401).json({ 
       success: false,
-      message: 'Token de acceso inválido'
+      message: 'Token de acceso inválido',
+      error: error.message
     });
   }
 };
