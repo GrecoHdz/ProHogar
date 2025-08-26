@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
 
-const RefreshToken = sequelize.define('RefreshToken', {  // Cambiado a PascalCase
+const RefreshToken = sequelize.define('RefreshToken', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -10,14 +10,16 @@ const RefreshToken = sequelize.define('RefreshToken', {  // Cambiado a PascalCas
     token: {
         type: DataTypes.STRING(512),  // Longitud específica para tokens JWT
         allowNull: false,
-        unique: 'token_unique'  // Nombre explícito para la restricción única
+        unique: true  // Solo el token debe ser único
     },
     usuario_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: {  // Referencia explícita a la tabla usuarios
+        references: {
             model: 'usuario',
-            key: 'id_usuario'
+            key: 'id_usuario',
+            onDelete: 'CASCADE',
+            onUpdate: 'CASCADE'
         }
     },
     expires_at: {
@@ -28,10 +30,9 @@ const RefreshToken = sequelize.define('RefreshToken', {  // Cambiado a PascalCas
     timestamps: false,
     tableName: 'refresh_tokens',
     indexes: [
-        // Índice para búsquedas por usuario_id
+        // Índice para búsquedas por usuario_id (no único)
         {
             name: 'idx_refresh_token_usuario',
-            unique: true,
             fields: ['usuario_id']
         },
         // Índice para limpieza de tokens expirados

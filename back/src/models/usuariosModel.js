@@ -11,9 +11,11 @@ const Usuario = sequelize.define("Usuario", {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-            model: 'roles', // Nombre de la tabla a la que hace referencia
+            model: 'roles',
             key: 'id_rol'
-        }
+        },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
     },
     nombre: {
         type: DataTypes.STRING,
@@ -22,12 +24,12 @@ const Usuario = sequelize.define("Usuario", {
     identidad: {
         type: DataTypes.STRING(20),
         allowNull: false,
-        unique: true
+        unique: 'uk_usuario_identidad'
     },
     email: {
         type: DataTypes.STRING(100),
         allowNull: false,
-        unique: true,
+        unique: 'uk_usuario_email',
         validate: {
             isEmail: true
         }
@@ -35,7 +37,7 @@ const Usuario = sequelize.define("Usuario", {
     telefono: {
         type: DataTypes.STRING(20),
         allowNull: false,
-        unique: true
+        unique: 'uk_usuario_telefono'
     },
     password_hash: {
         type: DataTypes.STRING(255),
@@ -43,18 +45,28 @@ const Usuario = sequelize.define("Usuario", {
     },
     fecha_registro: {
         type: DataTypes.DATE,
-        allowNull: true,
+        allowNull: false,
         defaultValue: DataTypes.NOW
+    },
+    // Agregamos campos para auditoría
+    activo: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
     }
 }, {
     timestamps: false,
-    tableName: "usuario",
+    tableName: 'usuario',
     indexes: [
-        // Solo índices realmente necesarios
-        // Los campos con unique: true ya crean índices automáticamente
+        // Índice para búsquedas por rol
         {
             name: 'idx_usuario_id_rol',
             fields: ['id_rol']
+        },
+        // Índice para búsquedas por estado
+        {
+            name: 'idx_usuario_activo',
+            fields: ['activo']
         }
     ]
 });
