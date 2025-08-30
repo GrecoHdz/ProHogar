@@ -58,7 +58,8 @@ router.put("/:id",
         body("identidad").optional().isString().withMessage("La identidad debe ser una cadena de caracteres"), 
         body("email").optional().isString().withMessage("El email debe ser una cadena de caracteres"), 
         body("telefono").optional().isString().withMessage("El telefono debe ser una cadena de caracteres"), 
-        body("password_hash").optional().isString().withMessage("El password_hash debe ser una cadena de caracteres")
+        body("password_hash").optional().isString().withMessage("El password_hash debe ser una cadena de caracteres"),
+        body("activo").optional().isBoolean().withMessage("El activo debe ser un booleano")
     ], 
     validarErrores, 
     actualizarUsuario);

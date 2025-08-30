@@ -172,7 +172,8 @@ const actualizarUsuario = async (req, res) => {
         identidad, 
         email, 
         telefono, 
-        password_hash 
+        password_hash,
+        activo 
     } = req.body;
     
     if (!id) {
@@ -198,6 +199,7 @@ const actualizarUsuario = async (req, res) => {
             const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
             usuario.password_hash = hashedPassword;
         }
+        if (activo) usuario.activo = activo;
         
 await usuario.save();
         

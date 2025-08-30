@@ -48,7 +48,6 @@ const Usuario = sequelize.define("Usuario", {
         allowNull: false,
         defaultValue: DataTypes.NOW
     },
-    // Agregamos campos para auditoría
     activo: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
