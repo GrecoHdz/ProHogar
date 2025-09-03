@@ -25,6 +25,16 @@ const setupAssociations = () => {
     as: 'usuarios'  // Añadimos el alias 'usuarios' para la relación inversa
   });
 
+  // Relación Usuario - Ciudad
+  Usuario.belongsTo(Ciudad, {
+    foreignKey: 'id_ciudad',
+    as: 'ciudad'
+  });
+  Ciudad.hasMany(Usuario, {
+    foreignKey: 'id_ciudad',
+    as: 'usuarios'
+  });
+
   // Relación Usuario - Técnico
   Usuario.hasOne(Tecnico, { foreignKey: 'usuario_id' });
   Tecnico.belongsTo(Usuario, { foreignKey: 'usuario_id' });

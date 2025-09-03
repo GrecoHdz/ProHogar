@@ -10,7 +10,7 @@ const RefreshToken = sequelize.define('RefreshToken', {
     token: {
         type: DataTypes.STRING(512),  // Longitud específica para tokens JWT
         allowNull: false,
-        unique: true  // Solo el token debe ser único
+        unique: 'token_unique'  // Nombre explícito para la restricción única
     },
     usuario_id: {
         type: DataTypes.INTEGER,
@@ -29,7 +29,15 @@ const RefreshToken = sequelize.define('RefreshToken', {
 }, {
     timestamps: false,
     tableName: 'refresh_tokens',
+    // Deshabilitar la sincronización automática de índices para evitar duplicados
+    sync: { alter: false },
     indexes: [
+        // Índice único para token (con nombre explícito)
+        {
+            name: 'token_unique',
+            unique: true,
+            fields: ['token']
+        },
         // Índice para búsquedas por usuario_id (no único)
         {
             name: 'idx_refresh_token_usuario',

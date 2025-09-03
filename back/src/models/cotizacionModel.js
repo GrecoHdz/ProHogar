@@ -23,6 +23,9 @@ const Cotizacion = sequelize.define("Cotizacion", {
         type: DataTypes.ENUM("pendiente", "aceptado", "rechazado"),
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "cotizacion",
 });
 
 module.exports = Cotizacion;

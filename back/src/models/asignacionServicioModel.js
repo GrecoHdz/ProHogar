@@ -23,6 +23,9 @@ const AsignacionServicio = sequelize.define("AsignacionServicio", {
         type: DataTypes.ENUM("pendiente", "asignado", "en_proceso", "finalizado", "cancelado"),
         allowNull: false
     }
-});
+}, {
+    timestamps: false,
+    tableName: "asignacion_servicio",
+}); 
 
 module.exports = AsignacionServicio;

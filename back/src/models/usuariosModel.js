@@ -7,6 +7,16 @@ const Usuario = sequelize.define("Usuario", {
         primaryKey: true,
         autoIncrement: true
     },
+    id_ciudad: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'ciudad',
+            key: 'id_ciudad'
+        },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+    },
     id_rol: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -66,6 +76,11 @@ const Usuario = sequelize.define("Usuario", {
         {
             name: 'idx_usuario_activo',
             fields: ['activo']
+        },
+        // Índice para búsquedas por ciudad
+        {
+            name: 'idx_usuario_id_ciudad',
+            fields: ['id_ciudad']
         }
     ]
 });
@@ -75,6 +90,14 @@ Usuario.associate = function(models) {
   Usuario.belongsTo(models.Rol, {
     foreignKey: 'id_rol',
     as: 'rol',
+    onDelete: 'SET NULL',
+    onUpdate: 'CASCADE'
+  });
+
+  // Agregamos la relación con Ciudad después de definir el modelo
+  Usuario.belongsTo(models.Ciudad, {
+    foreignKey: 'id_ciudad',
+    as: 'ciudad',
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE'
   });

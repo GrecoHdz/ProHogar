@@ -19,6 +19,9 @@ const Membresia = sequelize.define("Membresia", {
         type: DataTypes.ENUM("activa", "vencida", "cancelada"),
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "membresia",
 });
 
 module.exports = Membresia;

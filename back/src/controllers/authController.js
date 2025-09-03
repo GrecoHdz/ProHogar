@@ -77,12 +77,9 @@ const login = async (req, res) => {
     // Crear objeto con datos seguros del usuario para la cookie
     // Crear objeto con solo los datos necesarios para el frontend
     const userForCookie = {
-      identidad: userData.identidad,
-      nombre: userData.nombre,
-      email: userData.email,
-      telefono: userData.telefono || '',
-      role: userData.role,
-      fecha_registro: userData.fecha_registro ? new Date(userData.fecha_registro).toISOString() : null
+      id_usuario: userData.id_usuario,  
+      nombre: userData.nombre,   
+      id_rol: userData.id_rol
     };
 
     // Configurar cookies seguras
@@ -96,16 +93,7 @@ const login = async (req, res) => {
       path: '/' // Disponible en todas las rutas
     });
 
-    // 2. Única cookie con información del usuario (accesible desde JavaScript)
-    // Duración extendida a 7 días (igual que el refresh token)
-    res.cookie('user', JSON.stringify(userForCookie), {
-      httpOnly: false, // Accesible desde JavaScript
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días (igual que el refresh token)
-      path: '/'
-    });
-
+    // El frontend manejará sus propias cookies
     // 3. Cookie con el token de acceso (accesible desde JavaScript)
     res.cookie('token', accessToken, {
       httpOnly: false, // Accesible desde JavaScript
@@ -115,30 +103,11 @@ const login = async (req, res) => {
       path: '/'
     });
 
-    // Enviar respuesta exitosa con solo los datos necesarios
-    const responseUser = {
-      identidad: userForCookie.identidad,
-      nombre: userForCookie.nombre,
-      email: userForCookie.email,
-      telefono: userForCookie.telefono,
-      role: userForCookie.role,
-      fecha_registro: userForCookie.fecha_registro
-    };
-
-    // Actualizar la cookie del usuario con los datos completos
-    res.cookie('user', JSON.stringify(responseUser), {
-      httpOnly: false, // Accesible desde JavaScript
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      path: '/'
-    });
-
+    // Enviar respuesta exitosa con los datos del usuario
     res.status(200).json({
       success: true,
-      message: 'Inicio de sesión exitoso',
-      user: responseUser,
-      token: accessToken
+      token: accessToken,
+      user: userForCookie
     });
   } catch (error) {
     console.error('Error en el login:', error);

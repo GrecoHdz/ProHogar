@@ -19,6 +19,9 @@ const Referido = sequelize.define("Referido", {
         type: DataTypes.DATE,
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "referido",
 });
 
 module.exports = Referido;

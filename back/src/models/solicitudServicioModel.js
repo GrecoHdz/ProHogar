@@ -47,6 +47,9 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
         type: DataTypes.TEXT,
         allowNull: true
     }
+}, {
+    timestamps: false,
+    tableName: "solicitudservicio",
 });
 
 module.exports = SolicitudServicio;

@@ -1,16 +1,20 @@
-
+//Importaciones
+const { connectDB } = require("./src/config/database");
+const cookieParser = require("cookie-parser");
 const express = require("express")
-const { sequelize } = require("./src/config/database");;
 const morgan = require("morgan");
 const cors = require("cors");
-const cookieParser = require("cookie-parser");
-const app = express(); 
-const { connectDB } = require("./src/config/database");
-//const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
+const app = express();  
+
+//Rutas
 const userRoutes = require("./src/routes/UsuarioRoute");
 const authRoutes = require("./src/routes/authRoute");
-const verifyToken = require("./src/middleware/authMiddleware");
+//const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
 const rolRoutes = require("./src/routes/RolRoute");
+const ciudadRoutes = require("./src/routes/CiudadRoute");
+// Configurar las asociaciones de los modelos
+const setupAssociations = require('./src/models');
+setupAssociations();
 
 // Configuración de cookies
 const cookieConfig = {
@@ -20,6 +24,11 @@ const cookieConfig = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
   path: '/',
 };
+//Middleware para configurar la configuración de cookies en todas las rutas
+app.use((req, res, next) => {
+  req.cookieConfig = cookieConfig;
+  next();
+});
 
 // Middlewares
 app.use(morgan("dev"));
@@ -30,51 +39,24 @@ app.use(
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
   })
-);
-
-// Hacer que la configuración de cookies esté disponible en todas las rutas
-app.use((req, res, next) => {
-  req.cookieConfig = cookieConfig;
-  next();
-});
-
+); 
 
 // Importar Rutas 
 app.use("/usuarios", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/roles", rolRoutes);
-
+app.use("/ciudad", ciudadRoutes);
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
 
-
 // Aplicar middleware de verificación de token y limitador de API a todas las demás rutas
-//app.use("/productos", apiLimiter, verifyToken, productRoutes);
-
-
-
-// Configurar las asociaciones de los modelos
-const setupAssociations = require('./src/models');
-setupAssociations();
-
-// Sincronizar modelos con la base de datos
-const syncModels = async () => {
-  try {
-    // { force: true } para forzar la recreación de las tablas (cuidado en producción)
-    // { alter: true } para alterar las tablas existentes
-    await sequelize.sync({ alter: true });
-    console.log('✅ Modelos sincronizados con la base de datos');
-  } catch (error) {
-    console.error('❌ Error al sincronizar modelos:', error);
-  }
-};
+//app.use("/productos", apiLimiter, verifyToken, productRoutes); 
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
 const startServer = async () => {
   try {
     await connectDB();
-    await syncModels();
     
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://0.0.0.0:${PORT}`);

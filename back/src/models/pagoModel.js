@@ -39,6 +39,9 @@ const Pago = sequelize.define("Pago", {
         type: DataTypes.ENUM("pendiente", "pagado", "cancelado"),
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "pago",
 });
 
 module.exports = Pago;

@@ -12,8 +12,8 @@ const Rol = sequelize.define("roles", {
         allowNull: false
     },
 }, {
-    timestamps: false, // Desactiva los timestamps automáticos de Sequelize
-    tableName: "roles", // Nombre de la tabla en la base de datos
+    timestamps: false,
+    tableName: "roles",
 });
 
 module.exports = Rol;

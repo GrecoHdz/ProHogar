@@ -11,6 +11,9 @@ const Tecnico = sequelize.define("Tecnico", {
         type: DataTypes.BOOLEAN,
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "tecnico",
 });
 
 module.exports = Tecnico;

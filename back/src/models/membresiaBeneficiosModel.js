@@ -15,6 +15,9 @@ const MembresiaBeneficio = sequelize.define("MembresiaBeneficio", {
         type: DataTypes.STRING,
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "membresia_beneficio",
 });
 
 module.exports = MembresiaBeneficio;

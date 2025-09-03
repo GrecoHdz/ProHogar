@@ -5,6 +5,7 @@ const {
     obtenerUsuarios, 
     obtenerUsuarioPorNombre, 
     obtenerUsuarioPorIdentidad, 
+    obtenerUsuarioPorId,
     crearUsuario, 
     actualizarUsuario, 
     eliminarUsuario 
@@ -22,6 +23,14 @@ const validarErrores = (req, res, next) => {
 //Obtener todos los Usuarios
 router.get("/", validarErrores, obtenerUsuarios);
 
+//Obtener Usuario por ID
+router.get("/id/:id", 
+    [
+        param("id").isString().withMessage("El ID debe ser una cadena de caracteres")
+    ], 
+    validarErrores, 
+    obtenerUsuarioPorId);
+
 //Obtener Usuario por nombre
 router.get("/:nombre", 
     [
@@ -31,7 +40,7 @@ router.get("/:nombre",
     obtenerUsuarioPorNombre);
 
 //Obtener Usuario por identidad
-router.get("/id/:identidad", 
+router.get("/identidad/:identidad", 
     [   
         param("identidad").isString().withMessage("La identidad debe ser una cadena de caracteres")
     ], 
@@ -45,6 +54,7 @@ router.post("/",
         body("identidad").isString().withMessage("La identidad debe ser una cadena de caracteres"), 
         body("email").isString().withMessage("El email debe ser una cadena de caracteres"), 
         body("telefono").isString().withMessage("El telefono debe ser una cadena de caracteres"), 
+        body("id_ciudad").isInt().withMessage("El id_ciudad debe ser un numero entero"),
         body("password_hash").isString().withMessage("El password_hash debe ser una cadena de caracteres")
     ], 
     validarErrores, 
@@ -59,6 +69,7 @@ router.put("/:id",
         body("email").optional().isString().withMessage("El email debe ser una cadena de caracteres"), 
         body("telefono").optional().isString().withMessage("El telefono debe ser una cadena de caracteres"), 
         body("password_hash").optional().isString().withMessage("El password_hash debe ser una cadena de caracteres"),
+        body("id_ciudad").optional().isInt().withMessage("El id_ciudad debe ser un numero entero"),
         body("activo").optional().isBoolean().withMessage("El activo debe ser un booleano")
     ], 
     validarErrores, 

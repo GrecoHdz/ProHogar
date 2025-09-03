@@ -11,6 +11,9 @@ const Ciudad = sequelize.define("Ciudad", {
         type: DataTypes.STRING,
         allowNull: false
     }
+}, {
+    timestamps: false,
+    tableName: "ciudad",
 });
 
 module.exports = Ciudad;
