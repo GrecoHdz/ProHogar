@@ -369,6 +369,145 @@ const actualizarUsuario = async (req, res) => {
         });
     }
 };
+ 
+// Actualizar contraseña con verificación de contraseña actual
+const actualizarPassword = async (req, res) => {
+    console.log('Solicitud de cambio de contraseña recibida:', {
+        params: req.params,
+        body: {
+            ...req.body,
+            currentPassword: req.body.currentPassword ? '***' : 'undefined',
+            newPassword: req.body.newPassword ? '***' : 'undefined'
+        }
+    });
+
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!id) {
+        const error = "Se requiere el ID del usuario";
+        console.error('Error de validación:', error);
+        return res.status(400).json({ 
+            status: 400,
+            error: error
+        });
+    }
+    
+    if (!currentPassword || !newPassword) {
+        const error = "Se requieren tanto la contraseña actual como la nueva";
+        console.error('Error de validación:', error);
+        return res.status(400).json({ 
+            status: 400,
+            error: error
+        });
+    }
+    
+    try {
+        // Buscar el usuario por id_usuario (que es la clave primaria)
+        console.log('Buscando usuario con ID:', id);
+        const usuario = await Usuario.findOne({
+            where: { id_usuario: id },
+            attributes: ['id_usuario', 'email', 'password_hash'] // Solo los campos necesarios
+        });
+        
+        if (!usuario) {
+            const error = `Usuario con ID ${id} no encontrado`;
+            console.error(error);
+            return res.status(404).json({ 
+                status: 404,
+                error: error
+            });
+        }
+        
+        // Verificar que el password_hash existe
+        if (!usuario.password_hash) {
+            console.error('El usuario no tiene contraseña configurada');
+            return res.status(400).json({
+                status: 400,
+                error: 'No se puede verificar la contraseña actual'
+            });
+        }
+
+        console.log('Usuario encontrado:', {
+            id_usuario: usuario.id_usuario, // Usar id_usuario en lugar de id
+            email: usuario.email,
+            hasPassword: !!usuario.password_hash,
+            passwordHashStartsWith: usuario.password_hash ? 
+                (usuario.password_hash.substring(0, 10) + '...') : 
+                'No tiene contraseña'
+        });
+        
+        // Verificar la contraseña actual
+        console.log('Verificando contraseña...');
+        console.log('Datos de verificación:', {
+            hashedPasswordInDb: usuario.password_hash,
+            currentPasswordLength: currentPassword.length,
+            firstFewCharsOfCurrentPassword: currentPassword.substring(0, 2) + '...',
+            isPasswordValid: await bcrypt.compare(currentPassword, usuario.password_hash)
+        });
+        
+        const isPasswordValid = await bcrypt.compare(currentPassword, usuario.password_hash);
+        
+        if (!isPasswordValid) {
+            console.error('La contraseña actual no coincide');
+            // Verificar si la contraseña en la base de datos está hasheada correctamente
+            const isBcryptHash = usuario.password_hash.startsWith('$2b$');
+            console.error('Detalles de la contraseña:', {
+                isBcryptHash: isBcryptHash,
+                hashStartsWith: isBcryptHash ? usuario.password_hash.substring(0, 10) + '...' : 'No parece un hash bcrypt'
+            });
+            
+            return res.status(400).json({ 
+                status: 400,
+                error: "Contraseña actual incorrecta",
+                message: "La contraseña actual proporcionada no es correcta."
+            });
+        }
+        
+        console.log('Contraseña verificada correctamente. Actualizando...');
+        
+        // Hashear y guardar la nueva contraseña
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+        usuario.password_hash = hashedPassword;
+        await usuario.save();
+        
+        // No devolver la contraseña en la respuesta
+        const usuarioActualizado = usuario.toJSON();
+        delete usuarioActualizado.password_hash;
+        
+        console.log('Contraseña actualizada exitosamente para el usuario:', usuarioActualizado.id);
+        
+        res.json({
+            status: 200,
+            message: "Contraseña actualizada exitosamente",
+            usuario: usuarioActualizado
+        });
+        
+    } catch (error) {
+        console.error("Error al actualizar la contraseña:", error);
+        
+        // Detalles adicionales del error
+        const errorDetails = {
+            name: error.name,
+            message: error.message,
+            ...(error.errors && { errors: error.errors.map(e => ({
+                message: e.message,
+                type: e.type,
+                path: e.path,
+                value: e.value
+            }))})
+        };
+        
+        console.error('Detalles del error:', errorDetails);
+        
+        res.status(500).json({ 
+            status: 500,
+            error: "Error al actualizar la contraseña",
+            message: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
+            details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+        });
+    }
+};
 
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
@@ -410,5 +549,6 @@ module.exports = {
     obtenerUsuarioPorIdentidad,
     crearUsuario,
     actualizarUsuario,
+    actualizarPassword,
     eliminarUsuario
 };

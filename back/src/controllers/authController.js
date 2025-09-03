@@ -350,29 +350,29 @@ const getCurrentUser = async (req, res) => {
       transaction: t
     });
 
-    // Verificar si necesitamos generar/renovar el refresh token
-    let refreshTokenExpiration = null;
-    let shouldRenewRefreshToken = true; // Siempre intentar renovar si no hay token
-    
-    // Verificar si hay un refresh token en la solicitud
-    const requestRefreshToken = req.cookies.refreshToken;
-    
-    if (requestRefreshToken && refreshToken) {
-      // Si el token de la solicitud no coincide con el de la base de datos, forzar renovación
-      if (refreshToken.token !== requestRefreshToken) {
-        console.log('⚠️ El refresh token no coincide con el de la base de datos');
-      } else {
-        refreshTokenExpiration = new Date(refreshToken.expires_at).getTime();
-        const now = Date.now();
-        const oneDayInMs = 24 * 60 * 60 * 1000; // 1 día
-        
-        // Solo no renovar si el token es válido por más de un día
-        if ((refreshTokenExpiration - now) > oneDayInMs) {
-          console.log('ℹ️ Refresh token válido por más de un día, no es necesario renovar');
-          shouldRenewRefreshToken = false;
-        }
-      }
-    }
+   // Verificar si necesitamos generar/renovar el refresh token
+   let refreshTokenExpiration = null;
+   let shouldRenewRefreshToken = true; // Siempre intentar renovar si no hay token
+   
+   // Verificar si hay un refresh token en la solicitud
+   const requestRefreshToken = req.cookies.refreshToken;
+   
+   if (requestRefreshToken && refreshToken) {
+     // Si el token de la solicitud no coincide con el de la base de datos, forzar renovación
+     if (refreshToken.token !== requestRefreshToken) {
+       console.log('⚠️ El refresh token no coincide con el de la base de datos');
+     } else {
+       refreshTokenExpiration = new Date(refreshToken.expires_at).getTime();
+       const now = Date.now();
+       const oneDayInMs = 24 * 60 * 60 * 1000; // 1 día
+       
+       // Solo no renovar si el token es válido por más de un día
+       if ((refreshTokenExpiration - now) > oneDayInMs) {
+         console.log('ℹ️ Refresh token válido por más de un día, no es necesario renovar');
+         shouldRenewRefreshToken = false;
+       }
+     }
+   }
     
     // Renovar el refresh token si es necesario
     if (shouldRenewRefreshToken) {

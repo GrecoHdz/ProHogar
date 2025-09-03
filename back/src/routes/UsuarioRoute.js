@@ -8,6 +8,7 @@ const {
     obtenerUsuarioPorId,
     crearUsuario, 
     actualizarUsuario, 
+    actualizarPassword,
     eliminarUsuario 
 } = require("../controllers/UsuarioController");
 
@@ -74,6 +75,16 @@ router.put("/:id",
     ], 
     validarErrores, 
     actualizarUsuario);
+
+//Actualizar Contraseña
+router.put("/cambio-clave/:id", 
+    [
+        param("id").isString().withMessage("El ID debe ser una cadena de caracteres"), 
+        body("currentPassword").isString().withMessage("La contraseña actual debe ser una cadena de caracteres"), 
+        body("newPassword").isString().withMessage("La nueva contraseña debe ser una cadena de caracteres")
+    ], 
+    validarErrores, 
+    actualizarPassword);
 
 //Eliminar Usuario
 router.delete("/:id", 
