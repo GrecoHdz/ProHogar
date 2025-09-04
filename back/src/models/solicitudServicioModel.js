@@ -9,15 +9,35 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
     },
     id_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuarios',
+            key: 'id_usuario'
+        }
     },
-    id_categoria: {
+    id_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'servicios',
+            key: 'id_servicio'
+        }
     },
     id_ciudad:{
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'ciudades',
+            key: 'id_ciudad'
+        }
+    },
+    id_tecnico: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'tecnicos',
+            key: 'id_tecnico'
+        }
     },
     colonia:{
         type: DataTypes.STRING,
@@ -33,7 +53,8 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
     },
     fecha_solicitud:{
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: true,
+        defaultValue: DataTypes.NOW
     },
     estado:{
         type: DataTypes.ENUM("pendiente_pago", "pendiente_asignacion", "asignado", "en_proceso", "finalizado", "cancelado"),

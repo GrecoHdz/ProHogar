@@ -25,7 +25,7 @@ const AsignacionServicio = sequelize.define("AsignacionServicio", {
     }
 }, {
     timestamps: false,
-    tableName: "asignacion_servicio",
+    tableName: "asignacionservicio",
 }); 
 
 module.exports = AsignacionServicio;

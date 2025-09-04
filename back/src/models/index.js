@@ -3,7 +3,7 @@ const Usuario = require('./usuariosModel');
 const Rol = require('./rolesModel');
 const Tecnico = require('./tecnicosModel');
 const Categoria = require('./categoriasModel');
-const Servicio = require('./asignacionServicioModel');
+const Servicio = require('./serviciosModel');
 const SolicitudServicio = require('./solicitudServicioModel');
 const Cotizacion = require('./cotizacionModel');
 const Pago = require('./pagoModel');
@@ -50,20 +50,34 @@ const setupAssociations = () => {
   });
 
   // Relación Usuario - Solicitud de Servicio (Cliente)
-  Usuario.hasMany(SolicitudServicio, { foreignKey: 'cliente_id' });
-  SolicitudServicio.belongsTo(Usuario, { foreignKey: 'cliente_id' });
+  Usuario.hasMany(SolicitudServicio, { foreignKey: 'id_usuario' });
+  SolicitudServicio.belongsTo(Usuario, { foreignKey: 'id_usuario' });
 
   // Relación Técnico - Solicitud de Servicio
-  Tecnico.hasMany(SolicitudServicio, { foreignKey: 'tecnico_id' });
-  SolicitudServicio.belongsTo(Tecnico, { foreignKey: 'tecnico_id' });
+  Tecnico.hasMany(SolicitudServicio, { foreignKey: 'id_tecnico' });
+  SolicitudServicio.belongsTo(Tecnico, { foreignKey: 'id_tecnico' });
 
   // Relación Solicitud de Servicio - Cotización
-  SolicitudServicio.hasOne(Cotizacion, { foreignKey: 'solicitud_id' });
-  Cotizacion.belongsTo(SolicitudServicio, { foreignKey: 'solicitud_id' });
+  SolicitudServicio.hasOne(Cotizacion, { foreignKey: 'id_solicitud' });
+  Cotizacion.belongsTo(SolicitudServicio, { foreignKey: 'id_solicitud' });
+
+  // Relación Servicio - Solicitud de Servicio
+  Servicio.hasMany(SolicitudServicio, { 
+    foreignKey: 'id_servicio',
+    as: 'solicitudes'
+  });
+  SolicitudServicio.belongsTo(Servicio, { 
+    foreignKey: 'id_servicio',
+    as: 'servicio'  // Añadimos el alias 'servicio' para la relación
+  });
+
+  // Relación Ciudad - Solicitud de Servicio
+  Ciudad.hasMany(SolicitudServicio, { foreignKey: 'id_ciudad' });
+  SolicitudServicio.belongsTo(Ciudad, { foreignKey: 'id_ciudad' });
 
   // Relación Cotización - Pago
-  Cotizacion.hasOne(Pago, { foreignKey: 'cotizacion_id' });
-  Pago.belongsTo(Cotizacion, { foreignKey: 'cotizacion_id' });
+  Cotizacion.hasOne(Pago, { foreignKey: 'id_cotizacion' });
+  Pago.belongsTo(Cotizacion, { foreignKey: 'id_cotizacion' });
 
   // Relación Usuario - RefreshToken
   Usuario.hasMany(RefreshToken, { 
@@ -73,11 +87,7 @@ const setupAssociations = () => {
   RefreshToken.belongsTo(Usuario, { 
     foreignKey: 'usuario_id',
     as: 'usuario'
-  });
-
-  // Relación Membresía - Beneficios (comentada ya que no tenemos el campo membresia_id en Usuario)
-  // Membresia.hasMany(MembresiaBeneficio, { foreignKey: 'membresia_id' });
-  // MembresiaBeneficio.belongsTo(Membresia, { foreignKey: 'membresia_id' });
+  }); 
 
   // Relación Usuario - Referidos
   Usuario.hasMany(Referido, { foreignKey: 'usuario_referidor_id' });
@@ -91,10 +101,6 @@ const setupAssociations = () => {
     foreignKey: 'usuario_referido_id',
     as: 'Referido'
   });
-
-  // Relación Usuario - Ciudad (comentada ya que no tenemos el campo ciudad_id en Usuario)
-  // Usuario.belongsTo(Ciudad, { foreignKey: 'ciudad_id' });
-  // Ciudad.hasMany(Usuario, { foreignKey: 'ciudad_id' });
 
   console.log('Asociaciones configuradas correctamente');
 };

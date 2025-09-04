@@ -12,6 +12,9 @@ const authRoutes = require("./src/routes/authRoute");
 //const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
 const rolRoutes = require("./src/routes/RolRoute");
 const ciudadRoutes = require("./src/routes/CiudadRoute");
+const serviciosRoutes = require("./src/routes/ServiciosRoute");
+const solicitudServicioRoutes = require("./src/routes/SolicitudServicioRoute");
+const soporteRoutes = require("./src/routes/SoporteRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -46,6 +49,9 @@ app.use("/usuarios", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/roles", rolRoutes);
 app.use("/ciudad", ciudadRoutes);
+app.use("/servicios", serviciosRoutes);
+app.use("/solicitudservicio", solicitudServicioRoutes);
+app.use("/soporte", soporteRoutes);
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
 
