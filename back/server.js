@@ -15,6 +15,9 @@ const ciudadRoutes = require("./src/routes/CiudadRoute");
 const serviciosRoutes = require("./src/routes/ServiciosRoute");
 const solicitudServicioRoutes = require("./src/routes/SolicitudServicioRoute");
 const soporteRoutes = require("./src/routes/SoporteRoute");
+const membresiaRoutes = require("./src/routes/MembresiaRoute");
+const cuentasRoutes = require("./src/routes/CuentasRoute");
+const configRoutes = require("./src/routes/ConfigRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -52,6 +55,9 @@ app.use("/ciudad", ciudadRoutes);
 app.use("/servicios", serviciosRoutes);
 app.use("/solicitudservicio", solicitudServicioRoutes);
 app.use("/soporte", soporteRoutes);
+app.use("/membresia", membresiaRoutes);
+app.use("/cuentas", cuentasRoutes);
+app.use("/config", configRoutes);
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
 

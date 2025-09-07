@@ -11,12 +11,20 @@ const Membresia = sequelize.define("Membresia", {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    fecha_inicio: {
+    id_cuenta: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    num_comprobante: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    fecha: {
         type: DataTypes.DATE,
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("activa", "vencida", "cancelada"),
+        type: DataTypes.ENUM("activa", "vencida", "pendiente"),
         allowNull: false
     }
 }, {

@@ -7,7 +7,7 @@ const Servicio = require('./serviciosModel');
 const SolicitudServicio = require('./solicitudServicioModel');
 const Cotizacion = require('./cotizacionModel');
 const Pago = require('./pagoModel');
-const Membresia = require('./membresiasModel');
+const Membresia = require('./membresiaModel');
 const MembresiaBeneficio = require('./membresiaBeneficiosModel');
 const Referido = require('./referidosModel');
 const Ciudad = require('./ciudadesModel');
@@ -101,6 +101,10 @@ const setupAssociations = () => {
     foreignKey: 'usuario_referido_id',
     as: 'Referido'
   });
+
+  // Relación Usuario - Membresia
+  Usuario.hasOne(Membresia, { foreignKey: 'id_usuario' });
+  Membresia.belongsTo(Usuario, { foreignKey: 'id_usuario' });
 
   console.log('Asociaciones configuradas correctamente');
 };

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
+const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     obtenerSoportes, 
     obtenerSoportePorCliente, 
@@ -9,6 +10,8 @@ const {
     eliminarSoporte 
 } = require("../controllers/SoporteController");    
 
+// Middleware de autenticación
+router.use(authMiddleware);
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -16,8 +19,7 @@ const validarErrores = (req, res, next) => {
       return res.status(400).json({ errores: errors.array() });
     }
     next();
-  };
-
+  }; 
   //Obtener todos los Soportes
   router.get("/", validarErrores, obtenerSoportes);
 
