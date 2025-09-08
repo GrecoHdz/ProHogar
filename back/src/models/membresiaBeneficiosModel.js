@@ -17,7 +17,7 @@ const MembresiaBeneficio = sequelize.define("MembresiaBeneficio", {
     }
 }, {
     timestamps: false,
-    tableName: "membresia_beneficio",
+    tableName: "membresiabeneficio",
 });
 
 module.exports = MembresiaBeneficio;

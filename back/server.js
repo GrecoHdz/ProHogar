@@ -18,6 +18,7 @@ const soporteRoutes = require("./src/routes/SoporteRoute");
 const membresiaRoutes = require("./src/routes/MembresiaRoute");
 const cuentasRoutes = require("./src/routes/CuentasRoute");
 const configRoutes = require("./src/routes/ConfigRoute");
+const membresiaBeneficiosRoutes = require("./src/routes/MembresiBeneficiosRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -58,6 +59,7 @@ app.use("/soporte", soporteRoutes);
 app.use("/membresia", membresiaRoutes);
 app.use("/cuentas", cuentasRoutes);
 app.use("/config", configRoutes);
+app.use("/membresiabeneficios", membresiaBeneficiosRoutes);
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
 
