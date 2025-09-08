@@ -1,4 +1,5 @@
-const Membresia = require("../models/membresiaModel"); 
+const Membresia = require("../models/membresiaModel");
+const Config = require("../models/configModel");
 
 //Obtener todas las membresias
 const obtenerMembresias = async (req, res) => {
@@ -74,6 +75,90 @@ const obtenerMembresiaActual = async (req, res) => {
     }
 };
 
+// Obtener progreso de membresía por usuario
+const obtenerProgresoMembresia = async (req, res) => {
+    try {
+        // Obtener el valor de la membresía desde la tabla de configuración
+        const configMembresia = await Config.findOne({
+            where: { tipo_config: 'membresia' },
+            raw: true
+        });
+
+        if (!configMembresia) {
+            return res.status(500).json({
+                status: 'error',
+                message: 'No se encontró la configuración de membresía'
+            });
+        }
+
+        const valorMembresia = configMembresia.valor;
+
+        // Obtener todas las membresías del usuario
+        const membresias = await Membresia.findAll({
+            where: { 
+                id_usuario: req.params.id_usuario,
+                estado: ['activa', 'vencida']
+            },
+            order: [['fecha', 'ASC']], // Orden cronológico
+            raw: true
+        });
+
+        if (!membresias || membresias.length === 0) {
+            return res.status(404).json({ 
+                status: 'not_found',
+                message: 'No se encontraron membresías para este usuario',
+                montoTotal: 0,
+                mesesProgreso: 0
+            });
+        }
+
+        let progreso = 0;
+        let maxProgreso = 0;
+        let ultimaFecha = null;
+
+        // Calcular progreso
+        for (const m of membresias) {
+            const fechaActual = new Date(m.fecha);
+
+            if (!ultimaFecha) {
+                progreso = 1;
+            } else {
+                const diffMeses = 
+                    (fechaActual.getFullYear() - ultimaFecha.getFullYear()) * 12 +
+                    (fechaActual.getMonth() - ultimaFecha.getMonth());
+
+                if (diffMeses === 1) {
+                    progreso++;
+                } else {
+                    progreso = 1; // reinicia progreso
+                }
+            }
+
+            ultimaFecha = new Date(fechaActual);
+            maxProgreso = Math.max(maxProgreso, progreso);
+        }
+
+        // Calcular el monto total como valor_membresia * meses de progreso
+        const montoTotal = valorMembresia * maxProgreso;
+
+        res.json({
+            status: 'success',
+            mesesProgreso: maxProgreso,
+            montoTotal: montoTotal,
+            valorMembresia: valorMembresia
+        });
+
+    } catch (error) {
+        console.error("Error al obtener progreso de membresía:", error);
+        res.status(500).json({ 
+            status: 'error',
+            message: 'Error al obtener progreso de membresía',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+
 //Crear membresia
 const crearMembresia = async (req, res) => {
     try {
@@ -136,5 +221,6 @@ module.exports = {
     obtenerMembresiaActual,
     crearMembresia,
     actualizarMembresia,
-    eliminarMembresia
+    eliminarMembresia,
+    obtenerProgresoMembresia
 };

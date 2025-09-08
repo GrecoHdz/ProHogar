@@ -8,7 +8,8 @@ const {
     obtenerMembresiaActual,
     crearMembresia, 
     actualizarMembresia, 
-    eliminarMembresia 
+    eliminarMembresia,
+    obtenerProgresoMembresia 
 } = require("../controllers/MembresiaController");
 
 // Middleware de autenticación
@@ -22,6 +23,9 @@ const validarErrores = (req, res, next) => {
     next();
   }; 
 
+
+// Obtener progreso de la membresía actual del usuario
+router.get('/progreso/:id_usuario', obtenerProgresoMembresia);
 
 // Obtener todas las membresias (solo para administradores)
 router.get("/", obtenerMembresias);
