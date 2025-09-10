@@ -5,6 +5,7 @@ const { sequelize } = require('../config/database');
 const Usuario = require('../models/usuariosModel');
 const Rol = require('../models/rolesModel');
 const RefreshToken = require('../models/refreshtokenModel');
+const Ciudad = require('../models/ciudadesModel');
 
 // Generar un token de acceso
 const generateAccessToken = (user) => {
@@ -330,19 +331,30 @@ const getCurrentUser = async (req, res) => {
   const t = await sequelize.transaction();
   
   try {
-    // El middleware authMiddleware ya adjuntó el usuario a req.user
-    const user = req.user;
+    // Obtener el usuario completo con sus relaciones
+    const user = await Usuario.findByPk(req.user.id_usuario, {
+      attributes: { 
+        exclude: ['password', 'password_reset_token', 'password_reset_expires'] 
+      },
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre_rol']
+        },
+        {
+          model: sequelize.models.Ciudad,
+          as: 'ciudad',
+          attributes: ['id_ciudad']
+        }
+      ],
+      transaction: t
+    });
     
     if (!user) {
       await t.rollback();
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-
-    // Obtener información del rol
-    const rol = await Rol.findByPk(user.id_rol, {
-      attributes: ['id_rol', 'nombre_rol'],
-      transaction: t
-    });
 
     // Buscar el refresh token actual del usuario
     let refreshToken = await RefreshToken.findOne({
@@ -360,7 +372,6 @@ const getCurrentUser = async (req, res) => {
    if (requestRefreshToken && refreshToken) {
      // Si el token de la solicitud no coincide con el de la base de datos, forzar renovación
      if (refreshToken.token !== requestRefreshToken) {
-       console.log('⚠️ El refresh token no coincide con el de la base de datos');
      } else {
        refreshTokenExpiration = new Date(refreshToken.expires_at).getTime();
        const now = Date.now();
@@ -368,15 +379,13 @@ const getCurrentUser = async (req, res) => {
        
        // Solo no renovar si el token es válido por más de un día
        if ((refreshTokenExpiration - now) > oneDayInMs) {
-         console.log('ℹ️ Refresh token válido por más de un día, no es necesario renovar');
          shouldRenewRefreshToken = false;
        }
      }
    }
     
     // Renovar el refresh token si es necesario
-    if (shouldRenewRefreshToken) {
-      console.log('🔄 Renovando refresh token...');
+    if (shouldRenewRefreshToken) { 
       
       // Eliminar refresh token anterior si existe
       if (refreshToken) {
@@ -413,20 +422,31 @@ const getCurrentUser = async (req, res) => {
       }
       
       // Establecer la cookie con el nuevo refresh token
-      res.cookie('refreshToken', refreshToken, cookieOptions);
-      console.log('✅ Refresh token renovado exitosamente');
+      res.cookie('refreshToken', refreshToken, cookieOptions); 
     }
     
-    // Crear respuesta con información segura del usuario
+    // Crear respuesta con información segura del usuario incluyendo datos de la ciudad
     const userData = {
       id_usuario: user.id_usuario, 
       identidad: user.identidad,
       nombre: user.nombre,
       email: user.email,
-      role: rol ? rol.nombre_rol.toLowerCase() : 'usuario',
+      telefono: user.telefono,
+      id_ciudad: user.id_ciudad,
+      // Incluir datos completos de la ciudad si existe
+      ...(user.ciudad && {
+        ciudad: {
+          id_ciudad: user.ciudad.id_ciudad,
+          nombre_ciudad: user.ciudad.nombre_ciudad || user.ciudad.nombre,
+          departamento: user.ciudad.departamento
+        }
+      }),
+      id_rol: user.id_rol,
+      // Usar el rol de la relación cargada o 'usuario' por defecto
+      role: (user.rol && user.rol.nombre_rol) ? user.rol.nombre_rol.toLowerCase() : 'usuario',
       // Incluir la fecha de expiración del refresh token si está disponible
       ...(refreshTokenExpiration && { refreshTokenExpiration })
-    };
+    }; 
     
     await t.commit();
     res.status(200).json(userData);

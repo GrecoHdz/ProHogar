@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
 
-const Membresia = sequelize.define("Membresia", {
-    id_membresia: {
+const PagoVisita = sequelize.define("PagoVisita", {
+    id_pagovisita: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
@@ -11,16 +11,20 @@ const Membresia = sequelize.define("Membresia", {
         type: DataTypes.INTEGER,
         allowNull: false
     },
+    id_solicitud: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
     id_cuenta: {
         type: DataTypes.INTEGER,
-        allowNull: true
-    },
-    num_comprobante: {
-        type: DataTypes.STRING,
-        allowNull: true
+        allowNull: false
     },
     monto: {
         type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    num_comprobante: {
+        type: DataTypes.STRING,
         allowNull: false
     },
     fecha: {
@@ -28,12 +32,12 @@ const Membresia = sequelize.define("Membresia", {
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("activa", "vencida", "pendiente"),
-        allowNull: false
+        type: DataTypes.ENUM("pendiente", "pagado"),
+        allowNull: true
     }
 }, {
     timestamps: false,
-    tableName: "pagomembresia",
+    tableName: "pagovisita",
 });
 
-module.exports = Membresia;
+module.exports = PagoVisita;

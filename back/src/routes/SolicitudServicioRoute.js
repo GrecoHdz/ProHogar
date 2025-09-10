@@ -43,6 +43,7 @@ router.post("/", [
     body("colonia").isString().withMessage("La colonia debe ser una cadena de caracteres"),
     body("direccion_precisa").isString().withMessage("La dirección precisa debe ser una cadena de caracteres"),
     body("descripcion").isString().withMessage("La descripción debe ser una cadena de caracteres"),
+    body("pagar_visita").isBoolean().withMessage("La visita pagada debe ser un booleano"),
     body("estado").isIn(["pendiente_pago", "pendiente_asignacion", "asignado", "en_proceso", "finalizado", "cancelado"]).withMessage("Estado no válido")
 ], validarErrores, crearSolicitudServicio);
 
@@ -51,7 +52,7 @@ router.put("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"), 
     body("id_tecnico").optional().isInt({ min: 1 }).withMessage("El ID del técnico debe ser un número entero positivo"),
     body("estado").optional().isIn(["pendiente_pago", "pendiente_asignacion", "asignado", "en_proceso", "finalizado", "cancelado"]).withMessage("Estado no válido"),
-    body("comentario_admin").optional().isString().withMessage("El comentario debe ser una cadena de caracteres")
+    body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres")
 ], validarErrores, actualizarSolicitudServicio);
 
 //Eliminar una solicitud de servicio

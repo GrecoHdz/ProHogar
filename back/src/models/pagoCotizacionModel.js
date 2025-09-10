@@ -1,47 +1,43 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
 
-const Pago = sequelize.define("Pago", {
-    id_pago: {
+const PagoCotizacion = sequelize.define("PagoCotizacion", {
+    id_pagocotizacion: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
     },
-    id_usuario: {
+    id_solicitud: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    id_cotizacion: {
-        type: DataTypes.INTEGER,
-        allowNull: true
-    },
-    id_membresia: {
+    id_cuenta: {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    monto: {
+    num_comprobante: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    monto_manodeobra: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    tipo_pago: {
-        type: DataTypes.ENUM("efectivo", "tarjeta", "transferencia"),
-        allowNull: false
+    comentario:{
+        type:DataTypes.STRING,
+        allowNull:true
     },
-    metodo_pago: {
-        type: DataTypes.ENUM("efectivo", "tarjeta", "transferencia"),
-        allowNull: false
-    },
-    fecha_pago: {
+    fecha: {
         type: DataTypes.DATE,
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("pendiente", "pagado", "cancelado"),
+        type: DataTypes.ENUM("pendiente", "pagado", "rechazado"),
         allowNull: false
     }
 }, {
     timestamps: false,
-    tableName: "pago",
+    tableName: "pagocotizacion",
 });
 
-module.exports = Pago;
+module.exports = PagoCotizacion;

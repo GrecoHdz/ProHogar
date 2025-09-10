@@ -46,12 +46,50 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
 //Obtener todas las solicitudes de servicios por usuario
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     try {
+        const idUsuario = req.params.id;
+        
+        // Obtener todas las solicitudes
         const solicitudes = await SolicitudServicio.findAll({
             where: {
-                id_usuario: req.params.id
+                id_usuario: idUsuario
+            },
+            order: [['fecha_solicitud', 'DESC']]
+        });
+        
+        // Contar las solicitudes totales
+        const totalSolicitudes = await SolicitudServicio.count({
+            where: {
+                id_usuario: idUsuario
             }
         });
-        res.json(solicitudes);
+
+        // Contar solicitudes finalizadas (completadas)
+        const finalizadas = await SolicitudServicio.count({
+            where: {
+                id_usuario: idUsuario,
+                estado: 'finalizado'
+            }
+        });
+
+        // Contar solicitudes pendientes (cualquier estado que no sea finalizado o cancelado)
+        const pendientes = await SolicitudServicio.count({
+            where: {
+                id_usuario: idUsuario,
+                estado: [
+                    'pendiente_pago',
+                    'pendiente_asignacion',
+                    'asignado',
+                    'en_proceso'
+                ]
+            }
+        }); 
+
+        res.json({
+            solicitudes,
+            total: totalSolicitudes,
+            finalizadas,
+            pendientes,
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al obtener las solicitudes de servicios por usuario" });
@@ -76,10 +114,22 @@ const actualizarSolicitudServicio = async (req, res) => {
         if (!solicitud) {
             return res.status(404).json({ error: "Solicitud de servicio no encontrada" });
         }
-        await solicitud.update(req.body);
+        
+        // Si se está cancelando la solicitud
+        if (req.body.estado === 'cancelado') {
+            // Agregar comentario
+            await solicitud.update({ 
+                comentario: req.body.comentario,
+                estado: 'cancelado'
+            });
+        } else {
+            // Actualización normal
+            await solicitud.update(req.body);
+        }
+        
         res.json(solicitud);
     } catch (error) {
-        console.error(error);
+        console.error('Error al actualizar la solicitud de servicio:', error);
         res.status(500).json({ error: "Error al actualizar la solicitud de servicio" });
     }
 };

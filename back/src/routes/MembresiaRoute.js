@@ -53,7 +53,8 @@ router.post("/",
   [
     body("id_usuario").isInt().withMessage("El id_usuario debe ser un número entero"),
     body("id_cuenta").optional().isInt().withMessage("El id_cuenta debe ser un número entero"),
-    body("num_comprobante").optional().isString().withMessage("El num_comprobante debe ser una cadena de caracteres")
+    body("num_comprobante").optional().isString().withMessage("El num_comprobante debe ser una cadena de caracteres"),
+    body("monto").isInt().withMessage("El monto debe ser un número entero"),
   ], 
   validarErrores, 
   crearMembresia

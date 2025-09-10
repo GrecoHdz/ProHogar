@@ -57,14 +57,14 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
         defaultValue: DataTypes.NOW
     },
     estado:{
-        type: DataTypes.ENUM("pendiente_pago", "pendiente_asignacion", "asignado", "en_proceso", "finalizado", "cancelado"),
+        type: DataTypes.ENUM("pendiente_pago", "pendiente_asignacion", "asignado", "pendiente_pagocotizacion","en_proceso", "finalizado", "cancelado"),
         allowNull: false
     },
-    visita_pagada:{
+    pagar_visita:{
         type: DataTypes.BOOLEAN,
         allowNull: false
     },
-    comentario_admin:{
+    comentario:{
         type: DataTypes.TEXT,
         allowNull: true
     }
