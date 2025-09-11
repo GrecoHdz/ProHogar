@@ -5,6 +5,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     obtenerServicios, 
     obtenerServicioPorId, 
+    obtenerServiciosActivos,
     crearServicio, 
     actualizarServicio, 
     eliminarServicio 
@@ -23,6 +24,9 @@ const validarErrores = (req, res, next) => {
 
 //Obtener todos los servicios
 router.get("/", validarErrores, obtenerServicios);
+
+//Obtener todos los servicios activos
+router.get("/activos", validarErrores, obtenerServiciosActivos);
 
 //Obtener un servicio por ID
 router.get("/:id", [

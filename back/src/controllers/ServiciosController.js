@@ -11,6 +11,17 @@ const obtenerServicios = async (req, res) => {
     }
 };
 
+//Obtener todos los servicios activos
+const obtenerServiciosActivos = async (req, res) => {
+    try {
+        const servicios = await Servicio.findAll({ where: { estado: 1 } });
+        res.json(servicios);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al obtener los servicios activos" });
+    }
+};
+
 //Obtener un servicio por ID
 const obtenerServicioPorId = async (req, res) => {
     try {
@@ -69,6 +80,7 @@ const eliminarServicio = async (req, res) => {
 module.exports = {
     obtenerServicios,
     obtenerServicioPorId,
+    obtenerServiciosActivos,
     crearServicio,
     actualizarServicio,
     eliminarServicio

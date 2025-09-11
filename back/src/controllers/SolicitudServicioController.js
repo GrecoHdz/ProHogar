@@ -43,18 +43,34 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
     }
 };
 
-//Obtener todas las solicitudes de servicios por usuario
+//Obtener todas las solicitudes de servicios por usuario con el nombre del servicio
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     try {
         const idUsuario = req.params.id;
         
-        // Obtener todas las solicitudes
+        // Obtener todas las solicitudes con los datos del servicio
         const solicitudes = await SolicitudServicio.findAll({
             where: {
                 id_usuario: idUsuario
             },
-            order: [['fecha_solicitud', 'DESC']]
+            include: [{
+                model: Servicio,
+                as: 'servicio',
+                attributes: ['id_servicio', 'nombre']
+            }],
+            order: [['fecha_solicitud', 'DESC']],
+            raw: true,
+            nest: true
         });
+
+        // Formatear la respuesta para incluir el servicio con id y nombre
+        const solicitudesFormateadas = solicitudes.map(({ id_servicio, servicio, ...solicitud }) => ({
+            ...solicitud,
+            servicio: {
+                id_servicio,
+                nombre: servicio?.nombre || 'Servicio no disponible'
+            }
+        }));
         
         // Contar las solicitudes totales
         const totalSolicitudes = await SolicitudServicio.count({
@@ -82,10 +98,10 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                     'en_proceso'
                 ]
             }
-        }); 
+        });   
 
         res.json({
-            solicitudes,
+            solicitudes: solicitudesFormateadas,
             total: totalSolicitudes,
             finalizadas,
             pendientes,
