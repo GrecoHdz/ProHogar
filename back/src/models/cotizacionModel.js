@@ -7,25 +7,41 @@ const Cotizacion = sequelize.define("Cotizacion", {
         primaryKey: true,
         autoIncrement: true
     },
-    id_asignacion: {
+    id_solicitud: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    mano_obra: {
+    id_cuenta: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    num_comprobante: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    monto_manodeobra: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    fecha_cotizacion: {
+    monto_materiales: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    comentario:{
+        type:DataTypes.STRING,
+        allowNull:false
+    },
+    fecha: {
         type: DataTypes.DATE,
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("pendiente", "aceptado", "rechazado"),
+        type: DataTypes.ENUM("pendiente", "aceptado", "rechazado", "pagado"),
         allowNull: false
     }
 }, {
     timestamps: false,
-    tableName: "cotizacion",
+    tableName: "cotizaciones",
 });
 
 module.exports = Cotizacion;

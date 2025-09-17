@@ -6,6 +6,7 @@ const {
     obtenerPagos,
     obtenerPagoPorId,
     obtenerPagosPorUsuario,
+    obtenerUltimoPagoPorSolicitud,
     crearPago,
     actualizarPago,
     eliminarPago
@@ -31,6 +32,11 @@ router.get("/:id", validarErrores, obtenerPagoPorId);
 //Obtener pagos por usuario
 router.get("/usuario/:id", validarErrores, obtenerPagosPorUsuario); 
 
+//Obtener ultimo pago de solicitud espefica
+router.get("/solicitud/:id_solicitud", [
+    param("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo")
+], validarErrores, obtenerUltimoPagoPorSolicitud);
+
 //Crear un pago
 router.post("/", [
     body("id_usuario").isInt({ min: 1 }).withMessage("El ID del usuario debe ser un número entero positivo"),
@@ -44,7 +50,7 @@ router.post("/", [
 //Actualizar un pago
 router.put("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
-    body("estado").isIn(["pagado"]).withMessage("El estado debe ser'pagado'")
+    body("estado").isIn(["pagado", "rechazado"]).withMessage("El estado debe ser'pagado' o 'rechazado'")
 ], validarErrores, actualizarPago);
 
 //Eliminar un pago

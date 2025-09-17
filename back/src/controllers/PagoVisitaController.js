@@ -33,6 +33,35 @@ const obtenerPagosPorUsuario = async (req, res) => {
     }
 }
 
+//Obtener ultimo pago de solicitud espefica
+const obtenerUltimoPagoPorSolicitud = async (req, res) => {
+    try {
+        const pago = await PagoVisita.findOne({
+            where: { id_solicitud: req.params.id_solicitud },
+            order: [['id_pagovisita','DESC']],
+            attributes: ['estado']  
+        });
+
+        if (!pago) {
+            return res.status(404).json({
+                status: "error",
+                message: "No se encontró ningún pago para esta solicitud"
+            });
+        }
+
+        return res.json({
+            status: "success",
+            estado: pago.estado
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            status: "error",
+            message: "Error al obtener el estado del último pago"
+        });
+    }
+}; 
+
 //Crear un pago
 const crearPago = async (req, res) => {
     try {
@@ -69,6 +98,7 @@ const eliminarPago = async (req, res) => {
 module.exports = {
     obtenerPagos,
     obtenerPagoPorId,
+    obtenerUltimoPagoPorSolicitud,
     obtenerPagosPorUsuario,
     crearPago,
     actualizarPago,
