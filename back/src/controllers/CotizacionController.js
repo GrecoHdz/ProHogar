@@ -38,26 +38,32 @@ const getUltimaCotizacionPorSolicitud = async (req, res) => {
     try {
         const cotizacion = await Cotizacion.findOne({
             where: { id_solicitud: req.params.id_solicitud },
-            order: [['id_cotizacion','DESC']],
-            attributes: ['estado'] 
+            order: [['id_cotizacion','DESC']]
         });
 
         if (!cotizacion) {
             return res.status(404).json({
                 status: "error",
-                message: "No se encontró ninguna cotizacion para esta solicitud"
+                message: "No se encontró ninguna cotización para esta solicitud"
             });
         }
 
         return res.json({
             status: "success",
-            estado: cotizacion.estado
+            data: {   
+                id_cotizacion: cotizacion.id_cotizacion,
+                monto_manodeobra: cotizacion.monto_manodeobra,
+                monto_materiales: cotizacion.monto_materiales,
+                comentario: cotizacion.comentario,
+                estado: cotizacion.estado 
+            }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error en getUltimaCotizacionPorSolicitud:', error);
         return res.status(500).json({
             status: "error",
-            message: "Error al obtener el estado de la ultima cotizacion"
+            message: "Error al obtener los datos de la cotización",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -65,7 +71,10 @@ const getUltimaCotizacionPorSolicitud = async (req, res) => {
 //Crear cotizacion
 const createCotizacion = async (req, res) => {
     try {
-        const cotizacion = await Cotizacion.create(req.body);
+        const cotizacion = await Cotizacion.create({
+            ...req.body,
+            estado: 'pendiente'
+        });
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al crear la cotizacion:', error);

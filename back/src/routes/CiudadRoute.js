@@ -10,8 +10,6 @@ const {
     eliminarCiudad 
 } = require("../controllers/CiudadController");
 
-// Middleware de autenticación
-router.use(authMiddleware);
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -19,22 +17,21 @@ const validarErrores = (req, res, next) => {
       return res.status(400).json({ errores: errors.array() });
     }
     next();
-  }; 
+}; 
 
-
-//Obtener todas las Ciudades
+// Obtener todas las Ciudades (sin autenticación)
 router.get("/", validarErrores, obtenerCiudades);
 
-//Obtener una Ciudad por nombre
-router.get("/:nombre", validarErrores, obtenerCiudadPorNombre);
+// Obtener una Ciudad por nombre (requiere autenticación)
+router.get("/:nombre", authMiddleware, validarErrores, obtenerCiudadPorNombre);
 
-//Crear una Ciudad
-router.post("/", validarErrores, crearCiudad);
+// Crear una Ciudad (requiere autenticación)
+router.post("/", authMiddleware, validarErrores, crearCiudad);
 
-//Actualizar una Ciudad
-router.put("/:id", validarErrores, actualizarCiudad);
+// Actualizar una Ciudad (requiere autenticación)
+router.put("/:id", authMiddleware, validarErrores, actualizarCiudad);
 
-//Eliminar una Ciudad
-router.delete("/:id", validarErrores, eliminarCiudad);
+// Eliminar una Ciudad (requiere autenticación)
+router.delete("/:id", authMiddleware, validarErrores, eliminarCiudad);
 
 module.exports = router;

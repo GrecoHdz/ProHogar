@@ -8,7 +8,8 @@ const {
     obtenerSolicitudServicioPorUsuario,
     crearSolicitudServicio, 
     actualizarSolicitudServicio, 
-    eliminarSolicitudServicio 
+    eliminarSolicitudServicio,
+    obtenerSolicitudesPorTecnico
 } = require("../controllers/SolicitudServicioController");
 
 // Middleware de autenticación
@@ -29,6 +30,11 @@ router.get("/", validarErrores, obtenerSolicitudesServicios);
 router.get("/servicio/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
 ], validarErrores, obtenerSolicitudServicioPorServicio);
+
+// Obtener todas las solicitudes asignadas a un técnico
+router.get("/tecnico/:id_tecnico", [
+    param("id_tecnico").isInt({ min: 1 }).withMessage("El ID del técnico debe ser un número entero positivo"),
+], validarErrores, obtenerSolicitudesPorTecnico);
 
 //Obtener todas las solicitudes de servicios por usuario
 router.get("/usuario/:id", [
@@ -51,7 +57,7 @@ router.post("/", [
 router.put("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"), 
     body("id_tecnico").optional().isInt({ min: 1 }).withMessage("El ID del técnico debe ser un número entero positivo"),
-    body("estado").optional().isIn(["pendiente_pagovisita", "pendiente_asignacion","verificando_pagovisita", "verificando_pagoservicio", "asignado", "en_proceso", "finalizado", "pendiente_pagoservicio","cancelado"]).withMessage("Estado no válido"),
+    body("estado").optional().isIn(["pendiente_pagovisita","pendiente_cotizacion","pendiente_asignacion","verificando_pagovisita", "verificando_pagoservicio", "asignado", "en_proceso", "finalizado", "pendiente_pagoservicio","cancelado"]).withMessage("Estado no válido"),
     body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres")
 ], validarErrores, actualizarSolicitudServicio);
 

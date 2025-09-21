@@ -1,5 +1,7 @@
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
+const Usuario = require("../models/usuariosModel");
+const { Op } = require("sequelize"); 
 
 //Obtener todas las solicitudes de servicios
 const obtenerSolicitudesServicios = async (req, res) => {
@@ -12,9 +14,9 @@ const obtenerSolicitudesServicios = async (req, res) => {
             }]
         });
         
-        // Formatear la respuesta para incluir el objeto servicio
+        // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
         const solicitudesFormateadas = solicitudes.map(solicitud => {
-            const { servicio, id_servicio, ...datosSolicitud } = solicitud.toJSON();
+            const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
             return {
                 ...datosSolicitud,
                 servicio: servicio || null
@@ -91,11 +93,9 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
         const pendientes = await SolicitudServicio.count({
             where: {
                 id_usuario: idUsuario,
-                estado: [
-                    'pendiente_pago',
-                    'pendiente_asignacion',
-                    'asignado',
-                    'en_proceso'
+                [Op.and]: [
+                    { estado: { [Op.ne]: 'finalizado' } },
+                    { estado: { [Op.ne]: 'cancelado' } }
                 ]
             }
         });   
@@ -111,6 +111,74 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
         res.status(500).json({ error: "Error al obtener las solicitudes de servicios por usuario" });
     }
 };
+
+// Obtener solicitudes de servicio asignadas a un técnico específico
+const obtenerSolicitudesPorTecnico = async (req, res) => {
+    try {
+        const { id_tecnico } = req.params;
+        
+        const solicitudes = await SolicitudServicio.findAll({
+            where: {
+                id_tecnico: id_tecnico
+            },
+            include: [{
+                model: Servicio,
+                as: 'servicio',
+                attributes: ['id_servicio', 'nombre']
+            },
+            {
+                model: Usuario,
+                as: 'Usuario',
+                attributes: ['nombre','telefono'] 
+            }],
+            order: [['fecha_solicitud', 'DESC']] // Ordenar por fecha más reciente
+        });
+        
+        // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
+        const solicitudesFormateadas = solicitudes.map(solicitud => {
+            const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
+            return {
+                ...datosSolicitud,
+                servicio: servicio || null
+            };
+        });
+         // Contar las solicitudes totales
+         const totalSolicitudes = await SolicitudServicio.count({
+            where: {
+                id_tecnico: id_tecnico
+            }
+        });
+
+        // Contar solicitudes finalizadas (completadas)
+        const finalizadas = await SolicitudServicio.count({
+            where: {
+                id_tecnico: id_tecnico,
+                estado: 'finalizado'
+            }
+        });
+
+        // Contar solicitudes activas (ni finalizadas ni canceladas)
+        const activas = await SolicitudServicio.count({
+            where: {
+                id_tecnico: id_tecnico,
+                [Op.and]: [
+                    { estado: { [Op.ne]: 'finalizado' } },
+                    { estado: { [Op.ne]: 'cancelado' } }
+                ]
+            }
+        });
+
+        res.json({
+            solicitudes: solicitudesFormateadas,
+            total: totalSolicitudes,
+            finalizadas,
+            activas,
+        });
+    } catch (error) {
+        console.error('Error al obtener las solicitudes del técnico:', error);
+        res.status(500).json({ error: 'Error al obtener las solicitudes del técnico' });
+    }
+}; 
 
 //Crear una solicitud de servicio
 const crearSolicitudServicio = async (req, res) => {
@@ -166,6 +234,7 @@ const eliminarSolicitudServicio = async (req, res) => {
 };
 
 module.exports = {
+    obtenerSolicitudesPorTecnico,
     obtenerSolicitudesServicios,
     obtenerSolicitudServicioPorServicio,
     obtenerSolicitudServicioPorUsuario,
