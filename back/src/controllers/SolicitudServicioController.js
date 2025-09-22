@@ -149,11 +149,14 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             }
         });
 
-        // Contar solicitudes finalizadas (completadas)
+        // Contar solicitudes finalizadas (completadas) y pendientes de pago
         const finalizadas = await SolicitudServicio.count({
             where: {
                 id_tecnico: id_tecnico,
-                estado: 'finalizado'
+                [Op.or]: [
+                    { estado: 'finalizado' },
+                    { estado: 'pendiente_pagoservicio' }
+                ]
             }
         });
 
@@ -163,7 +166,9 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
                 id_tecnico: id_tecnico,
                 [Op.and]: [
                     { estado: { [Op.ne]: 'finalizado' } },
-                    { estado: { [Op.ne]: 'cancelado' } }
+                    { estado: { [Op.ne]: 'cancelado' } },
+                    { estado: { [Op.ne]: 'pendiente_pagoservicio' } },
+                    { estado: { [Op.ne]: 'pendiente_asignacion' } } 
                 ]
             }
         });
