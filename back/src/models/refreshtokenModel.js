@@ -9,18 +9,11 @@ const RefreshToken = sequelize.define('RefreshToken', {
     },
     token: {
         type: DataTypes.STRING(512),  // Longitud específica para tokens JWT
-        allowNull: false,
-        unique: 'token_unique'  // Nombre explícito para la restricción única
+        allowNull: false
     },
     usuario_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'usuario',
-            key: 'id_usuario',
-            onDelete: 'CASCADE',
-            onUpdate: 'CASCADE'
-        }
+        allowNull: false
     },
     expires_at: {
         type: DataTypes.DATE,
@@ -49,16 +42,6 @@ const RefreshToken = sequelize.define('RefreshToken', {
             fields: ['expires_at']
         }
     ]
-});
-
-// Relación con Usuario
-RefreshToken.associate = function(models) {
-    RefreshToken.belongsTo(models.Usuario, {
-        foreignKey: 'usuario_id',
-        as: 'usuario',
-        onDelete: 'CASCADE',  // Eliminar tokens cuando se elimine el usuario
-        onUpdate: 'CASCADE'
-    });
-};
+}); 
 
 module.exports = RefreshToken;

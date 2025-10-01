@@ -7,18 +7,26 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
   host: process.env.DB_HOST,
   dialect: "mysql",
   logging: false,
-  timezone: '-06:00', // Configurar zona horaria para América Central (UTC-6)
+  timezone: "-06:00", // Configurar zona horaria para América Central (UTC-6)
 });
 
-// Función para conectar a la base de datos
+// Función para conectar a la base de datos y sincronizar modelos
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Base de datos conectada correctamente.");
+
+    // Sincronizar modelos
+    await sequelize.sync({ 
+      alter: true, // ✅ crea tablas si no existen, no altera las ya existentes
+    });
+
+    console.log("📦 Tablas listas (si no existían, se crearon).");
   } catch (error) {
     console.error("❌ Error al conectar la base de datos:", error);
     process.exit(1); // Salir si no se puede conectar
   }
 };
 
-module.exports = { sequelize, connectDB };
+module.exports = { sequelize, connectDB }; 
+

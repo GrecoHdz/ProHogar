@@ -128,7 +128,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             },
             {
                 model: Usuario,
-                as: 'Usuario',
+                as: 'cliente',
                 attributes: ['nombre','telefono'] 
             }],
             order: [['fecha_solicitud', 'DESC']] // Ordenar por fecha más reciente

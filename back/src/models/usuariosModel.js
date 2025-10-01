@@ -9,23 +9,11 @@ const Usuario = sequelize.define("Usuario", {
     },
     id_ciudad: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-            model: 'ciudad',
-            key: 'id_ciudad'
-        },
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE'
+        allowNull: false
     },
     id_rol: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-            model: 'roles',
-            key: 'id_rol'
-        },
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE'
+        allowNull: false
     },
     nombre: {
         type: DataTypes.STRING,
@@ -85,22 +73,5 @@ const Usuario = sequelize.define("Usuario", {
     ]
 });
 
-// Agregamos la relación con Rol después de definir el modelo
-Usuario.associate = function(models) {
-  Usuario.belongsTo(models.Rol, {
-    foreignKey: 'id_rol',
-    as: 'rol',
-    onDelete: 'SET NULL',
-    onUpdate: 'CASCADE'
-  });
-
-  // Agregamos la relación con Ciudad después de definir el modelo
-  Usuario.belongsTo(models.Ciudad, {
-    foreignKey: 'id_ciudad',
-    as: 'ciudad',
-    onDelete: 'SET NULL',
-    onUpdate: 'CASCADE'
-  });
-};
 
 module.exports = Usuario;

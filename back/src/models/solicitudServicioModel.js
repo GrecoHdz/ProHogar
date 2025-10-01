@@ -9,35 +9,19 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
     },
     id_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'usuarios',
-            key: 'id_usuario'
-        }
+        allowNull: false
     },
     id_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'servicios',
-            key: 'id_servicio'
-        }
+        allowNull: false
     },
     id_ciudad:{
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'ciudades',
-            key: 'id_ciudad'
-        }
+        allowNull: false
     },
     id_tecnico: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-            model: 'tecnicos',
-            key: 'id_tecnico'
-        }
+        allowNull: true
     },
     colonia:{
         type: DataTypes.STRING,
@@ -71,6 +55,20 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
 }, {
     timestamps: false,
     tableName: "solicitudservicio",
+    indexes: [
+        {
+          name: 'idx_solicitud_tecnico_estado',
+          fields: ['id_tecnico', 'estado']
+        },
+        {
+          name: 'idx_solicitud_tecnico_fecha',
+          fields: ['id_tecnico', 'fecha_solicitud']
+        },
+        {
+          name: 'idx_solicitud_servicio',
+          fields: ['id_servicio']
+        }
+      ]
 });
 
 module.exports = SolicitudServicio;

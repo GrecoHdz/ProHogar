@@ -36,12 +36,15 @@ const Cotizacion = sequelize.define("Cotizacion", {
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("pendiente", "aceptado", "rechazado", "pagado"),
+        type: DataTypes.ENUM("pendiente", "aceptado", "rechazado", "pagado", "confirmado"),
         allowNull: false
     }
 }, {
     timestamps: false,
-    tableName: "cotizaciones",
+    tableName: "cotizaciones", 
+    indexes: [ 
+        { name: 'idx_cotizacion_estado', fields: ['estado'] }
+      ]
 });
 
 module.exports = Cotizacion;

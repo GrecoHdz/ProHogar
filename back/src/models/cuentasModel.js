@@ -12,7 +12,7 @@ const Cuenta = sequelize.define("cuentas", {
         allowNull: false
     },
     beneficiario: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.STRING(100),
         allowNull: false
     },
     num_cuenta: {

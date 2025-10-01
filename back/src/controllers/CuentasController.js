@@ -1,10 +1,11 @@
 const Cuenta = require("../models/cuentasModel");
-
-
+ 
 //Obtener todas las cuentas
 const obtenerCuentas = async (req, res) => {
     try {
-        const cuentas = await Cuenta.findAll();
+        const cuentas = await Cuenta.findAll({
+            attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo', 'activo']
+        });
         res.json(cuentas);
     } catch (error) {
         console.error("Error al obtener cuentas:", error);

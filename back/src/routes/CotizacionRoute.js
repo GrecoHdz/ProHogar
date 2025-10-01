@@ -50,7 +50,7 @@ router.get("/solicitud/:id_solicitud", [
 router.post("/", [ 
     body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo"), 
     body("monto_manodeobra").isFloat({ min: 1 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
-    body("monto_materiales").isFloat({ min: 1 }).withMessage("El monto de materiales debe ser un número entero positivo"),
+    body("monto_materiales").isFloat({ min: 0 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("comentario").isString().withMessage("El comentario debe ser una cadena de caracteres"),
     body("fecha").isISO8601().withMessage("La fecha debe tener un formato válido (ISO 8601)"),
 ], validarErrores, createCotizacion);
@@ -63,7 +63,7 @@ router.put("/:id", [
     body("monto_manodeobra").optional().isFloat({ min: 1 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
     body("monto_materiales").optional().isFloat({ min: 1 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres"), 
-    body("estado").optional().isIn(["pendiente", "aceptado", "rechazado", "pagado"]).withMessage("El estado debe ser 'pendiente', 'aceptado', 'rechazado' o 'pagado'")
+    body("estado").optional().isIn(["pendiente", "aceptado", "rechazado", "pagado", "confirmado"]).withMessage("El estado debe ser 'pendiente', 'aceptado', 'rechazado', 'pagado' o 'pago_confirmado'")
 ], validarErrores, updateCotizacion);
 
 //Eliminar cotizacion
