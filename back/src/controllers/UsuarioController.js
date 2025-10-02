@@ -275,7 +275,8 @@ const actualizarUsuario = async (req, res) => {
         telefono, 
         id_ciudad,
         password_hash,
-        activo 
+        activo,
+        estado 
     } = req.body;
     
     if (!id) {
@@ -303,6 +304,7 @@ const actualizarUsuario = async (req, res) => {
             usuario.password_hash = hashedPassword;
         }
         if (activo !== undefined) usuario.activo = activo;
+        if (estado) usuario.estado = estado;
         
         await usuario.save();
         

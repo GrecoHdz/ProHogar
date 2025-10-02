@@ -46,10 +46,10 @@ const Usuario = sequelize.define("Usuario", {
         allowNull: false,
         defaultValue: DataTypes.NOW
     },
-    activo: {
-        type: DataTypes.BOOLEAN,
+    estado: {
+        type: DataTypes.ENUM('activo', 'inactivo','deshabilitado'),
         allowNull: false,
-        defaultValue: true
+        defaultValue: 'activo'
     }
 }, {
     timestamps: false,
@@ -62,8 +62,8 @@ const Usuario = sequelize.define("Usuario", {
         },
         // Índice para búsquedas por estado
         {
-            name: 'idx_usuario_activo',
-            fields: ['activo']
+            name: 'idx_usuario_estado',
+            fields: ['estado']
         },
         // Índice para búsquedas por ciudad
         {

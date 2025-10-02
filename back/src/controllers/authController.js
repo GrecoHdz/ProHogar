@@ -11,9 +11,15 @@ const Ciudad = require('../models/ciudadesModel');
 // Generar un token de acceso
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { id: user.id_usuario, identidad: user.identidad, rol: user.id_rol },
+    { 
+      id: user.id_usuario, 
+      identidad: user.identidad, 
+      rol: user.id_rol,
+      estado: user.estado, // Incluir estado en el token
+      role: (user.rol && user.rol.nombre_rol) || 'usuario' // Incluir el rol en el token
+    },
     process.env.JWT_SECRET,
-    { expiresIn: '15m' } // Token de acceso corto (15 minutos)
+    { expiresIn: '15m' }
   );
 };
 
@@ -21,7 +27,7 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = async (usuario, transaction = null) => {
   const token = crypto.randomBytes(40).toString('hex');
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 días
+  expiresAt.setDate(expiresAt.getDate() + 7);
 
   const options = transaction ? { transaction } : {};
   await RefreshToken.create(
@@ -34,6 +40,20 @@ const generateRefreshToken = async (usuario, transaction = null) => {
   );
 
   return token;
+};
+
+// Función auxiliar para limpiar cookies
+const clearAllAuthCookies = (res) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  };
+
+  res.clearCookie('refreshToken', cookieOptions);
+  res.clearCookie('token', { ...cookieOptions, httpOnly: false });
+  res.clearCookie('user', { ...cookieOptions, httpOnly: false });
 };
 
 // LOGIN
@@ -50,59 +70,94 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
     }
 
+    // 🔹 VERIFICAR ESTADO DEL USUARIO
+    if (user.estado === 'deshabilitado') {
+      return res.status(403).json({ 
+        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
+        disabled: true 
+      });
+    }
+
     // Verificar la contraseña hasheada
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
     }
 
-    // Eliminar cualquier refresh token existente para este usuario
-    await RefreshToken.destroy({ where: { usuario_id: user.id_usuario } });
+    const t = await sequelize.transaction();
+    
+    try {
+      // Eliminar cualquier refresh token existente para este usuario
+      await RefreshToken.destroy({ 
+        where: { usuario_id: user.id_usuario },
+        transaction: t 
+      });
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = await generateRefreshToken(user);
+      const accessToken = generateAccessToken(user);
+      const refreshToken = await generateRefreshToken(user, t);
 
-    // Crear objeto de usuario limpio
-    const userData = user.get({ plain: true });
-    delete userData.password_hash;
+      // Crear objeto de usuario limpio
+      const userData = user.get({ plain: true });
+      delete userData.password_hash;
 
-    userData.role = user.rol && user.rol.nombre_rol;
+      userData.role = user.rol && user.rol.nombre_rol;
 
-    // Crear objeto con solo los datos necesarios para el frontend
-    const userForCookie = {
-      id_usuario: userData.id_usuario,
-      nombre: userData.nombre,
-      id_rol: userData.id_rol,
-      role: userData.role,
-    };
+      // Crear objeto con solo los datos necesarios para el frontend
+      const userForCookie = {
+        id_usuario: userData.id_usuario,
+        nombre: userData.nombre,
+        role: (user.rol && user.rol.nombre_rol) || 'usuario',
+        id_ciudad: userData.id_ciudad || 1
+      };
 
-    // Cookie HTTP-Only para el refresh token
-    res.cookie('refreshToken', refreshToken, {
-      ...req.cookieConfig,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+      // Cookie HTTP-Only para el refresh token
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
 
-    // Cookie accesible desde JS con el access token
-    res.cookie('token', accessToken, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-      maxAge: 15 * 60 * 1000,
-      path: '/',
-    });
+      // Cookie accesible desde JS con el access token
+      res.cookie('token', accessToken, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000,
+        path: '/',
+      });
 
-    res.status(200).json({
-      success: true,
-      token: accessToken,
-      user: userForCookie,
-    });
+      // Cookie con datos del usuario
+      res.cookie('user', JSON.stringify(userForCookie), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+
+      await t.commit();
+      
+      res.status(200).json({
+        success: true,
+        token: accessToken,
+        user: userForCookie,
+      });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error en el login:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Error en el servidor durante el inicio de sesión' 
+      });
+    }
   } catch (error) {
     console.error('Error en el login:', error);
-    res.status(500).json({ message: 'Error en el servidor' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error en el servidor' 
+    });
   }
 };
 
@@ -111,11 +166,96 @@ const refreshToken = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const refreshToken = req.cookies.refreshToken;
+    const accessToken = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    
+    // Si no hay refresh token pero hay access token, intentar regenerar el refresh token
+    if (!refreshToken && accessToken) {
+      try {
+        const decoded = jwt.verify(accessToken, process.env.JWT_SECRET, { ignoreExpiration: true });
+        
+        // Buscar al usuario
+        const user = await Usuario.findByPk(decoded.id, {
+          include: [
+            { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
+            { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
+          ]
+        });
+
+        if (!user || user.estado === 'deshabilitado') {
+          throw new Error('Usuario no encontrado o deshabilitado');
+        }
+
+        // Eliminar cualquier refresh token existente para este usuario
+        await RefreshToken.destroy({
+          where: { usuario_id: user.id_usuario },
+          transaction: t
+        });
+
+        // Generar nuevos tokens
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = await generateRefreshToken(user, t);
+
+        // Preparar datos del usuario
+        const userData = user.get({ plain: true });
+        delete userData.password_hash;
+        userData.role = user.rol?.nombre_rol?.toLowerCase() || 'usuario';
+
+        const userForCookie = {
+          id_usuario: userData.id_usuario,
+          nombre: userData.nombre,
+          role: (user.rol && user.rol.nombre_rol) || 'usuario',
+          id_ciudad: userData.id_ciudad || 1
+        };
+
+        // Establecer cookies
+        const cookieOptions = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          path: '/',
+        };
+
+        res.cookie('refreshToken', newRefreshToken, {
+          ...cookieOptions,
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+        });
+
+        res.cookie('token', newAccessToken, {
+          ...cookieOptions,
+          httpOnly: false,
+          maxAge: 15 * 60 * 1000, // 15 minutos
+        });
+
+        res.cookie('user', JSON.stringify(userForCookie), {
+          ...cookieOptions,
+          httpOnly: false,
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+        });
+
+        await t.commit();
+        return res.json({
+          success: true,
+          message: 'Sesión renovada exitosamente',
+          token: newAccessToken,
+          user: userForCookie,
+        });
+      } catch (error) {
+        console.error('Error al regenerar tokens:', error);
+        clearAllAuthCookies(res);
+        await t.rollback();
+        return res.status(401).json({
+          success: false,
+          message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
+        });
+      }
+    }
+    
     if (!refreshToken) {
+      clearAllAuthCookies(res);
+      await t.rollback();
       return res.status(401).json({
         success: false,
-        message:
-          'No se encontró el token de actualización. Por favor, inicie sesión nuevamente.',
+        message: 'No se encontró el token de actualización. Por favor, inicie sesión nuevamente.',
       });
     }
 
@@ -126,56 +266,73 @@ const refreshToken = async (req, res) => {
           model: Usuario,
           as: 'usuario',
           attributes: { exclude: ['password_hash'] },
-          include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] }],
+          include: [
+            { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
+            { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
+          ],
         },
       ],
       transaction: t,
     });
 
     if (!storedToken) {
-      res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        path: '/',
-      });
+      clearAllAuthCookies(res);
+      await t.rollback();
       return res.status(403).json({
         success: false,
         message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
       });
     }
 
+    // 🔹 VERIFICAR EXPIRACIÓN DEL REFRESH TOKEN
     if (new Date() > storedToken.expires_at) {
       await storedToken.destroy({ transaction: t });
+      clearAllAuthCookies(res);
       await t.rollback();
-      return res
-        .status(403)
-        .json({ success: false, message: 'Refresh token expirado' });
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Sesión expirada. Por favor, inicie sesión nuevamente.' 
+      });
     }
 
     const user = storedToken.usuario;
+
+    // 🔹 VERIFICAR ESTADO DEL USUARIO
+    if (user.estado === 'deshabilitado') {
+      await storedToken.destroy({ transaction: t });
+      clearAllAuthCookies(res);
+      await t.rollback();
+      return res.status(403).json({
+        success: false,
+        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
+        disabled: true
+      });
+    }
+
     const newAccessToken = generateAccessToken(user);
 
+    // Destruir el refresh token antiguo y crear uno nuevo
     await storedToken.destroy({ transaction: t });
     const newRefreshToken = await generateRefreshToken(user, t);
 
     const userData = user.get({ plain: true });
     delete userData.password_hash;
 
-    userData.role =
-      user.rol && user.rol.nombre_rol
-        ? user.rol.nombre_rol.toLowerCase()
-        : 'usuario';
+    userData.role = user.rol && user.rol.nombre_rol
+      ? user.rol.nombre_rol.toLowerCase()
+      : 'usuario';
 
     const userForCookie = {
       id_usuario: userData.id_usuario,
       nombre: userData.nombre,
       role: userData.role,
+      id_rol: userData.id_rol,
       id_ciudad: userData.id_ciudad || 1,
+      estado: userData.estado
     };
 
+    // Establecer todas las cookies
     res.cookie('refreshToken', newRefreshToken, {
-      ...req.cookieConfig,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
@@ -191,6 +348,14 @@ const refreshToken = async (req, res) => {
       path: '/',
     });
 
+    res.cookie('user', JSON.stringify(userForCookie), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
     await t.commit();
     res.json({
       success: true,
@@ -203,6 +368,7 @@ const refreshToken = async (req, res) => {
       await t.rollback();
     }
     console.error('Error al refrescar el token:', error);
+    clearAllAuthCookies(res);
     res.status(401).json({
       success: false,
       message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
@@ -221,17 +387,7 @@ const logout = async (req, res) => {
     }
   }
 
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    path: '/',
-  };
-
-  res.clearCookie('refreshToken', { ...cookieOptions });
-  res.clearCookie('token', { ...cookieOptions, httpOnly: false });
-  res.clearCookie('user', { ...cookieOptions, httpOnly: false });
-
+  clearAllAuthCookies(res);
   res.json({ success: true, message: 'Sesión cerrada correctamente' });
 };
 
@@ -253,20 +409,28 @@ const getCurrentUser = async (req, res) => {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
+    // 🔹 VERIFICAR ESTADO DEL USUARIO
+    if (user.estado === 'deshabilitado') {
+      await t.rollback();
+      return res.status(403).json({ 
+        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
+        disabled: true 
+      });
+    }
+
     const userData = user.get({ plain: true });
-    userData.role =
-      user.rol && user.rol.nombre_rol
-        ? user.rol.nombre_rol.toLowerCase()
-        : 'usuario';
+    userData.role = user.rol && user.rol.nombre_rol
+      ? user.rol.nombre_rol.toLowerCase()
+      : 'usuario';
 
     await t.commit();
     res.status(200).json(userData);
   } catch (error) {
     await t.rollback();
     console.error('Error al obtener usuario actual:', error);
-    res
-      .status(500)
-      .json({ message: 'Error del servidor al obtener información del usuario' });
+    res.status(500).json({ 
+      message: 'Error del servidor al obtener información del usuario' 
+    });
   }
 };
 
