@@ -12,7 +12,7 @@ const Config = sequelize.define("config", {
         allowNull: false
     },
     valor: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.STRING(100),
         allowNull: false
     }
 }, {

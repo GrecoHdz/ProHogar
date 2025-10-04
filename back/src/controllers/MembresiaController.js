@@ -97,18 +97,18 @@ const obtenerProgresoMembresia = async (req, res) => {
         const membresias = await Membresia.findAll({
             where: { 
                 id_usuario: req.params.id_usuario,
-                estado: ['activa', 'vencida']
+                estado: ['activa']
             },
             order: [['fecha', 'ASC']], // Orden cronológico
             raw: true
         });
 
         if (!membresias || membresias.length === 0) {
-            return res.status(404).json({ 
-                status: 'not_found',
-                message: 'No se encontraron membresías para este usuario',
+            return res.json({
+                status: 'success',
+                mesesProgreso: 0,
                 montoTotal: 0,
-                mesesProgreso: 0
+                valorMembresia: valorMembresia
             });
         }
 
@@ -157,7 +157,6 @@ const obtenerProgresoMembresia = async (req, res) => {
         });
     }
 };
-
 
 //Crear membresia
 const crearMembresia = async (req, res) => {

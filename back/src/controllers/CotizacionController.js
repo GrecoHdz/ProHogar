@@ -1,4 +1,5 @@
 const Cotizacion = require("../models/cotizacionModel"); 
+const Referido = require("../models/referidosModel");
 
 //Obtener todas las cotizaciones
 const getAllCotizaciones = async (req, res) => {

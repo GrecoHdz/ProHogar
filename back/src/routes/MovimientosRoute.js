@@ -56,24 +56,16 @@ router.get("/estadisticas/:id_tecnico", [
 //Crear movimiento
 router.post("/", [
     body("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero"), 
+    body("id_cotizacion").optional().isInt().withMessage("El id_cotizacion debe ser un numero entero"),
+    body("id_referido").optional().isInt().withMessage("El id_referido debe ser un numero entero"),
     body("tipo").isIn(["ingreso", "retiro"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
     body("monto").isInt().withMessage("El monto debe ser un numero entero"),
-    // Validación condicional para el campo descripción
-    (req, res, next) => {
-        if (req.body.descripcion !== undefined && req.body.descripcion !== null) {
-            body('descripcion').isString().withMessage('La descripción debe ser un texto')(req, res, next);
-        } else {
-            next();
-        }
-    }
+    body("descripcion").optional().isString().withMessage("La descripción debe ser un texto"),
 ], validarErrores, crearMovimiento);
 
 //Actualizar movimiento
 router.put("/:id", [
-    param("id").isInt().withMessage("El id debe ser un numero entero"),
-    body("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero"),
-    body("monto").isInt().withMessage("El monto debe ser un numero entero"),
-    body("tipo").isIn(["ingreso", "retiro"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
+    param("id").isInt().withMessage("El id debe ser un numero entero"), 
     body("estado").optional().isIn(["pendiente", "completado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
 ], validarErrores, actualizarMovimiento);
 

@@ -11,8 +11,6 @@ const {
     eliminarConfig 
 } = require("../controllers/ConfigController");
 
-// Middleware de autenticación
-router.use(authMiddleware);
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -24,12 +22,12 @@ const validarErrores = (req, res, next) => {
 
 //Obtener todas las configuraciones
 router.get("/", [ 
-], validarErrores, obtenerConfig);
+],authMiddleware, validarErrores, obtenerConfig);
 
 //Obtener configuracion por id
 router.get("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, obtenerConfigPorId);
+],authMiddleware, validarErrores, obtenerConfigPorId);
 
 //Obtener valor de configuracion
 router.get("/valor/:tipo_config", [
@@ -40,18 +38,18 @@ router.get("/valor/:tipo_config", [
 router.post("/", [
     body("tipo_config").isString().withMessage("El tipo_config debe ser una cadena de caracteres"),
     body("valor").isInt().withMessage("El valor debe ser un numero entero")
-], validarErrores, crearConfig);
+],authMiddleware, validarErrores, crearConfig);
 
 //Actualizar configuracion
 router.put("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero"),
     body("tipo_config").optional().isString().withMessage("El tipo_config debe ser una cadena de caracteres"),
     body("valor").optional().isInt().withMessage("El valor debe ser un numero entero")
-], validarErrores, actualizarConfig);
+],authMiddleware, validarErrores, actualizarConfig);
 
 //Eliminar configuracion
 router.delete("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, eliminarConfig);
+],authMiddleware, validarErrores, eliminarConfig);
 
 module.exports = router;

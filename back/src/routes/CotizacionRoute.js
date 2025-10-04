@@ -62,6 +62,8 @@ router.put("/:id", [
     body("num_comprobante").optional().isString().withMessage("El número de comprobante debe ser una cadena de caracteres"),
     body("monto_manodeobra").optional().isFloat({ min: 1 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
     body("monto_materiales").optional().isFloat({ min: 1 }).withMessage("El monto de materiales debe ser un número entero positivo"),
+    body("descuento_membresia").optional().isFloat({ min: 0 }).withMessage("El descuento de membresia debe ser un número entero positivo"),
+    body("credito_usado").optional().isFloat({ min: 0 }).withMessage("El crédito usado debe ser un número entero positivo"),
     body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres"), 
     body("estado").optional().isIn(["pendiente", "aceptado", "rechazado", "pagado", "confirmado"]).withMessage("El estado debe ser 'pendiente', 'aceptado', 'rechazado', 'pagado' o 'pago_confirmado'")
 ], validarErrores, updateCotizacion);

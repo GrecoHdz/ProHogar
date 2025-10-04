@@ -27,6 +27,14 @@ const Cotizacion = sequelize.define("Cotizacion", {
         type: DataTypes.INTEGER,
         allowNull: false
     },
+    descuento_membresia: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    credito_usado: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
     comentario:{
         type:DataTypes.STRING,
         allowNull:false
@@ -43,7 +51,8 @@ const Cotizacion = sequelize.define("Cotizacion", {
     timestamps: false,
     tableName: "cotizaciones", 
     indexes: [ 
-        { name: 'idx_cotizacion_estado', fields: ['estado'] }
+        { name: 'idx_cotizacion_estado', fields: ['estado'] },
+        { name: 'idx_cotizacion_id_solicitud', fields: ['id_solicitud'] }
       ]
 });
 

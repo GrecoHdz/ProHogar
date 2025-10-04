@@ -15,6 +15,10 @@ const Movimiento = sequelize.define('Movimiento', {
         type: DataTypes.INTEGER,
         allowNull: true
     },
+    id_referido: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
     tipo: {
         type: DataTypes.ENUM('ingreso', 'retiro'),
         allowNull: false
@@ -29,10 +33,12 @@ const Movimiento = sequelize.define('Movimiento', {
     },
     fecha: {
         type: DataTypes.DATE,
+        allowNull: true,
         defaultValue: DataTypes.NOW
     },
     estado: {
         type: DataTypes.ENUM('pendiente', 'completado'),
+        allowNull: true,
         defaultValue: 'pendiente'
     }
 }, {
@@ -50,6 +56,10 @@ const Movimiento = sequelize.define('Movimiento', {
         {
           name: 'idx_movimientos_tipo_fecha',
           fields: ['tipo', 'fecha']
+        },
+        {
+          name: 'idx_movimientos_referido_fecha',
+          fields: ['id_referido', 'fecha']
         }
       ]
 }); 

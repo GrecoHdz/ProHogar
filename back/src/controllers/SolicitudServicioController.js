@@ -1,6 +1,6 @@
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
-const Usuario = require("../models/usuariosModel");
+const Usuario = require("../models/usuariosModel"); 
 const { Op } = require("sequelize"); 
 
 //Obtener todas las solicitudes de servicios
@@ -59,7 +59,13 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                 model: Servicio,
                 as: 'servicio',
                 attributes: ['id_servicio', 'nombre']
-            }],
+            },
+            {
+                model: Usuario,
+                as: 'tecnico',
+                attributes: ['nombre'] 
+            }
+        ],
             order: [['fecha_solicitud', 'DESC']],
             raw: true,
             nest: true

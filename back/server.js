@@ -23,6 +23,8 @@ const pagoVisitaRoutes = require("./src/routes/PagoVisitaRoute");
 const cotizacionRoutes = require("./src/routes/CotizacionRoute"); 
 const movimientosRoutes = require("./src/routes/MovimientosRoute");
 const calificacionesRoutes = require("./src/routes/CalificacionesRoute");
+const creditoRoutes = require("./src/routes/CreditoRoute");
+const referidoRoutes = require("./src/routes/ReferidoRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -68,6 +70,8 @@ app.use("/pagovisita", pagoVisitaRoutes);
 app.use("/cotizacion", cotizacionRoutes);  
 app.use("/movimientos", movimientosRoutes);
 app.use("/calificaciones", calificacionesRoutes);
+app.use("/credito", creditoRoutes);
+app.use("/referidos", referidoRoutes);
 // Aplicar limitador estricto a rutas de autenticación
 //app.use("/login", authLimiter, authRoutes);
 

@@ -29,7 +29,8 @@ const Calificacion = sequelize.define('Calificacion', {
     },
     fecha: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: true,
+        defaultValue: DataTypes.NOW
     }
 }, {
     tableName: 'calificaciones',

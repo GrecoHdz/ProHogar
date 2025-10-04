@@ -11,6 +11,7 @@ const Cuenta = require('./cuentasModel');
 const Cotizacion = require('./cotizacionModel');
 const Movimiento = require('./movimientosModel');
 const Calificacion = require('./calificacionesModels');
+const CreditoUsuario = require('./creditoUsuariosModel');
 
 // Función para configurar las asociaciones
 const setupAssociations = () => {
@@ -265,6 +266,14 @@ const setupAssociations = () => {
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
+
+  // Relación Credito - Usuario
+  CreditoUsuario.belongsTo(Usuario, { 
+    foreignKey: 'id_usuario',
+    as: 'usuario',
+    onUpdate: 'CASCADE',
+    onDelete: 'RESTRICT'
+  }); 
 
   console.log('Asociaciones configuradas correctamente');
 };
