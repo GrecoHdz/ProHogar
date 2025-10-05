@@ -217,6 +217,7 @@ const crearUsuario = async (req, res) => {
         res.status(201).json({
             status: 201,
             message: "Usuario creado exitosamente",
+            id_usuario: usuario.id_usuario, // Asegurar que el ID esté disponible en la respuesta
             usuario: usuarioSinPassword
         });
     } catch (error) {

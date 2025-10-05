@@ -118,11 +118,14 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     }
 };
 
-// Obtener solicitudes de servicio asignadas a un técnico específico
+// Obtener solicitudes de servicio asignadas a un técnico específico (limit 3)
 const obtenerSolicitudesPorTecnico = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
-        
+        const limit = parseInt(req.query.limit) || 10; // Límite de items por página, por defecto 3
+        const offset = parseInt(req.query.offset) || 0; // Offset inicial
+
+        // Obtener solicitudes con límite y offset
         const solicitudes = await SolicitudServicio.findAll({
             where: {
                 id_tecnico: id_tecnico
@@ -137,9 +140,16 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
                 as: 'cliente',
                 attributes: ['nombre','telefono'] 
             }],
-            order: [['fecha_solicitud', 'DESC']] // Ordenar por fecha más reciente
+            order: [['fecha_solicitud', 'DESC']],
+            limit: limit,
+            offset: offset
         });
-        
+
+        // Contar total de solicitudes para este técnico
+        const totalSolicitudes = await SolicitudServicio.count({
+            where: { id_tecnico: id_tecnico }
+        });
+
         // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
         const solicitudesFormateadas = solicitudes.map(solicitud => {
             const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
@@ -147,12 +157,6 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
                 ...datosSolicitud,
                 servicio: servicio || null
             };
-        });
-         // Contar las solicitudes totales
-         const totalSolicitudes = await SolicitudServicio.count({
-            where: {
-                id_tecnico: id_tecnico
-            }
         });
 
         // Contar solicitudes finalizadas (completadas) y pendientes de pago
@@ -179,9 +183,14 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             }
         });
 
+        // Verificar si hay más resultados
+        const hasMore = (offset + solicitudes.length) < totalSolicitudes;
+
         res.json({
             solicitudes: solicitudesFormateadas,
             total: totalSolicitudes,
+            hasMore: hasMore,
+            offset: offset + solicitudes.length, // Nuevo offset para la próxima carga
             finalizadas,
             activas,
         });
@@ -189,7 +198,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         console.error('Error al obtener las solicitudes del técnico:', error);
         res.status(500).json({ error: 'Error al obtener las solicitudes del técnico' });
     }
-}; 
+};
 
 //Crear una solicitud de servicio
 const crearSolicitudServicio = async (req, res) => {

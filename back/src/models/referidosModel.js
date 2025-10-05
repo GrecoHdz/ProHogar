@@ -17,7 +17,8 @@ const Referido = sequelize.define("Referido", {
     },
     fecha_referido: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: true,
+        defaultValue: DataTypes.NOW
     }
 }, {
     timestamps: false,

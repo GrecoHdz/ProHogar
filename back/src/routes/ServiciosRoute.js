@@ -10,9 +10,7 @@ const {
     actualizarServicio, 
     eliminarServicio 
 } = require("../controllers/ServiciosController");
-
-// Middleware de autenticación
-router.use(authMiddleware);
+ 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -23,7 +21,7 @@ const validarErrores = (req, res, next) => {
   }; 
 
 //Obtener todos los servicios
-router.get("/", validarErrores, obtenerServicios);
+router.get("/", validarErrores, obtenerServicios, authMiddleware);
 
 //Obtener todos los servicios activos
 router.get("/activos", validarErrores, obtenerServiciosActivos);
@@ -31,14 +29,14 @@ router.get("/activos", validarErrores, obtenerServiciosActivos);
 //Obtener un servicio por ID
 router.get("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
-], validarErrores, obtenerServicioPorId);
+], validarErrores, obtenerServicioPorId, authMiddleware);
 
 //Crear un servicio
 router.post("/", [
     body("nombre").isString().withMessage("El nombre debe ser una cadena de caracteres"),
     body("descripcion").isString().withMessage("La descripción debe ser una cadena de caracteres"),
     body("estado").optional().isBoolean().withMessage("El estado debe ser un booleano")
-], validarErrores, crearServicio);
+], validarErrores, crearServicio, authMiddleware);
 
 //Actualizar un servicio
 router.put("/:id", [
@@ -46,11 +44,11 @@ router.put("/:id", [
     body("nombre").optional().isString().withMessage("El nombre debe ser una cadena de caracteres"),
     body("descripcion").optional().isString().withMessage("La descripción debe ser una cadena de caracteres"),
     body("estado").optional().isBoolean().withMessage("El estado debe ser un booleano")
-], validarErrores, actualizarServicio);
+], validarErrores, actualizarServicio, authMiddleware);
 
 //Eliminar un servicio
 router.delete("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo")
-], validarErrores, eliminarServicio);
+], validarErrores, eliminarServicio, authMiddleware);
 
 module.exports = router;

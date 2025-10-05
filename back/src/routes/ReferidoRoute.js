@@ -8,9 +8,7 @@ const {
     getReferidorByUser,
     createReferido
 } = require("../controllers/ReferidoController");
-
-// Middleware de autenticación
-router.use(authMiddleware);
+ 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -27,12 +25,12 @@ router.get("/", [
 //Obtener referidos de un usuario
 router.get("/:id_referidor", [
     param("id_referidor").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, getReferidosByUser);
+], validarErrores, getReferidosByUser, authMiddleware);
 
 //Obtener referidor de un usuario
 router.get("/referidor/:id_referido_usuario", [
     param("id_referido_usuario").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, getReferidorByUser);
+], validarErrores, getReferidorByUser, authMiddleware);
 
 //Crear referido
 router.post("/", [
