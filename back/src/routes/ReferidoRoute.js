@@ -25,7 +25,7 @@ router.get("/", [
 ], validarErrores, getAllReferidos);
 
 //Obtener referidos de un usuario
-router.get("/referidos/:id_referidor", [
+router.get("/:id_referidor", [
     param("id_referidor").isInt().withMessage("El ID debe ser un numero entero")
 ], validarErrores, getReferidosByUser);
 

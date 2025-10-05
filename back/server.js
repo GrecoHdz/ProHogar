@@ -49,7 +49,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: true, //process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: true,//'http://localhost:3000',// true, process.env.FRONTEND_URL ||
     credentials: true,
   })
 ); 

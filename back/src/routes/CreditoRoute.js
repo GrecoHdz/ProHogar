@@ -35,7 +35,7 @@ router.get("/usuario/:id_usuario", [
 //Crear credito
 router.post("/", [
     body("id_usuario").isInt().withMessage("El ID debe ser un numero entero"),
-    body("monto_credito").isInt().withMessage("El monto debe ser un numero entero"),
+    body("monto_credito").isFloat({ min: 0 }).withMessage("El monto debe ser un número válido (entero o decimal) y mayor o igual a 0"),
     validarErrores
 ], createCredito); 
  

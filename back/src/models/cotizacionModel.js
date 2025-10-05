@@ -50,10 +50,21 @@ const Cotizacion = sequelize.define("Cotizacion", {
 }, {
     timestamps: false,
     tableName: "cotizaciones", 
-    indexes: [ 
-        { name: 'idx_cotizacion_estado', fields: ['estado'] },
-        { name: 'idx_cotizacion_id_solicitud', fields: ['id_solicitud'] }
+    indexes: [  
+        {
+          name: 'idx_cotizacion_id_solicitud',
+          fields: ['id_solicitud']
+        },
+        {
+          name: 'idx_cotizacion_solicitud_idcotizacion',
+          fields: ['id_solicitud', 'id_cotizacion']
+        },
+        {
+          name: 'idx_cotizacion_estado',
+          fields: ['estado']
+        }
       ]
+      
 });
 
 module.exports = Cotizacion;

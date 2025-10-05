@@ -16,19 +16,22 @@ const getAllMovimientos = async (req, res) => {
     }
 };
 
-// Obtener movimientos por usuario con formato para el frontend
+// Obtener movimientos para el tecnico
 const getMovimientosPorUsuario = async (req, res) => {
     try {
-        const { mes, tipo } = req.query;
+        const { mes, tipo, page = 1, limit = 10 } = req.query;
         const { id_usuario } = req.params;
+        
+        // Convertir a números enteros
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const offset = (pageNum - 1) * limitNum;
 
         const year = new Date().getFullYear();
         const mesAjustado = parseInt(mes) - 1; // Ajustar el mes (0-11)
         const startDate = new Date(year, mesAjustado, 1);
         const endDate = new Date(year, mesAjustado + 1, 0, 23, 59, 59);
         
-        console.log(`Consultando movimientos para el usuario ${id_usuario} entre ${startDate} y ${endDate}`);
-
         // Configurar condiciones de búsqueda
         const where = {
             id_usuario: id_usuario,
@@ -56,33 +59,82 @@ const getMovimientosPorUsuario = async (req, res) => {
             queryOptions.include = [{
                 model: Cotizacion,
                 as: 'cotizacion',
-                required: false, // Hacer el join opcional
+                required: false,
                 include: [{
                     model: SolicitudServicio,
                     as: 'solicitud',
-                    required: false, // Hacer el join opcional
-                    attributes: ['colonia'],
+                    required: false,
+                    attributes: ['colonia', 'id_servicio', 'id_solicitud'],
                     include: [{
                         model: Servicio,
                         as: 'servicio',
-                        required: false, // Hacer el join opcional
+                        required: false,
                         attributes: ['nombre']
                     }]
                 }]
             }];
             
-            // Incluir los atributos necesarios del movimiento
+            // Asegurar que se incluyan los IDs de las relaciones
             queryOptions.attributes = {
-                include: ['id_movimiento', 'monto', 'fecha', 'estado', 'tipo']
+                include: ['id_cotizacion']
             };
+            
+            // Incluir los atributos necesarios del movimiento
+            queryOptions.attributes = ['id_movimiento', 'monto', 'fecha', 'estado', 'tipo', 'id_cotizacion'];
+            queryOptions.raw = false;
         }
 
-        // Obtener movimientos
-        const movimientos = await Movimiento.findAll(queryOptions);
+        // Obtener total de registros para la paginación
+        const total = await Movimiento.count({ 
+            where: queryOptions.where,
+            distinct: true,
+            col: 'id_movimiento' // Asegurar que cuente por el ID del movimiento
+        });
+        
+        const totalPages = Math.ceil(total / limitNum);
 
+        // Aplicar paginación a la consulta
+        queryOptions.limit = limitNum;
+        queryOptions.offset = offset;
+        queryOptions.distinct = true; // Importante para evitar duplicados en la paginación
+
+        // Obtener movimientos con paginación
+        const { count, rows: movimientos } = await Movimiento.findAndCountAll({
+            ...queryOptions,
+            // Solo obtener los IDs primero
+            attributes: ['id_movimiento', 'id_cotizacion', 'tipo', 'monto', 'fecha', 'estado']
+        });
+        
+        // Cargar las relaciones para cada movimiento
+        const movimientosConRelaciones = await Promise.all(movimientos.map(async movimiento => {
+            const include = [];
+            
+            if (movimiento.tipo === 'ingreso' && movimiento.id_cotizacion) {
+                // Cargar la cotización con sus relaciones
+                const cotizacion = await Cotizacion.findByPk(movimiento.id_cotizacion, {
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        attributes: ['colonia', 'id_servicio', 'id_solicitud'],
+                        include: [{
+                            model: Servicio,
+                            as: 'servicio',
+                            attributes: ['nombre']
+                        }]
+                    }]
+                });
+                
+                return {
+                    ...movimiento.get({ plain: true }),
+                    cotizacion: cotizacion ? cotizacion.get({ plain: true }) : null
+                };
+            }
+            
+            return movimiento.get({ plain: true });
+        }));
+        
         // Formatear la respuesta
-        const movimientosFormateados = movimientos.map(movimiento => {
-            const datosMovimiento = movimiento.toJSON();
+        const movimientosFormateados = movimientosConRelaciones.map(datosMovimiento => {
             const esIngreso = datosMovimiento.tipo === 'ingreso';
             const esRetiro = datosMovimiento.tipo === 'retiro';
             
@@ -99,13 +151,33 @@ const getMovimientosPorUsuario = async (req, res) => {
 
             // Agregar campos específicos para ingresos
             if (esIngreso) {
-                const cotizacion = datosMovimiento.cotizacion || {};
-                const solicitud = cotizacion.solicitud || {};
-                const servicio = solicitud.servicio || {};
+                const cotizacion = datosMovimiento.cotizacion;
                 
-                // Asegurar que siempre estén estos campos para ingresos
-                base.servicio = servicio.nombre || 'Servicio no especificado';
-                base.colonia = solicitud.colonia || 'Sin colonia especificada';
+                if (cotizacion) {
+                    const solicitud = cotizacion.solicitud;
+                    
+                    if (solicitud) {
+                        const colonia = solicitud.colonia;
+                        const servicio = solicitud.servicio;
+                        
+                        // Agregar datos específicos de ingreso
+                        Object.assign(base, {
+                            colonia: colonia || 'Sin colonia especificada',
+                            servicio: servicio ? servicio.nombre : 'Servicio no especificado'
+                        });
+                    } else {
+                        // Si no hay solicitud, establecer valores por defecto
+                        Object.assign(base, {
+                            colonia: 'Sin colonia especificada',
+                            servicio: 'Servicio no especificado'
+                        });
+                    }
+                } else {
+                    Object.assign(base, {
+                        colonia: 'Sin colonia especificada',
+                        servicio: 'Servicio no especificado'
+                    });
+                }
             } 
             // Agregar campos específicos para retiros
             else if (esRetiro) {
@@ -142,10 +214,10 @@ const getMovimientosPorUsuario = async (req, res) => {
                 mes: startDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
             },
             pagination: {
-                total: movimientosFormateados.length,
-                page: 1,
-                limit: movimientosFormateados.length,
-                totalPages: 1
+                total: total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: totalPages
             }
         });
 
@@ -363,7 +435,161 @@ const getEstadisticasGenerales = async (req, res) => {
         res.status(500).json({ error: 'Error al obtener estadísticas generales' });
     }
 }; 
- 
+
+//Obtener ingresos totales por referido
+const getIngresosTotalesReferidos = async (req, res) => {
+    try {
+        const { id_usuario } = req.params;
+        
+        // Obtener la suma de ingresos por referidos
+        const ingresosTotales = await Movimiento.sum('monto', {
+            where: { id_usuario, tipo: 'ingreso_referido', estado: 'completado' }
+        }) || 0;
+
+        // Obtener la suma de todos los retiros
+        const retirosTotales = await Movimiento.sum('monto', {
+            where: { id_usuario, tipo: 'retiro' }
+        }) || 0;
+
+        // Obtener la suma de retiros completados
+        const retirosCompletados = await Movimiento.sum('monto', {
+            where: { id_usuario, tipo: 'retiro', estado: 'completado' }
+        }) || 0;
+
+        // Calcular saldo disponible
+        const saldoDisponible = ingresosTotales - retirosTotales;
+        
+        res.json({ 
+            success: true,
+            total: ingresosTotales,
+            saldoDisponible: saldoDisponible > 0 ? saldoDisponible : 0,
+            retirado: retirosCompletados
+        });
+    } catch (error) {
+        console.error('Error en getIngresosTotalesReferidos:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al obtener información de ingresos y retiros' 
+        });
+    }
+};   
+
+// Obtener historial de ingresos y/o retiros de referidos de un usuario, con límite, filtro por mes y tipo y resumen
+const getIngresosyRetirosdeReferidos = async (req, res) => {
+    try {
+        const { id_usuario } = req.params;
+        const { mes, tipo, page = 1, limit = 10 } = req.query;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+
+        // Validaciones
+        if (!id_usuario) {
+            return res.status(400).json({ 
+                success: false,
+                error: "El parámetro id_usuario es requerido" 
+            });
+        }
+
+        if (!mes || isNaN(mes) || mes < 1 || mes > 12) {
+            return res.status(400).json({ 
+                success: false,
+                error: "Debe proporcionar un mes válido (1-12)" 
+            });
+        }
+
+        // Configurar fechas
+        const year = new Date().getFullYear();
+        const mesAjustado = parseInt(mes) - 1;
+        const startDate = new Date(year, mesAjustado, 1);
+        const endDate = new Date(year, mesAjustado + 1, 0, 23, 59, 59);
+
+        // Configurar condiciones de búsqueda
+        const where = {
+            id_usuario,
+            fecha: { [Op.between]: [startDate, endDate] }
+        };
+
+        // Filtrar por tipo si se especifica
+        if (tipo && ['retiro', 'ingreso_referido'].includes(tipo)) {
+            where.tipo = tipo;
+        }
+
+        // Obtener total de registros para la paginación
+        const total = await Movimiento.count({
+            where,
+            distinct: true,
+            col: 'id_movimiento'
+        });
+
+        // Configurar opciones de consulta con paginación
+        const queryOptions = {
+            where,
+            order: [['fecha', 'DESC']],
+            attributes: ['id_movimiento', 'monto', 'descripcion', 'fecha', 'estado', 'tipo'],
+            limit: parseInt(limit),
+            offset,
+            distinct: true,
+            raw: false
+        };
+
+        // Obtener movimientos con paginación
+        const { count, rows: movimientos } = await Movimiento.findAndCountAll(queryOptions);
+
+        // Formatear movimientos
+        const movimientosFormateados = movimientos.map(mov => {
+            const datos = mov.get({ plain: true });
+            return {
+                id_movimiento: datos.id_movimiento,
+                monto: parseFloat(datos.monto).toFixed(2),
+                fecha: new Date(datos.fecha).toISOString().split('T')[0],
+                estado: (datos.estado || '').toLowerCase() === 'completado' ? 'Completado' : 'Pendiente',
+                tipo: datos.tipo,
+                descripcion: datos.descripcion || (datos.tipo === 'retiro' ? 'Retiro de fondos' : 'Ingreso por referido')
+            };
+        });
+
+        // Calcular totales (solo completados)
+        const totales = movimientosFormateados.reduce(
+            (acc, mov) => {
+                const monto = parseFloat(mov.monto) || 0;
+                const esCompletado = mov.estado.toLowerCase() === 'completado';
+
+                if (mov.tipo === 'ingreso_referido' && esCompletado) acc.ingresosReferido += monto;
+                if (mov.tipo === 'retiro' && esCompletado) acc.retiros += monto;
+
+                return acc;
+            },
+            { ingresosReferido: 0, retiros: 0 }
+        );
+
+        const totalPages = Math.ceil(total / limit);
+
+        // Respuesta final
+        res.json({
+            success: true,
+            data: movimientosFormateados,
+            summary: {
+                totalIngresosReferido: totales.ingresosReferido.toFixed(2),
+                totalRetiros: totales.retiros.toFixed(2),
+                mes: startDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
+            },
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages
+            }
+        });
+
+    } catch (error) {
+        console.error('Error en getIngresosyRetirosdeReferidos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener los movimientos de referidos',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+}; 
+
 // Crear movimiento
 const crearMovimiento = async (req, res) => {
     try { 
@@ -456,6 +682,8 @@ module.exports = {
     getServiciosPorMes,
     getServiciosPorTipo,
     getEstadisticasGenerales,
+    getIngresosTotalesReferidos,
+    getIngresosyRetirosdeReferidos,
     crearMovimiento,
     actualizarMovimiento,
     eliminarMovimiento

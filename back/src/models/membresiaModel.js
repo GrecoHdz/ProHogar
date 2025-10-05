@@ -34,6 +34,25 @@ const Membresia = sequelize.define("Membresia", {
 }, {
     timestamps: false,
     tableName: "pagomembresia",
+    indexes: [ 
+        {
+          name: 'idx_membresia_id_usuario',
+          fields: ['id_usuario']
+        }, 
+        {
+          name: 'idx_membresia_id_usuario_fecha',
+          fields: ['id_usuario', 'fecha']
+        }, 
+        {
+          name: 'idx_membresia_estado',
+          fields: ['estado']
+        }, 
+        {
+          name: 'idx_membresia_usuario_estado',
+          fields: ['id_usuario', 'estado']
+        }
+      ]
+      
 });
 
 module.exports = Membresia;

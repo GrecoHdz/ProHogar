@@ -34,7 +34,17 @@ const Calificacion = sequelize.define('Calificacion', {
     }
 }, {
     tableName: 'calificaciones',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+        {
+          name: 'idx_calificaciones_usuario_fecha',
+          fields: ['id_usuario_calificado', 'fecha']
+        },
+        {
+          name: 'idx_calificaciones_solicitud',
+          fields: ['id_solicitud']
+        }
+      ]
 });
 
 module.exports = Calificacion;

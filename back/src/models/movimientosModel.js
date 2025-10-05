@@ -20,7 +20,7 @@ const Movimiento = sequelize.define('Movimiento', {
         allowNull: true
     },
     tipo: {
-        type: DataTypes.ENUM('ingreso', 'retiro'),
+        type: DataTypes.ENUM('ingreso', 'retiro','ingreso_referido'),
         allowNull: false
     },
     monto: {
@@ -43,25 +43,25 @@ const Movimiento = sequelize.define('Movimiento', {
     }
 }, {
     tableName: 'movimientos',
-    timestamps: false,
+    timestamps: false, 
     indexes: [
+        {
+          name: 'idx_movimientos_usuario_tipo_fecha',
+          fields: ['id_usuario', 'tipo', 'fecha']
+        },
         {
           name: 'idx_movimientos_usuario_estado',
           fields: ['id_usuario', 'estado']
         },
         {
-          name: 'idx_movimientos_usuario_fecha',
-          fields: ['id_usuario', 'fecha']
-        },
-        {
-          name: 'idx_movimientos_tipo_fecha',
-          fields: ['tipo', 'fecha']
+          name: 'idx_movimientos_tipo_estado_fecha',
+          fields: ['tipo', 'estado', 'fecha']
         },
         {
           name: 'idx_movimientos_referido_fecha',
           fields: ['id_referido', 'fecha']
         }
-      ]
+    ] 
 }); 
 
 module.exports = Movimiento;

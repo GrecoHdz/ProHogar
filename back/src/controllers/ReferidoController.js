@@ -1,4 +1,5 @@
 const Referido = require("../models/referidosModel");
+const Usuario = require("../models/usuariosModel");
 const { Op } = require("sequelize");
 
 // Obtener todos los referidos
@@ -18,20 +19,52 @@ const getAllReferidos = async (req, res) => {
     }
 };
 
-// Obtener referidos de un usuario
+// Obtener referidos de un usuario con paginación
 const getReferidosByUser = async (req, res) => {
     try {
         const { id_referidor } = req.params;
-        const referidos = await Referido.findAll({ where: { id_referidor } });
+        const { page = 1, limit = 10 } = req.query;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        
+        // Obtener los referidos con paginación
+        const { count, rows: referidos } = await Referido.findAndCountAll({ 
+            where: { id_referidor },
+            include: [{
+                model: Usuario,
+                as: 'usuario',
+                attributes: ['nombre']
+            }],
+            attributes: ['fecha_referido'],
+            order: [['fecha_referido', 'DESC']],
+            limit: parseInt(limit),
+            offset: offset,
+            distinct: true
+        });
+        
+        // Mapear los resultados para incluir solo el nombre y la fecha
+        const referidosSimples = referidos.map(referido => ({
+            nombre: referido.usuario?.nombre || 'Usuario no encontrado',
+            fecha: referido.fecha_referido
+        }));
+        
+        const totalPages = Math.ceil(count / limit);
+        
         res.json({ 
             success: true,
-            data: referidos 
+            data: referidosSimples,
+            pagination: {
+                total: count,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: totalPages
+            }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error en getReferidosByUser:', error);
         res.status(500).json({ 
             success: false,
-            error: "Error al obtener los referidos" 
+            error: "Error al obtener los referidos",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

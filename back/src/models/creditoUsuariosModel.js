@@ -25,8 +25,16 @@ const CreditoUsuario = sequelize.define("CreditoUsuario", {
     timestamps: false,
     tableName: "credito", 
     indexes: [ 
-        { name: 'idx_credito_usuario', fields: ['id_usuario'] }
+        {
+          name: 'idx_credito_usuario',
+          fields: ['id_usuario']
+        }, 
+        {
+          name: 'idx_credito_fecha',
+          fields: ['fecha']
+        }
       ]
+      
 });
 
 module.exports = CreditoUsuario;
