@@ -160,6 +160,126 @@ const processPayment = async (req, res) => {
   }
 };
 
-module.exports = { processPayment };
+const denyPayment = async (req, res) => {
+    const t = await Cotizacion.sequelize.transaction();
+  
+    try {
+      const {
+        id_cotizacion,
+        id_solicitud,
+        id_usuario
+      } = req.body;
+  
+      console.log('🛰️ [DEBUG] Datos recibidos en /pagos/denegar:', req.body);
+  
+      // 1️⃣ Obtener cotización
+      const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
+      const monto_credito_usado = parseInt(cotizacion.credito_usado || 0);
+      if (!cotizacion) throw new Error('Cotización no encontrada');
+  
+      // 2️⃣ Revertir estado de cotización
+      await cotizacion.update(
+        {
+          id_cuenta: null,
+          num_comprobante: null, 
+          descuento_membresia: null,
+          credito_usado: null,
+          estado: 'rechazado'
+        },
+        { transaction: t }
+      );
+  
+      // 3️⃣ Revertir estado de solicitud
+      const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
+      if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+      await solicitud.update({ estado: 'pendiente_pagoservicio' }, { transaction: t });
+  
+      // 4️⃣ Devolver crédito al usuario (si usó crédito) 
+      console.log(`💰 [DEBUG] Monto de crédito usado: ${monto_credito_usado}`);
+      if (monto_credito_usado > 0) {  
+  
+        await CreditoUsuario.upsert(
+          {
+            id_usuario,
+            monto_credito: monto_credito_usado,
+            fecha: new Date()
+          },
+          { transaction: t }
+        );
+  
+        console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario}`);
+      }
+  
+      // 5️⃣ Buscar si el usuario tenía referidor (para quitar comisión)
+      const referido = await Referido.findOne({
+        where: { id_referido_usuario: id_usuario },
+        transaction: t
+      });
+  
+      if (referido && referido.id_referidor) {
+        // Buscar movimiento de comisión
+        const movimientoComision = await Movimiento.findOne({
+          where: {
+            id_usuario: referido.id_referidor,
+            id_referido: id_usuario,
+            tipo: 'ingreso_referido'
+          },
+          order: [['fecha', 'DESC']],
+          transaction: t
+        });
+  
+        if (movimientoComision) {
+          const comision = parseInt(movimientoComision.monto);
+  
+          // 5.1️⃣ Restar la comisión al crédito del referidor
+          const creditoReferidor = await CreditoUsuario.findOne({
+            where: { id_usuario: referido.id_referidor },
+            transaction: t
+          });
+  
+          if (creditoReferidor) {
+            const nuevoCreditoReferidor = Math.max(0, parseInt(creditoReferidor.monto_credito) - comision);
+            
+            await CreditoUsuario.upsert(
+              { 
+                id_usuario: referido.id_referidor,
+                monto_credito: nuevoCreditoReferidor,
+                fecha: new Date()
+              },
+              { transaction: t }
+            );
+            console.log(`💸 [DEBUG] Comisión revertida (-${comision}) del referidor ${referido.id_referidor}`);
+          }
+  
+          // 5.2️⃣ Eliminar el movimiento de comisión
+          await Movimiento.destroy({
+            where: { id_movimiento: movimientoComision.id_movimiento },
+            transaction: t
+          });
+        }
+      }
+  
+      // ✅ Confirmar transacción
+      await t.commit();
+      console.log('✅ [DEBUG] Pago denegado y transacción revertida correctamente');
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Pago denegado correctamente. Todos los cambios han sido revertidos.'
+      });
+  
+    } catch (error) {
+      // ❌ Rollback si algo falla
+      await t.rollback();
+      console.error('[ERROR] Error al denegar pago:', error);
+  
+      return res.status(500).json({
+        success: false,
+        message: 'Error al denegar el pago. Se revertieron los cambios.',
+        error: error.message
+      });
+    }
+  };
+  
 
- 
+module.exports = { processPayment, denyPayment };
