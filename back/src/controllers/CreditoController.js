@@ -49,14 +49,7 @@ const getCreditoPorUsuario = async (req, res) => {
 // Crear o actualizar crédito
 const createCredito = async (req, res) => {
     try {
-        const { id_usuario, monto_credito } = req.body;
-        
-        if (!id_usuario || monto_credito === undefined) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Los campos id_usuario y monto_credito son requeridos' 
-            });
-        }
+        const { id_usuario, monto_credito } = req.body; 
 
         // Buscar crédito existente
         const creditoExistente = await CreditoUsuario.findOne({ 

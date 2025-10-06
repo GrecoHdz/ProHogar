@@ -14,6 +14,10 @@ const MembresiaBeneficio = sequelize.define("MembresiaBeneficio", {
     tipo_beneficio: {
         type: DataTypes.STRING,
         allowNull: false
+    },
+    descripcion: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     timestamps: false,

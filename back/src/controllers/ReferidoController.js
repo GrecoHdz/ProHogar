@@ -78,9 +78,9 @@ const getReferidorByUser = async (req, res) => {
         });
         
         if (!referido) {
-            return res.status(404).json({ 
-                success: false,
-                message: "No se encontró el referidor" 
+            return res.json({ 
+                success: true,
+                message: "No se encontró el referidor"
             });
         }
         

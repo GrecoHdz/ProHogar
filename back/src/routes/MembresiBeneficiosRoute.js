@@ -10,8 +10,6 @@ const {
     eliminarBeneficio 
 } = require("../controllers/MembresiaBeneficiosController");
  
-// Middleware de autenticación
-router.use(authMiddleware); 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -25,24 +23,26 @@ const validarErrores = (req, res, next) => {
 router.get("/", validarErrores, obtenerBeneficios);
 
 //Obtener un beneficio por id
-router.get("/:id", validarErrores, obtenerBeneficioPorId);
+router.get("/:id", validarErrores, obtenerBeneficioPorId, authMiddleware);
 
 //Crear un beneficio
 router.post("/", [
     body("mes_requerido").isInt().withMessage("El mes_requerido debe ser un número entero"),
-    body("tipo_beneficio").isString().withMessage("El tipo_beneficio debe ser una cadena de caracteres")
-], validarErrores, crearBeneficio);
+    body("tipo_beneficio").isString().withMessage("El tipo_beneficio debe ser una cadena de caracteres"),
+    body("descripcion").isString().withMessage("La descripcion debe ser una cadena de caracteres")
+], validarErrores, crearBeneficio, authMiddleware);
 
 //Actualizar un beneficio
 router.put("/:id", [
     param("id").isInt().withMessage("El ID debe ser un número entero"),
     body("mes_requerido").optional().isInt().withMessage("El mes_requerido debe ser un número entero"),
-    body("tipo_beneficio").optional().isString().withMessage("El tipo_beneficio debe ser una cadena de caracteres")
-], validarErrores, actualizarBeneficio);
+    body("tipo_beneficio").optional().isString().withMessage("El tipo_beneficio debe ser una cadena de caracteres"),
+    body("descripcion").optional().isString().withMessage("La descripcion debe ser una cadena de caracteres")
+], validarErrores, actualizarBeneficio, authMiddleware);
 
 //Eliminar un beneficio
 router.delete("/:id", [
     param("id").isInt().withMessage("El ID debe ser un número entero")
-], validarErrores, eliminarBeneficio);
+], validarErrores, eliminarBeneficio, authMiddleware);
 
 module.exports = router;

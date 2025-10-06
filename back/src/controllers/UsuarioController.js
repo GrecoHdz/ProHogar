@@ -206,8 +206,7 @@ const crearUsuario = async (req, res) => {
             email, 
             telefono, 
             password_hash: hashedPassword,
-            id_ciudad,
-            activo: true // Por defecto activo al crear
+            id_ciudad
         });
         
         // No devolver la contraseña en la respuesta
@@ -217,8 +216,7 @@ const crearUsuario = async (req, res) => {
         res.status(201).json({
             status: 201,
             message: "Usuario creado exitosamente",
-            id_usuario: usuario.id_usuario, // Asegurar que el ID esté disponible en la respuesta
-            usuario: usuarioSinPassword
+            id_usuario: usuario.id_usuario
         });
     } catch (error) {
         console.error("Error al crear usuario:", error);
