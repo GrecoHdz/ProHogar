@@ -42,38 +42,40 @@ const obtenerHistorialMembresias = async (req, res) => {
         });
     }
 };
-
+ 
 // Obtener la membresía activa más reciente de un usuario
 const obtenerMembresiaActual = async (req, res) => {
     try {
-        const membresia = await Membresia.findOne({ 
-            where: { 
-                id_usuario: req.params.id
-            },
-            order: [['fecha', 'DESC']], // Ordenar por fecha descendente
-            raw: true
+      const { id } = req.params;
+  
+      const membresia = await Membresia.findOne({
+        where: { id_usuario: id },
+        order: [['fecha', 'DESC']],
+        raw: true
+      });
+  
+      if (!membresia) {
+        console.log(`ℹ️ [INFO] Usuario ${id} no tiene membresía activa.`);
+        return res.json({
+          status: 'not_found',
+          data: null,
+          message: 'El usuario no tiene una membresía activa.'
         });
-        
-        if (!membresia) {
-            return res.status(404).json({ 
-                status: 'not_found',
-                message: 'No se encontró una membresía activa para este usuario'
-            });
-        }
-        
-        res.json({
-            status: 'success',
-            data: membresia
-        });
+      }
+  
+      return res.json({
+        status: 'success',
+        data: membresia
+      });
     } catch (error) {
-        console.error("Error al obtener la membresía actual:", error);
-        res.status(500).json({ 
-            status: 'error',
-            message: 'Error al obtener la membresía actual',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+      console.error("❌ [ERROR] Al obtener la membresía actual:", error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Error al obtener la membresía actual'
+      });
     }
-};
+  };
+  
 
 // Obtener progreso de membresía por usuario
 const obtenerProgresoMembresia = async (req, res) => {

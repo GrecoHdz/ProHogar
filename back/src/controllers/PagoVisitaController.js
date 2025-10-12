@@ -43,15 +43,15 @@ const obtenerUltimoPagoPorSolicitud = async (req, res) => {
         });
 
         if (!pago) {
-            return res.status(404).json({
-                status: "error",
-                message: "No se encontró ningún pago para esta solicitud"
+            return res.json({
+              status: "not_found",
+              data: { estado: "pendiente" }
             });
-        }
+          } 
 
         return res.json({
             status: "success",
-            estado: pago.estado
+            data: { estado: pago.estado }
         });
     } catch (error) {
         console.error(error);

@@ -18,33 +18,44 @@ const getAllCreditos = async (req, res) => {
     }
 };
 
-//Obtener un credito por usuario
+// Obtener crédito por usuario
 const getCreditoPorUsuario = async (req, res) => {
     try {
-        const credito = await CreditoUsuario.findOne({ 
-            where: { id_usuario: req.params.id_usuario } 
+      const { id_usuario } = req.params;
+  
+      const credito = await CreditoUsuario.findOne({
+        where: { id_usuario }
+      });
+  
+      // Si el usuario no tiene registro de crédito, devolver monto 0 sin error
+      if (!credito) {
+        console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito registrado. Retornando 0.`);
+        return res.json({
+          success: true,
+          data: {
+            id_usuario,
+            monto_credito: 0,
+            fecha: null
+          }
         });
-        
-        if (!credito) {
-            return res.status(404).json({
-                success: false,
-                message: 'No se encontró el crédito para el usuario especificado'
-            });
-        }
-        
-        res.json({
-            success: true,
-            data: credito
-        });
+      }
+  
+      // Si existe registro, devolver normalmente
+      return res.json({
+        success: true,
+        data: credito
+      });
+  
     } catch (error) {
-        console.error('Error al obtener el crédito:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Error al obtener el crédito',
-            details: error.message 
-        });
+      console.error('❌ [ERROR] Al obtener crédito del usuario:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener el crédito',
+        details: error.message
+      });
     }
-};
+  };
+  
 
 // Crear o actualizar crédito
 const createCredito = async (req, res) => {

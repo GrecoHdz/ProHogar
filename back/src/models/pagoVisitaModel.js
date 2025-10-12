@@ -33,7 +33,8 @@ const PagoVisita = sequelize.define("PagoVisita", {
     },
     estado: {
         type: DataTypes.ENUM("pendiente", "pagado", "rechazado"),
-        allowNull: true
+        allowNull: true,
+        defaultValue: "pendiente"
     }
 }, {
     timestamps: false,

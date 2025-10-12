@@ -31,8 +31,8 @@ const processPayment = async (req, res) => {
       {
         id_cuenta,
         num_comprobante,
-        estado: 'pagado', 
-        descuento_membresia: descuento_membresia,
+        estado: 'pagado',
+        descuento_membresia,
         credito_usado: monto_credito,
       },
       { where: { id_cotizacion }, transaction: t }
@@ -41,95 +41,102 @@ const processPayment = async (req, res) => {
     // 2️⃣ Actualizar solicitud a "verificando_pagoservicio"
     const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
     if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+
     await solicitud.update({ estado: 'verificando_pagoservicio' }, { transaction: t });
 
-    // 3️⃣ Buscar si el usuario tiene un referido
+    // 3️⃣ Buscar si el usuario tiene un referido (no obligatorio)
     const referido = await Referido.findOne({
       where: { id_referido_usuario: id_usuario },
       transaction: t
     });
-    console.log('🛰️ [DEBUG] Referido encontrado:', referido);
+
+    console.log('🛰️ [DEBUG] Referido encontrado:', referido ? referido.id_referidor : 'ninguno');
 
     // 4️⃣ Procesar comisión por referido si existe
     if (referido && referido.id_referidor) {
-      // Obtener el valor de la comisión de referido desde la configuración
-      const configComision = await Config.findOne({
-        where: { tipo_config: 'porcentaje_referido' },
-        transaction: t
-      });
+      try {
+        // Obtener el valor de la comisión de referido desde la configuración
+        const configComision = await Config.findOne({
+          where: { tipo_config: 'porcentaje_referido' },
+          transaction: t
+        });
 
-      if (!configComision) {
-        console.warn('⚠️ No se encontró la configuración de comisión de referido');
-        return;
+        if (!configComision) {
+          console.warn('⚠️ No se encontró configuración de comisión de referido, se omite comisión.');
+        } else {
+          const porcentaje_comision = parseFloat(configComision.valor) || 0;
+          const comision_referido_calc = (porcentaje_comision * monto_manodeobra) / 100;
+
+          console.log(`💸 [DEBUG] Procesando comisión de $${comision_referido_calc} para referidor ${referido.id_referidor}`);
+
+          // Crear movimiento de comisión solo si hay monto positivo
+          if (comision_referido_calc > 0) {
+            await Movimiento.create(
+              {
+                id_usuario: referido.id_referidor,
+                id_referido: id_usuario,
+                tipo: 'ingreso_referido',
+                monto: comision_referido_calc,
+                descripcion: `Comisión por referido - ${nombre}`,
+                estado: 'completado'
+              },
+              { transaction: t }
+            );
+
+            // Actualizar o crear crédito del referidor
+            const creditoReferidor = await CreditoUsuario.findOne({
+              where: { id_usuario: referido.id_referidor },
+              transaction: t
+            });
+
+            const nuevoCreditoReferidor = creditoReferidor
+              ? parseInt(creditoReferidor.monto_credito) + parseInt(comision_referido_calc)
+              : parseInt(comision_referido_calc);
+
+            await CreditoUsuario.upsert(
+              {
+                id_usuario: referido.id_referidor,
+                monto_credito: nuevoCreditoReferidor,
+                fecha: new Date()
+              },
+              { transaction: t }
+            );
+          } else {
+            console.log('ℹ️ [INFO] Comisión calculada es 0, no se crea movimiento.');
+          }
+        }
+      } catch (errComision) {
+        console.warn('⚠️ Error al procesar comisión, se omite:', errComision.message);
       }
-
-      const pocentaje_comision = parseFloat(configComision.valor);
-      const comision_referido = (pocentaje_comision * monto_manodeobra) / 100;
-      console.log(`💸 [DEBUG] Procesando comisión de $${comision_referido} para referidor ${referido.id_referidor}`);
-
-      // 3.1️⃣ Crear movimiento de comisión solo si hay monto de comisión
-      if (comision_referido > 0) {
-        await Movimiento.create(
-          {
-            id_usuario: referido.id_referidor,
-            id_referido: id_usuario,
-            tipo: 'ingreso_referido',
-            monto: comision_referido, 
-            descripcion: `Comisión por referido - ${nombre}`,
-            estado: 'completado'
-          },
-          { transaction: t }
-        );
-      } else {
-        console.log(`ℹ️ [INFO] No se crea movimiento de comisión - Monto de comisión es 0`);
-      }
-
-      // 3.2️⃣ Actualizar crédito del referidor
-      const creditoReferidor = await CreditoUsuario.findOne({
-        where: { id_usuario: referido.id_referidor },
-        transaction: t
-      });
-
-      const nuevoCreditoReferidor = creditoReferidor
-        ? parseInt(creditoReferidor.monto_credito) + parseInt(comision_referido)
-        : parseInt(comision_referido);
-
-      await CreditoUsuario.upsert(
-        {
-          id_usuario: referido.id_referidor,
-          monto_credito: nuevoCreditoReferidor,
-          fecha: new Date()
-        },
-        { transaction: t }
-      );
     } else {
-      console.log('⚙️ [DEBUG] No se procesó comisión (sin referidor o comision_referido no válida).');
+      console.log('ℹ️ [INFO] Usuario no tiene referidor, se omite proceso de comisión.');
     }
 
-    // 4️⃣ Restar crédito del usuario si tiene
+    // 5️⃣ Restar crédito del usuario si tiene
     const creditoUsuario = await CreditoUsuario.findOne({
       where: { id_usuario },
       transaction: t
     });
 
-    if (parseInt(creditoUsuario.monto_credito) > 0) { 
-        const nuevoMonto = parseInt(creditoUsuario.monto_credito) - Math.abs(parseInt(monto_credito)); 
-        console.log(`💰 [DEBUG] Restando crédito ${monto_credito} del total ${creditoUsuario.monto_credito}`);
-        
-        // 2. Update the credit using upsert
-        await CreditoUsuario.upsert(
-            { 
-                id_usuario,
-                monto_credito: nuevoMonto,
-                fecha: new Date()
-            },
-            { 
-                where: { id_usuario },
-                transaction: t,
-                returning: true
-            }
-        ); 
-        console.log(`💰 [DEBUG] Crédito del usuario ${id_usuario} actualizado de ${creditoUsuario.monto_credito} a ${nuevoMonto}`);
+    if (creditoUsuario && parseInt(creditoUsuario.monto_credito) > 0) {
+      const montoCredito = parseInt(creditoUsuario.monto_credito);
+      const montoADescontar = Math.abs(parseInt(monto_credito) || 0);
+      const nuevoMonto = Math.max(0, montoCredito - montoADescontar);
+
+      console.log(`💰 [DEBUG] Restando crédito ${montoADescontar} del total ${montoCredito}`);
+
+      await CreditoUsuario.upsert(
+        {
+          id_usuario,
+          monto_credito: nuevoMonto,
+          fecha: new Date()
+        },
+        { transaction: t }
+      );
+
+      console.log(`💰 [DEBUG] Crédito del usuario ${id_usuario} actualizado de ${montoCredito} a ${nuevoMonto}`);
+    } else {
+      console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito para descontar o no existe registro.`);
     }
 
     // ✅ Confirmar transacción
@@ -143,8 +150,7 @@ const processPayment = async (req, res) => {
         id_cotizacion,
         id_solicitud,
         id_usuario,
-        id_referidor,
-        comision_referido
+        id_referidor: referido?.id_referidor || null
       }
     });
   } catch (error) {
@@ -159,6 +165,7 @@ const processPayment = async (req, res) => {
     });
   }
 };
+
 
 const denyPayment = async (req, res) => {
     const t = await Cotizacion.sequelize.transaction();
