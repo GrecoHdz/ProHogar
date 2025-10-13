@@ -68,15 +68,7 @@ const login = async (req, res) => {
 
     if (!user) {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
-    }
-
-    // 🔹 VERIFICAR ESTADO DEL USUARIO
-    if (user.estado === 'deshabilitado') {
-      return res.status(403).json({ 
-        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
-        disabled: true 
-      });
-    }
+    } 
 
     // Verificar la contraseña hasheada
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
@@ -179,11 +171,7 @@ const refreshToken = async (req, res) => {
             { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
             { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
           ]
-        });
-
-        if (!user || user.estado === 'deshabilitado') {
-          throw new Error('Usuario no encontrado o deshabilitado');
-        }
+        }); 
 
         // Eliminar cualquier refresh token existente para este usuario
         await RefreshToken.destroy({
@@ -295,19 +283,7 @@ const refreshToken = async (req, res) => {
       });
     }
 
-    const user = storedToken.usuario;
-
-    // 🔹 VERIFICAR ESTADO DEL USUARIO
-    if (user.estado === 'deshabilitado') {
-      await storedToken.destroy({ transaction: t });
-      clearAllAuthCookies(res);
-      await t.rollback();
-      return res.status(403).json({
-        success: false,
-        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
-        disabled: true
-      });
-    }
+    const user = storedToken.usuario; 
 
     const newAccessToken = generateAccessToken(user);
 
@@ -396,9 +372,11 @@ const getCurrentUser = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const user = await Usuario.findByPk(req.user.id_usuario, {
-      attributes: { exclude: ['password_hash'] },
+      attributes: { 
+        exclude: ['password_hash', 'id_rol'] 
+      },
       include: [
-        { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
+        { model: Rol, as: 'rol', attributes: ['nombre_rol'] },
         { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] },
       ],
       transaction: t,
@@ -407,21 +385,13 @@ const getCurrentUser = async (req, res) => {
     if (!user) {
       await t.rollback();
       return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
-
-    // 🔹 VERIFICAR ESTADO DEL USUARIO
-    if (user.estado === 'deshabilitado') {
-      await t.rollback();
-      return res.status(403).json({ 
-        message: 'Tu cuenta ha sido deshabilitada. Contacta al administrador.',
-        disabled: true 
-      });
-    }
+    } 
 
     const userData = user.get({ plain: true });
-    userData.role = user.rol && user.rol.nombre_rol
-      ? user.rol.nombre_rol.toLowerCase()
-      : 'usuario';
+    // Mantener solo el nombre_rol en el objeto rol
+    if (userData.rol) {
+      userData.rol = { nombre_rol: user.rol.nombre_rol };
+    }
 
     await t.commit();
     res.status(200).json(userData);
