@@ -13,7 +13,7 @@ const {
 } = require("../controllers/SolicitudServicioController");
 
 // Middleware de autenticación
-router.use(authMiddleware);
+//router.use(authMiddleware);
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);

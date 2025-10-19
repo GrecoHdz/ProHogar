@@ -247,7 +247,7 @@ const setupAssociations = () => {
   // Relación Calificación - SolicitudServicio
   Calificacion.belongsTo(SolicitudServicio, { 
     foreignKey: 'id_solicitud',
-    as: 'solicitud',
+    as: 'calificacionsolicitud',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
@@ -264,6 +264,14 @@ const setupAssociations = () => {
   Calificacion.belongsTo(Usuario, { 
     foreignKey: 'id_usuario_calificado',
     as: 'usuarioCalificado',
+    onUpdate: 'CASCADE',
+    onDelete: 'RESTRICT'
+  });
+
+  // Relación SolicitudServicio - Calificación (1:1)
+  SolicitudServicio.hasOne(Calificacion, {
+    foreignKey: 'id_solicitud',
+    as: 'calificacion',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });

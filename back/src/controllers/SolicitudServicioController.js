@@ -1,29 +1,176 @@
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
-const Usuario = require("../models/usuariosModel"); 
-const { Op } = require("sequelize"); 
+const Usuario = require("../models/usuariosModel");
+const Ciudad = require("../models/ciudadesModel"); 
+const Calificacion = require("../models/calificacionesModels"); 
+const Pagovisita = require("../models/pagoVisitaModel"); 
+const Cuenta = require("../models/cuentasModel"); 
+const Cotizacion = require("../models/cotizacionModel"); 
+const { Op, Sequelize } = require("sequelize"); 
 
-//Obtener todas las solicitudes de servicios
+//Obtener todas las solicitudes de servicios con paginación
 const obtenerSolicitudesServicios = async (req, res) => {
     try {
-        const solicitudes = await SolicitudServicio.findAll({
-            include: [{
-                model: Servicio,
-                as: 'servicio',
-                attributes: ['id_servicio', 'nombre']
-            }]
-        });
+        // Obtener parámetros de paginación y filtros
+        let limit = parseInt(req.query.limit) || 10; // Por defecto 10 elementos
+        // Asegurarse de que el límite no sea mayor a 100 por razones de rendimiento
+        limit = Math.min(limit, 100);
+        const offset = parseInt(req.query.offset) || 0; // Por defecto desde el inicio
+        const month = req.query.month; // Formato esperado: 'YYYY-MM'
         
-        // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
-        const solicitudesFormateadas = solicitudes.map(solicitud => {
-            const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
-            return {
-                ...datosSolicitud,
-                servicio: servicio || null
+        // Construir el where condition
+        const whereCondition = {};
+        
+        // Si se proporciona el parámetro month, filtrar por ese mes y año
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            
+            // Usar funciones de Sequelize para comparar año y mes
+            whereCondition[Op.and] = [
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), monthNum)
+            ];
+        }
+        
+        // Si se proporciona el parámetro status, filtrar por estado
+        if (req.query.status) {
+            const statuses = req.query.status.split(',');
+            whereCondition.estado = {
+                [Op.in]: statuses
             };
+        } 
+        // Si se proporciona el parámetro excludeStatus, excluir esos estados
+        else if (req.query.excludeStatus) {
+            const statusesToExclude = req.query.excludeStatus.split(',');
+            whereCondition.estado = {
+                [Op.notIn]: statusesToExclude
+            };
+        }
+        
+        // Obtener el conteo total de registros que coinciden con los filtros
+        const total = await SolicitudServicio.count({ where: whereCondition });
+        
+        // Obtener los registros paginados
+        const solicitudes = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: ['id_servicio', 'nombre']
+                },
+                {
+                    model: Usuario,
+                    as: 'tecnico',
+                    attributes: ['id_usuario', 'nombre']
+                },
+                {
+                    model: Usuario,
+                    as: 'cliente',
+                    attributes: ['id_usuario', 'nombre','telefono']
+                },
+                {
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['id_ciudad', 'nombre_ciudad']
+                },
+                {
+                    model: Calificacion,
+                    as: 'calificacion',
+                    attributes: ['calificacion', 'comentario']
+                },
+                {
+                    model: Pagovisita,
+                    as: 'pagoVisita',
+                    include: [
+                        {
+                            model: Cuenta,
+                            as: 'cuenta',
+                            attributes: ['banco', 'num_cuenta','tipo']
+                        }
+                    ],
+                    attributes: ['id_cuenta', 'monto', 'num_comprobante', 'fecha']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    include: [
+                        {
+                            model: Cuenta,
+                            as: 'cuenta',
+                            attributes: ['banco', 'num_cuenta','tipo']
+                        }
+                    ],
+                    attributes: [
+                        'num_comprobante', 
+                        'monto_manodeobra', 
+                        'descuento_membresia', 
+                        'credito_usado'
+                    ]
+                }
+            ],
+            order: [['fecha_solicitud', 'DESC']],
+            limit: limit,
+            offset: offset,
+            raw: true,
+            nest: true
         });
         
-        res.json(solicitudesFormateadas);
+        // Formatear la respuesta para incluir el servicio y el técnico
+        const solicitudesFormateadas = solicitudes.map(({ id_servicio, servicio, tecnico, id_usuario, id_tecnico, cliente, id_cliente, ciudad, id_ciudad, calificacion, pagoVisita, cotizacion, ...solicitud }) => ({
+            ...solicitud,
+            servicio: servicio ? {
+                id_servicio: servicio.id_servicio,
+                nombre: servicio.nombre
+            } : null,
+            tecnico: tecnico ? {
+                id_tecnico: tecnico.id_usuario,
+                nombre: tecnico.nombre
+            } : null,
+            cliente: cliente ? {
+                id_cliente: cliente.id_usuario,
+                nombre: cliente.nombre
+            } : null,
+            ciudad: ciudad ? {
+                id_ciudad: ciudad.id_ciudad,
+                nombre: ciudad.nombre_ciudad
+            } : null,
+            calificacion: calificacion ? {
+                calificacion: calificacion.calificacion,
+                comentario: calificacion.comentario
+            } : null,
+                pagoVisita: pagoVisita ? { 
+                monto: pagoVisita.monto,
+                num_comprobante: pagoVisita.num_comprobante,
+                fecha: pagoVisita.fecha,
+                cuenta: pagoVisita.cuenta ? {
+                    banco: pagoVisita.cuenta.banco,
+                    num_cuenta: pagoVisita.cuenta.num_cuenta,
+                    tipo: pagoVisita.cuenta.tipo
+                } : null,
+            } : null,
+            cotizacion: cotizacion ? {
+                num_comprobante: cotizacion.num_comprobante,
+                monto_manodeobra: cotizacion.monto_manodeobra,
+                descuento_membresia: cotizacion.descuento_membresia,
+                credito_usado: cotizacion.credito_usado,
+                total: (cotizacion.monto_manodeobra || 0) - (cotizacion.descuento_membresia || 0) - (cotizacion.credito_usado || 0),
+                cuenta: cotizacion.cuenta ? {
+                    banco: cotizacion.cuenta.banco,
+                    num_cuenta: cotizacion.cuenta.num_cuenta,
+                    tipo: cotizacion.cuenta.tipo
+                } : null,
+            } : null
+        }));
+        
+        // Devolver los resultados con metadatos de paginación
+        res.json({
+            data: solicitudesFormateadas,
+            total,
+            page: Math.floor(offset / limit) + 1,
+            totalPages: Math.ceil(total / limit),
+            hasMore: (offset + limit) < total
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al obtener las solicitudes de servicios" });
