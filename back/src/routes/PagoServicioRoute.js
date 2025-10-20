@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");   
 const { authMiddleware } = require("../middleware/authMiddleware"); 
-const { processPayment, denyPayment } = require("../controllers/PagoServicioController");
+const { processPayment, denyPayment, acceptPayment } = require("../controllers/PagoServicioController");
 
 // Middleware de autenticación
 router.use(authMiddleware);
@@ -16,7 +16,7 @@ const validarErrores = (req, res, next) => {
   }; 
 
 //Procesar pago
-router.post("/", [
+router.post("/procesar", [
     body("id_cotizacion").isInt().withMessage("El ID de la cotización debe ser un número entero"),
     body("id_solicitud").isInt().withMessage("El ID de la solicitud debe ser un número entero"),
     body("monto_credito").isFloat().withMessage("El monto de crédito debe ser un número entero"),
@@ -36,5 +36,12 @@ router.post("/denegar", [
     body("id_cotizacion").isInt().withMessage("El ID de la cotización debe ser un número entero"),
     validarErrores
 ], denyPayment);
+
+//Aceptar pago
+router.post("/aceptar", [
+    body("id_solicitud").isInt().withMessage("El ID de la solicitud debe ser un número entero"),
+    body("id_cotizacion").isInt().withMessage("El ID de la cotización debe ser un número entero"),
+    validarErrores
+], acceptPayment);
 
 module.exports = router;

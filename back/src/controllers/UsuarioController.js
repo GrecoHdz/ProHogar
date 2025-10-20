@@ -1,7 +1,8 @@
 const Usuario = require("../models/usuariosModel");
 const Ciudad = require("../models/ciudadesModel");
 const Rol = require("../models/rolesModel");
-const { Op } = require('sequelize');
+const Calificaciones = require("../models/calificacionesModels");
+const { Op, fn, col  } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
 
@@ -16,6 +17,90 @@ const obtenerUsuarios = async (req, res) => {
         res.status(500).json({ error: "Error al obtener usuarios" });
     }
 };  
+
+// Obtener todos los técnicos de una ciudad  
+const obtenerTecnicosPorCiudad = async (req, res) => {
+    const { id_ciudad, limit = 10, offset = 0 } = req.query;
+  
+    try {
+      // 1️⃣ Condición base
+      const whereCondition = { id_rol: 4 }; // Rol de técnico
+  
+      if (id_ciudad) {
+        whereCondition.id_ciudad = id_ciudad;
+      }
+  
+      // 2️⃣ Obtener técnicos
+      const tecnicos = await Usuario.findAll({
+        attributes: ["id_usuario", "nombre", "identidad", "email", "telefono", "id_ciudad"],
+        where: whereCondition,
+        include: [
+          {
+            model: Ciudad,
+            as: "ciudad",
+            attributes: ["nombre_ciudad"]
+          },
+          {
+            model: Rol,
+            as: "rol",
+            attributes: ["nombre_rol"]
+          }
+        ],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [["nombre", "ASC"]]
+      });
+  
+      if (!tecnicos.length) {
+        return res.status(404).json({
+          mensaje: id_ciudad
+            ? `No se encontraron técnicos en la ciudad ${id_ciudad}`
+            : "No se encontraron técnicos registrados"
+        });
+      }
+  
+      // 3️⃣ Obtener promedios de calificaciones en bloque
+      const calificaciones = await Calificaciones.findAll({
+        attributes: [
+          "id_usuario_calificado",
+          [fn("AVG", col("calificacion")), "promedio"]
+        ],
+        group: ["id_usuario_calificado"]
+      });
+  
+      // Convertir a un mapa para acceso rápido
+      const mapaPromedios = {};
+      calificaciones.forEach((c) => {
+        mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio"));
+      });
+  
+      // 4️⃣ Agregar promedio y mover id_ciudad dentro de ciudad
+      const tecnicosConPromedio = tecnicos.map((t) => {
+        const data = t.toJSON();
+        const { id_ciudad, ...rest } = data;
+        return {
+          ...rest,
+          ciudad: {
+            id_ciudad,
+            ...data.ciudad
+          },
+          promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0
+        };
+      });
+  
+      // 5️⃣ Responder
+      return res.json({
+        total: tecnicosConPromedio.length,
+        tecnicos: tecnicosConPromedio
+      });
+    } catch (error) {
+      console.error("Error al obtener técnicos:", error);
+      return res.status(500).json({
+        error: "Error al obtener técnicos",
+        detalle: error.message
+      });
+    }
+  };
 
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
@@ -545,6 +630,7 @@ const eliminarUsuario = async (req, res) => {
 
 module.exports = {
     obtenerUsuarios,
+    obtenerTecnicosPorCiudad,
     obtenerUsuarioPorId,
     obtenerUsuarioPorNombre,
     obtenerUsuarioPorIdentidad,

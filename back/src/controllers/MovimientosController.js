@@ -638,8 +638,7 @@ const actualizarMovimiento = async (req, res) => {
         console.error('Error al actualizar movimiento:', error);
         res.status(500).json({
             success: false,
-            error: 'Error al actualizar el movimiento',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            error: 'Error al actualizar el movimiento'
         });
     }
 };

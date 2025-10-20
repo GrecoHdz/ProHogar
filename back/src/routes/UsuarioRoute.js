@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { body, param, validationResult } = require("express-validator");
+const { body, param, validationResult, query } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     obtenerUsuarios, 
+    obtenerTecnicosPorCiudad,
     obtenerUsuarioPorNombre, 
     obtenerUsuarioPorIdentidad, 
     obtenerUsuarioPorId,
@@ -31,6 +32,13 @@ router.get("/id/:id",
     ], 
     validarErrores, 
     obtenerUsuarioPorId, authMiddleware);
+
+//Obtener todos los Tecnicos por ciudad
+router.get("/tecnicos", [
+    query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
+  ],
+  validarErrores, obtenerTecnicosPorCiudad, authMiddleware);
+  
 
 //Obtener Usuario por nombre
 router.get("/:nombre", 

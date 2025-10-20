@@ -5,6 +5,7 @@ const CreditoUsuario = require("../models/creditoUsuariosModel");
 const Referido = require("../models/referidosModel");
 const Config = require("../models/configModel");
 const { Op } = require('sequelize');
+ 
 
 const processPayment = async (req, res) => {
   const t = await Cotizacion.sequelize.transaction();
@@ -19,29 +20,49 @@ const processPayment = async (req, res) => {
       descuento_membresia,
       id_usuario,
       monto_credito,
-      id_referidor,
+      id_referidor, // opcional si lo recibes por frontend
       nombre,
-      comision_referido
-    } = req.body; 
+      comision_referido // opcional, calculada desde Config
+    } = req.body;
 
     console.log('🛰️ [DEBUG] Datos recibidos en /pagos/procesar:', req.body);
 
+    // Validaciones básicas
+    if (!id_cotizacion || !id_solicitud || !id_usuario) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'Faltan campos requeridos.' });
+    }
+
+    // normalizar montos
+    const montoManoDeObra = Number.isFinite(parseFloat(monto_manodeobra)) ? parseFloat(monto_manodeobra) : 0;
+    const creditoUsadoInput = Number.isFinite(parseFloat(monto_credito)) ? parseFloat(monto_credito) : 0;
+
+    // 0️⃣ Obtener cotización y solicitud y validarlas
+    const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
+    if (!cotizacion) throw new Error('Cotización no encontrada');
+
+    const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
+    if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+
+    // Prevención: si ya está procesada
+    if (cotizacion.estado === 'pagado' || cotizacion.estado === 'confirmado') {
+      await t.rollback();
+      return res.status(409).json({ success: false, message: `Cotización ya procesada (estado: ${cotizacion.estado}).` });
+    }
+
     // 1️⃣ Actualizar la cotización a "pagado"
-    await Cotizacion.update(
+    await cotizacion.update(
       {
         id_cuenta,
         num_comprobante,
         estado: 'pagado',
         descuento_membresia,
-        credito_usado: monto_credito,
+        credito_usado: creditoUsadoInput
       },
-      { where: { id_cotizacion }, transaction: t }
+      { transaction: t }
     );
 
     // 2️⃣ Actualizar solicitud a "verificando_pagoservicio"
-    const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
-    if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
-
     await solicitud.update({ estado: 'verificando_pagoservicio' }, { transaction: t });
 
     // 3️⃣ Buscar si el usuario tiene un referido (no obligatorio)
@@ -52,33 +73,45 @@ const processPayment = async (req, res) => {
 
     console.log('🛰️ [DEBUG] Referido encontrado:', referido ? referido.id_referidor : 'ninguno');
 
-    // 4️⃣ Procesar comisión por referido si existe
+    // 4️⃣ Procesar comisión por referido si existe (AHORA INCLUYE id_cotizacion)
+    let movimientoReferidoCreado = null;
     if (referido && referido.id_referidor) {
       try {
-        // Obtener el valor de la comisión de referido desde la configuración
         const configComision = await Config.findOne({
           where: { tipo_config: 'porcentaje_referido' },
           transaction: t
         });
 
-        if (!configComision) {
-          console.warn('⚠️ No se encontró configuración de comisión de referido, se omite comisión.');
-        } else {
-          const porcentaje_comision = parseFloat(configComision.valor) || 0;
-          const comision_referido_calc = (porcentaje_comision * monto_manodeobra) / 100;
+        const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
+        const comision_referido_calc = Math.round(((porcentaje_comision * (montoManoDeObra) / 100) * 100) / 100); // 2 decimales
 
-          console.log(`💸 [DEBUG] Procesando comisión de $${comision_referido_calc} para referidor ${referido.id_referidor}`);
+        console.log(`💸 [DEBUG] Procesando comisión de $${comision_referido_calc} para referidor ${referido.id_referidor}`);
 
-          // Crear movimiento de comisión solo si hay monto positivo
-          if (comision_referido_calc > 0) {
-            await Movimiento.create(
+        if (comision_referido_calc > 0) {
+          // Evitar duplicados: comprobar si ya existe un movimiento pendiente para la misma cotización
+          const existeMovimiento = await Movimiento.findOne({
+            where: {
+              id_usuario: referido.id_referidor,
+              id_referido: id_usuario,
+              id_cotizacion,
+              tipo: 'ingreso_referido',
+              monto: comision_referido_calc,
+              estado: 'completado'
+            },
+            transaction: t
+          });
+
+          if (!existeMovimiento) {
+            movimientoReferidoCreado = await Movimiento.create(
               {
                 id_usuario: referido.id_referidor,
+                id_cotizacion, // <-- agregado
                 id_referido: id_usuario,
                 tipo: 'ingreso_referido',
                 monto: comision_referido_calc,
-                descripcion: `Comisión por referido - ${nombre}`,
-                estado: 'completado'
+                descripcion: `Comisión por referido - ${nombre || ''}`,
+                estado: 'completado',
+                fecha: new Date()
               },
               { transaction: t }
             );
@@ -89,9 +122,8 @@ const processPayment = async (req, res) => {
               transaction: t
             });
 
-            const nuevoCreditoReferidor = creditoReferidor
-              ? parseInt(creditoReferidor.monto_credito) + parseInt(comision_referido_calc)
-              : parseInt(comision_referido_calc);
+            const creditoAnterior = creditoReferidor ? parseFloat(creditoReferidor.monto_credito) || 0 : 0;
+            const nuevoCreditoReferidor = Math.round((creditoAnterior + comision_referido_calc) * 100) / 100;
 
             await CreditoUsuario.upsert(
               {
@@ -101,9 +133,13 @@ const processPayment = async (req, res) => {
               },
               { transaction: t }
             );
+
+            console.log(`💰 [DEBUG] Crédito referidor ${referido.id_referidor}: ${creditoAnterior} -> ${nuevoCreditoReferidor}`);
           } else {
-            console.log('ℹ️ [INFO] Comisión calculada es 0, no se crea movimiento.');
+            console.log('ℹ️ [INFO] Movimiento de referido ya existente para esta cotización, se evita duplicado.');
           }
+        } else {
+          console.log('ℹ️ [INFO] Comisión calculada es 0, no se crea movimiento.');
         }
       } catch (errComision) {
         console.warn('⚠️ Error al procesar comisión, se omite:', errComision.message);
@@ -118,12 +154,10 @@ const processPayment = async (req, res) => {
       transaction: t
     });
 
-    if (creditoUsuario && parseInt(creditoUsuario.monto_credito) > 0) {
-      const montoCredito = parseInt(creditoUsuario.monto_credito);
-      const montoADescontar = Math.abs(parseInt(monto_credito) || 0);
-      const nuevoMonto = Math.max(0, montoCredito - montoADescontar);
-
-      console.log(`💰 [DEBUG] Restando crédito ${montoADescontar} del total ${montoCredito}`);
+    if (creditoUsuario && parseFloat(creditoUsuario.monto_credito) > 0 && creditoUsadoInput > 0) {
+      const montoCredito = parseFloat(creditoUsuario.monto_credito) || 0;
+      const montoADescontar = Math.min(montoCredito, Math.abs(creditoUsadoInput));
+      const nuevoMonto = Math.round((montoCredito - montoADescontar) * 100) / 100;
 
       await CreditoUsuario.upsert(
         {
@@ -136,7 +170,7 @@ const processPayment = async (req, res) => {
 
       console.log(`💰 [DEBUG] Crédito del usuario ${id_usuario} actualizado de ${montoCredito} a ${nuevoMonto}`);
     } else {
-      console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito para descontar o no existe registro.`);
+      console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito para descontar o monto a descontar = 0.`);
     }
 
     // ✅ Confirmar transacción
@@ -150,11 +184,11 @@ const processPayment = async (req, res) => {
         id_cotizacion,
         id_solicitud,
         id_usuario,
-        id_referidor: referido?.id_referidor || null
+        id_referidor: referido?.id_referidor || null,
+        movimientoReferidoId: movimientoReferidoCreado ? movimientoReferidoCreado.id_movimiento || movimientoReferidoCreado.id : null
       }
     });
   } catch (error) {
-    // ❌ Rollback si algo falla
     await t.rollback();
     console.error('[ERROR] Error durante la transacción de pago:', error);
 
@@ -164,129 +198,243 @@ const processPayment = async (req, res) => {
       error: error.message
     });
   }
-};
-
-
+}; 
+ 
 const denyPayment = async (req, res) => {
-    const t = await Cotizacion.sequelize.transaction();
-  
-    try {
-      const {
-        id_cotizacion,
-        id_solicitud,
-        id_usuario
-      } = req.body;
-  
-      console.log('🛰️ [DEBUG] Datos recibidos en /pagos/denegar:', req.body);
-  
-      // 1️⃣ Obtener cotización
-      const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
-      const monto_credito_usado = parseInt(cotizacion.credito_usado || 0);
-      if (!cotizacion) throw new Error('Cotización no encontrada');
-  
-      // 2️⃣ Revertir estado de cotización
-      await cotizacion.update(
+  const t = await Cotizacion.sequelize.transaction();
+
+  try {
+    const {
+      id_cotizacion,
+      id_solicitud,
+      id_usuario
+    } = req.body;
+
+    console.log('🛰️ [DEBUG] Datos recibidos en /pagos/denegar:', req.body);
+
+    if (!id_cotizacion || !id_solicitud || !id_usuario) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'Faltan campos requeridos.' });
+    }
+
+    // 1️⃣ Obtener cotización
+    const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
+    if (!cotizacion) throw new Error('Cotización no encontrada');
+
+    const monto_credito_usado = parseFloat(cotizacion.credito_usado || 0);
+
+    // 2️⃣ Revertir estado de cotización
+    await cotizacion.update(
+      {
+        id_cuenta: null,
+        num_comprobante: null,
+        descuento_membresia: null,
+        credito_usado: null,
+        estado: 'rechazado'
+      },
+      { transaction: t }
+    );
+
+    // 3️⃣ Revertir estado de solicitud
+    const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
+    if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+    await solicitud.update({ estado: 'pendiente_pagoservicio' }, { transaction: t });
+
+    // 4️⃣ Devolver crédito al usuario (si usó crédito)
+    console.log(`💰 [DEBUG] Monto de crédito usado: ${monto_credito_usado}`);
+    if (monto_credito_usado > 0) {
+      // sumar el crédito devuelto al crédito actual (si existiera)
+      const creditoUsuario = await CreditoUsuario.findOne({
+        where: { id_usuario },
+        transaction: t
+      });
+
+      const creditoAnterior = creditoUsuario ? parseFloat(creditoUsuario.monto_credito) || 0 : 0;
+      const nuevoCredito = Math.round((creditoAnterior + monto_credito_usado) * 100) / 100;
+
+      await CreditoUsuario.upsert(
         {
-          id_cuenta: null,
-          num_comprobante: null, 
-          descuento_membresia: null,
-          credito_usado: null,
-          estado: 'rechazado'
+          id_usuario,
+          monto_credito: nuevoCredito,
+          fecha: new Date()
         },
         { transaction: t }
       );
-  
-      // 3️⃣ Revertir estado de solicitud
-      const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
-      if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
-      await solicitud.update({ estado: 'pendiente_pagoservicio' }, { transaction: t });
-  
-      // 4️⃣ Devolver crédito al usuario (si usó crédito) 
-      console.log(`💰 [DEBUG] Monto de crédito usado: ${monto_credito_usado}`);
-      if (monto_credito_usado > 0) {  
-  
-        await CreditoUsuario.upsert(
-          {
-            id_usuario,
-            monto_credito: monto_credito_usado,
-            fecha: new Date()
-          },
-          { transaction: t }
-        );
-  
-        console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario}`);
-      }
-  
-      // 5️⃣ Buscar si el usuario tenía referidor (para quitar comisión)
-      const referido = await Referido.findOne({
-        where: { id_referido_usuario: id_usuario },
+
+      console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario} (ahora ${nuevoCredito})`);
+    }
+
+    // 5️⃣ Buscar si el usuario tenía referidor (para quitar comisión)
+    const referido = await Referido.findOne({
+      where: { id_referido_usuario: id_usuario },
+      transaction: t
+    });
+
+    if (referido && referido.id_referidor) {
+      // Buscar movimiento de comisión asociado a esta cotización (AHORA INCLUYE id_cotizacion)
+      const movimientoComision = await Movimiento.findOne({
+        where: {
+          id_usuario: referido.id_referidor,
+          id_referido: id_usuario,
+          id_cotizacion, // <-- agregado
+          tipo: 'ingreso_referido'
+        },
+        order: [['fecha', 'DESC']],
         transaction: t
       });
-  
-      if (referido && referido.id_referidor) {
-        // Buscar movimiento de comisión
-        const movimientoComision = await Movimiento.findOne({
-          where: {
-            id_usuario: referido.id_referidor,
-            id_referido: id_usuario,
-            tipo: 'ingreso_referido'
-          },
-          order: [['fecha', 'DESC']],
+
+      if (movimientoComision) {
+        const comision = parseFloat(movimientoComision.monto) || 0;
+
+        // 5.1️⃣ Restar la comisión al crédito del referidor (si existe)
+        const creditoReferidor = await CreditoUsuario.findOne({
+          where: { id_usuario: referido.id_referidor },
           transaction: t
         });
-  
-        if (movimientoComision) {
-          const comision = parseInt(movimientoComision.monto);
-  
-          // 5.1️⃣ Restar la comisión al crédito del referidor
-          const creditoReferidor = await CreditoUsuario.findOne({
-            where: { id_usuario: referido.id_referidor },
-            transaction: t
-          });
-  
-          if (creditoReferidor) {
-            const nuevoCreditoReferidor = Math.max(0, parseInt(creditoReferidor.monto_credito) - comision);
-            
-            await CreditoUsuario.upsert(
-              { 
-                id_usuario: referido.id_referidor,
-                monto_credito: nuevoCreditoReferidor,
-                fecha: new Date()
-              },
-              { transaction: t }
-            );
-            console.log(`💸 [DEBUG] Comisión revertida (-${comision}) del referidor ${referido.id_referidor}`);
-          }
-  
-          // 5.2️⃣ Eliminar el movimiento de comisión
-          await Movimiento.destroy({
-            where: { id_movimiento: movimientoComision.id_movimiento },
-            transaction: t
-          });
-        }
-      }
-  
-      // ✅ Confirmar transacción
-      await t.commit();
-      console.log('✅ [DEBUG] Pago denegado y transacción revertida correctamente');
-  
-      return res.status(200).json({
-        success: true,
-        message: 'Pago denegado correctamente. Todos los cambios han sido revertidos.'
-      });
-  
-    } catch (error) {
-      // ❌ Rollback si algo falla
-      await t.rollback();
-      console.error('[ERROR] Error al denegar pago:', error);
-  
-      return res.status(500).json({
-        success: false,
-        message: 'Error al denegar el pago. Se revertieron los cambios.',
-        error: error.message
-      });
-    }
-  };
-  
 
-module.exports = { processPayment, denyPayment };
+        if (creditoReferidor) {
+          const nuevoCreditoReferidor = Math.max(0, parseFloat(creditoReferidor.monto_credito) - comision);
+          await CreditoUsuario.upsert(
+            {
+              id_usuario: referido.id_referidor,
+              monto_credito: nuevoCreditoReferidor,
+              fecha: new Date()
+            },
+            { transaction: t }
+          );
+          console.log(`💸 [DEBUG] Comisión revertida (-${comision}) del referidor ${referido.id_referidor}`);
+        }
+
+        // 5.2️⃣ Eliminar o marcar el movimiento de comisión
+        // Si prefieres eliminar:
+        await Movimiento.destroy({
+          where: { id_movimiento: movimientoComision.id_movimiento },
+          transaction: t
+        });
+
+        // Si prefieres marcar como 'anulado' en vez de eliminar, usa:
+        // await movimientoComision.update({ estado: 'anulado' }, { transaction: t });
+
+      } else {
+        console.log('ℹ️ [INFO] No se encontró movimiento de referido para esta cotización.');
+      }
+    } else {
+      console.log('ℹ️ [INFO] El usuario no tiene referidor asociado.');
+    }
+
+    // ✅ Confirmar transacción
+    await t.commit();
+    console.log('✅ [DEBUG] Pago denegado y transacción revertida correctamente');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Pago denegado correctamente. Todos los cambios han sido revertidos.'
+    });
+
+  } catch (error) {
+    await t.rollback();
+    console.error('[ERROR] Error al denegar pago:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error al denegar el pago. Se revertieron los cambios.',
+      error: error.message
+    });
+  }
+};
+ 
+const acceptPayment = async (req, res) => {
+  const t = await Cotizacion.sequelize.transaction();
+
+  try {
+    const { id_cotizacion, id_solicitud } = req.body;
+
+    console.log('🛰️ [DEBUG] Datos recibidos en /pagos/aceptar:', req.body);
+
+    if (!id_cotizacion || !id_solicitud) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'Faltan campos requeridos.' });
+    }
+
+    // 1️⃣ Verificar existencia de cotización
+    const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
+    if (!cotizacion) throw new Error('Cotización no encontrada');
+
+    // 2️⃣ Verificar existencia de solicitud
+    const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
+    if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+
+    // 3️⃣ Validar que la cotización esté en estado "pagado"
+    if (cotizacion.estado !== 'pagado') {
+      throw new Error(`Solo se pueden aceptar cotizaciones con estado 'pagado'. Estado actual: '${cotizacion.estado}'`);
+    }
+
+    // 4️⃣ Actualizar estados principales
+    await cotizacion.update({ estado: 'confirmado' }, { transaction: t });
+    await solicitud.update({ estado: 'finalizado' }, { transaction: t });
+
+    console.log(`✅ [DEBUG] Cotización ${id_cotizacion} confirmada y solicitud ${id_solicitud} finalizada.`);
+
+    // 5️⃣ Actualizar movimiento del técnico (si existe) buscando por id_cotizacion
+    const movimientoTecnico = await Movimiento.findOne({
+      where: {
+        id_cotizacion,
+        tipo: 'ingreso'
+      },
+      order: [['fecha', 'DESC']],
+      transaction: t
+    });
+
+    if (movimientoTecnico) {
+      await movimientoTecnico.update({ estado: 'completado' }, { transaction: t });
+      console.log(`💼 [DEBUG] Movimiento del técnico (${movimientoTecnico.id_movimiento}) marcado como completado.`);
+    } else {
+      console.log('ℹ️ [INFO] No se encontró movimiento de técnico para esta cotización.');
+    }
+
+    // 6️⃣ Actualizar movimiento del referido (si existe) buscando por id_cotizacion
+    const movimientoReferido = await Movimiento.findOne({
+      where: {
+        id_cotizacion,
+        tipo: 'ingreso_referido',
+        estado: 'pendiente'
+      },
+      order: [['fecha', 'DESC']],
+      transaction: t
+    });
+
+    if (movimientoReferido) {
+      await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
+      console.log(`🤝 [DEBUG] Movimiento de referido (${movimientoReferido.id_movimiento}) marcado como completado.`);
+    } else {
+      console.log('ℹ️ [INFO] No se encontró movimiento de referido pendiente para esta cotización.');
+    }
+
+    // ✅ Confirmar transacción
+    await t.commit();
+    console.log('✅ [DEBUG] Pago aceptado y todo actualizado correctamente.');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Pago aceptado correctamente. Estados actualizados.',
+      detalles: {
+        id_cotizacion,
+        nuevo_estado_cotizacion: 'confirmado',
+        nuevo_estado_solicitud: 'finalizado',
+        movimiento_tecnico: movimientoTecnico ? 'completado' : 'no encontrado',
+        movimiento_referido: movimientoReferido ? 'completado' : 'no encontrado'
+      }
+    });
+  } catch (error) {
+    await t.rollback();
+    console.error('[ERROR] Error al aceptar pago:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error al aceptar el pago. Se revertieron los cambios.',
+      error: error.message
+    });
+  }
+};
+
+module.exports = { processPayment, denyPayment, acceptPayment };
