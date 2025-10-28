@@ -1,8 +1,10 @@
+
 const Usuario = require("../models/usuariosModel");
 const Ciudad = require("../models/ciudadesModel");
 const Rol = require("../models/rolesModel");
+const Credito = require("../models/creditoUsuariosModel");
 const Calificaciones = require("../models/calificacionesModels");
-const { Op, fn, col  } = require('sequelize');
+const { Op, fn, col } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
 
@@ -17,34 +19,50 @@ const obtenerUsuarios = async (req, res) => {
         res.status(500).json({ error: "Error al obtener usuarios" });
     }
 };  
-
-// Obtener todos los técnicos de una ciudad  
+ 
+// Obtener todos los técnicos de una ciudad (con filtros)
 const obtenerTecnicosPorCiudad = async (req, res) => {
-    const { id_ciudad, limit = 10, offset = 0 } = req.query;
+    const { id_ciudad, nombre, estado, limit = 10, offset = 0 } = req.query;
   
     try {
-      // 1️⃣ Condición base
-      const whereCondition = { id_rol: 4 }; // Rol de técnico
+      // Obtener el ID del rol de técnico
+      const rolTecnico = await Rol.findOne({
+        where: { nombre_rol: 'Tecnico' },
+        attributes: ['id_rol'],
+        raw: true
+      });
   
-      if (id_ciudad) {
-        whereCondition.id_ciudad = id_ciudad;
+      if (!rolTecnico) {
+        return res.status(404).json({
+          success: false,
+          error: 'No se encontró el rol de Técnico'
+        });
       }
   
-      // 2️⃣ Obtener técnicos
+      // 🧩 Condición base con filtros opcionales
+      const whereCondition = { id_rol: rolTecnico.id_rol };
+  
+      if (id_ciudad) whereCondition.id_ciudad = id_ciudad;
+      if (estado) whereCondition.estado = estado;
+      if (nombre) {
+        whereCondition.nombre = { [Op.like]: `%${nombre}%` };
+      }
+  
+      // 🔎 Consultar técnicos filtrados
       const tecnicos = await Usuario.findAll({
-        attributes: ["id_usuario", "nombre", "identidad", "email", "telefono", "id_ciudad"],
+        attributes: [
+          "id_usuario",
+          "nombre",
+          "identidad",
+          "email",
+          "telefono",
+          "estado",
+          "id_ciudad"
+        ],
         where: whereCondition,
         include: [
-          {
-            model: Ciudad,
-            as: "ciudad",
-            attributes: ["nombre_ciudad"]
-          },
-          {
-            model: Rol,
-            as: "rol",
-            attributes: ["nombre_rol"]
-          }
+          { model: Ciudad, as: "ciudad", attributes: ["nombre_ciudad"] },
+          { model: Rol, as: "rol", attributes: ["nombre_rol"] }
         ],
         limit: parseInt(limit),
         offset: parseInt(offset),
@@ -52,14 +70,14 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
       });
   
       if (!tecnicos.length) {
-        return res.status(404).json({
-          mensaje: id_ciudad
-            ? `No se encontraron técnicos en la ciudad ${id_ciudad}`
-            : "No se encontraron técnicos registrados"
+        return res.status(200).json({
+          success: true,
+          total: 0,
+          tecnicos: []
         });
       }
   
-      // 3️⃣ Obtener promedios de calificaciones en bloque
+      // 📊 Obtener promedios de calificaciones
       const calificaciones = await Calificaciones.findAll({
         attributes: [
           "id_usuario_calificado",
@@ -68,31 +86,30 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         group: ["id_usuario_calificado"]
       });
   
-      // Convertir a un mapa para acceso rápido
       const mapaPromedios = {};
-      calificaciones.forEach((c) => {
+      calificaciones.forEach(c => {
         mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio"));
       });
   
-      // 4️⃣ Agregar promedio y mover id_ciudad dentro de ciudad
-      const tecnicosConPromedio = tecnicos.map((t) => {
+      // 🧮 Agregar promedio a cada técnico
+      const tecnicosConPromedio = tecnicos.map(t => {
         const data = t.toJSON();
         const { id_ciudad, ...rest } = data;
         return {
           ...rest,
-          ciudad: {
-            id_ciudad,
-            ...data.ciudad
-          },
+          ciudad: { id_ciudad, ...data.ciudad },
           promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0
         };
       });
   
-      // 5️⃣ Responder
+      // 📦 Total general (sin limit/offset)
+      const total = await Usuario.count({ where: whereCondition });
+  
       return res.json({
-        total: tecnicosConPromedio.length,
+        total,
         tecnicos: tecnicosConPromedio
       });
+  
     } catch (error) {
       console.error("Error al obtener técnicos:", error);
       return res.status(500).json({
@@ -101,6 +118,119 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
       });
     }
   };
+  
+ 
+// Obtener todos los usuarios de una ciudad (con filtros)
+const obtenerUsuariosPorCiudad = async (req, res) => {
+    const { id_ciudad, nombre, estado, limit = 10, offset = 0 } = req.query;
+  
+    try {
+      // Rol dinámico de usuario
+      const rolUsuario = await Rol.findOne({
+        where: { nombre_rol: 'Usuario' },
+        attributes: ['id_rol'],
+        raw: true
+      });
+  
+      if (!rolUsuario) {
+        return res.status(404).json({
+          success: false,
+          error: 'No se encontró el rol de Usuario'
+        });
+      }
+  
+      // 🧩 Filtros dinámicos (en SQL)
+      let filtrosSQL = `WHERE u.id_rol = :rolId`;
+      if (id_ciudad) filtrosSQL += ` AND u.id_ciudad = :ciudadId`;
+      if (estado) filtrosSQL += ` AND u.estado = :estado`;
+      if (nombre) filtrosSQL += ` AND u.nombre LIKE :nombre`;
+  
+      // 🧾 Consulta principal con filtros
+      let query = `
+        SELECT 
+            u.id_usuario,
+            u.nombre,
+            u.identidad,
+            u.email,
+            u.telefono,
+            u.estado,
+            u.id_ciudad,
+            c.nombre_ciudad,
+            r.nombre_rol,
+            COUNT(ref.id_referido) AS total_referidos,
+            COALESCE(cu.monto_credito, 0) AS monto_credito
+        FROM usuario u
+        LEFT JOIN ciudad c ON u.id_ciudad = c.id_ciudad
+        LEFT JOIN roles r ON u.id_rol = r.id_rol
+        LEFT JOIN referido ref ON u.id_usuario = ref.id_referidor
+        LEFT JOIN credito cu ON u.id_usuario = cu.id_usuario
+        ${filtrosSQL}
+        GROUP BY u.id_usuario, c.nombre_ciudad, r.nombre_rol, cu.monto_credito
+        ORDER BY u.nombre ASC
+        LIMIT :limit OFFSET :offset
+      `;
+  
+      // Parámetros seguros
+      const replacements = {
+        rolId: rolUsuario.id_rol,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      };
+      if (id_ciudad) replacements.ciudadId = id_ciudad;
+      if (estado) replacements.estado = estado;
+      if (nombre) replacements.nombre = `%${nombre}%`;
+  
+      // Ejecutar consulta
+      const [usuariosConReferidos] = await Usuario.sequelize.query(query, { replacements });
+  
+      if (!usuariosConReferidos.length) {
+        return res.status(200).json({
+          total: 0,
+          usuarios: []
+        });
+      }
+  
+      // 📦 Total (sin limit)
+      const totalUsuarios = await Usuario.count({
+        where: {
+          id_rol: rolUsuario.id_rol,
+          ...(id_ciudad && { id_ciudad }),
+          ...(estado && { estado }),
+          ...(nombre && { nombre: { [Op.like]: `%${nombre}%` } })
+        }
+      });
+  
+      // 🧮 Formatear respuesta
+      const usuariosFormateados = usuariosConReferidos.map(usuario => ({
+        id_usuario: usuario.id_usuario,
+        nombre: usuario.nombre,
+        identidad: usuario.identidad,
+        email: usuario.email,
+        telefono: usuario.telefono,
+        estado: usuario.estado,
+        credito: { monto: parseFloat(usuario.monto_credito) || 0 },
+        ciudad: {
+          id_ciudad: usuario.id_ciudad,
+          nombre_ciudad: usuario.nombre_ciudad
+        },
+        rol: { nombre_rol: usuario.nombre_rol },
+        total_referidos: parseInt(usuario.total_referidos) || 0
+      }));
+  
+      return res.json({
+        total: totalUsuarios,
+        usuarios: usuariosFormateados
+      });
+  
+    } catch (error) {
+      console.error("Error al obtener usuarios:", error);
+      return res.status(500).json({
+        error: "Error al obtener usuarios",
+        detalle: error.message
+      });
+    }
+  };
+  
 
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
@@ -210,9 +340,33 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
 
 //Crear Usuario
 const crearUsuario = async (req, res) => {
+    // Obtener el ID del rol de Cliente por defecto
+    let rolCliente;
+    try {
+        rolCliente = await Rol.findOne({
+            where: { nombre_rol: 'Cliente' },
+            attributes: ['id_rol'],
+            raw: true
+        });
+
+        if (!rolCliente) {
+            return res.status(500).json({
+                success: false,
+                error: 'No se pudo determinar el rol por defecto (Cliente)'
+            });
+        }
+    } catch (error) {
+        console.error("Error al obtener el rol de Cliente:", error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al obtener el rol por defecto',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+
     const { 
         nombre, 
-        id_rol = 3,
+        id_rol = rolCliente.id_rol, // Usar el ID del rol de Cliente por defecto
         identidad, 
         email, 
         telefono, 
@@ -351,7 +505,7 @@ const crearUsuario = async (req, res) => {
 
 //Actualizar Usuario
 const actualizarUsuario = async (req, res) => {
-    const { id } = req.params; // Cambiado de id_usuario a id para que coincida con la ruta
+    const { id } = req.params;  
     const { 
         nombre, 
         identidad, 
@@ -631,6 +785,7 @@ const eliminarUsuario = async (req, res) => {
 module.exports = {
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,
+    obtenerUsuariosPorCiudad,
     obtenerUsuarioPorId,
     obtenerUsuarioPorNombre,
     obtenerUsuarioPorIdentidad,

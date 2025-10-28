@@ -8,7 +8,8 @@ const {
     getCalificacionesPorSolicitud, 
     getPromedioCalificacionesPorUsuario,
     crearCalificacion, 
-    eliminarCalificacion 
+    eliminarCalificacion,
+    getTopTecnicosMejorCalificados 
 } = require("../controllers/CalificacionesController");
 
 // Middleware de autenticación
@@ -49,6 +50,9 @@ router.post("/", [
     body("calificacion").isInt().withMessage("La calificacion debe ser un numero entero"),
     body("comentario").isString().withMessage("El comentario debe ser una cadena de texto")
 ], validarErrores, crearCalificacion);
+
+// Obtener top 5 técnicos mejor calificados
+router.get("/top-tecnicos", authMiddleware, getTopTecnicosMejorCalificados);
 
 //Eliminar calificacion
 router.delete("/:id", [

@@ -2,7 +2,8 @@ const Calificaciones = require("../models/calificacionesModels");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicios = require("../models/serviciosModel");
 const Usuarios = require("../models/usuariosModel");
-const { Op } = require("sequelize");
+const Rol = require("../models/rolesModel");
+const { sequelize } = require("../config/database");
 
 //Obtener todas las calificaciones
 const getAllCalificaciones = async (req, res) => {
@@ -103,6 +104,81 @@ const getCalificacionesPorSolicitud = async (req, res) => {
         res.status(500).json({ error: "Error al obtener calificaciones por solicitud" });
     }
 };
+ 
+// Obtener top 5 técnicos con mejor calificación promedio 
+const getTopTecnicosMejorCalificados = async (req, res) => { 
+    try {
+        // Obtener el ID del rol de técnico
+        const rolTecnico = await Rol.findOne({
+            where: { nombre_rol: 'Tecnico' },
+            attributes: ['id_rol'],
+            raw: true
+        });
+
+        if (!rolTecnico) {
+            return res.status(404).json({
+                success: false,
+                error: 'No se encontró el rol de Técnico'
+            });
+        }
+
+        // Consulta SQL directa para evitar problemas de asociación múltiple
+        const [results] = await sequelize.query(`
+            SELECT 
+                c.id_usuario_calificado,
+                u.nombre,
+                u.email,
+                u.telefono,
+                ci.nombre_ciudad as ciudad,
+                ROUND(AVG(c.calificacion), 2) as promedio_calificacion,
+                COUNT(c.id_calificacion) as total_calificaciones
+            FROM 
+                calificaciones c
+            INNER JOIN 
+                usuario u ON c.id_usuario_calificado = u.id_usuario
+            INNER JOIN
+                ciudad ci ON u.id_ciudad = ci.id_ciudad
+            WHERE 
+                u.id_rol = ${rolTecnico.id_rol}  -- Solo técnicos
+                AND c.calificacion IS NOT NULL
+                AND c.calificacion > 0  -- Solo calificaciones mayores a 0
+            GROUP BY 
+                c.id_usuario_calificado, u.nombre, u.email, u.telefono, ci.nombre_ciudad
+            HAVING 
+                COUNT(c.id_calificacion) > 0  -- Asegurar que tenga al menos una calificación
+            ORDER BY 
+                promedio_calificacion DESC
+            LIMIT 5;
+        `);
+
+        // Verificar si hay resultados
+        if (!results || results.length === 0) {
+            return res.json({
+                success: true,
+                data: []
+            });
+        }
+
+        // Formatear la respuesta
+        const resultado = results.map(tecnico => ({
+            nombre: tecnico.nombre || 'Técnico',
+            ciudad: tecnico.ciudad || 'Sin ciudad',
+            promedio_calificacion: parseFloat(tecnico.promedio_calificacion).toFixed(2),
+            total_calificaciones: parseInt(tecnico.total_calificaciones)
+        }));
+
+        res.json({
+            success: true,
+            data: resultado
+        });
+    } catch (error) {
+        console.error('Error al obtener los técnicos mejor calificados:', error);
+        res.status(500).json({ 
+            error: 'Error al obtener los técnicos mejor calificados',
+            detalle: error.message 
+        });
+    }
+};
 
 //Crear calificacion 
 const crearCalificacion = async (req, res) => {
@@ -133,6 +209,7 @@ module.exports = {
     getCalificacionesPorUsuario,
     getCalificacionesPorSolicitud,
     getPromedioCalificacionesPorUsuario,
+    getTopTecnicosMejorCalificados,
     crearCalificacion,
     eliminarCalificacion
 };

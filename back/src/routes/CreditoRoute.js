@@ -1,13 +1,15 @@
+const { sequelize } = require("../config/database");
 const express = require("express");
 const router = express.Router();
-const { body, param, validationResult } = require("express-validator");   
+const { body, param, validationResult, query } = require("express-validator");   
 const { authMiddleware } = require("../middleware/authMiddleware");  
 const { 
     getAllCreditos,
     getCreditoPorUsuario,
+    getTopTecnicosConMasCredito,
     createCredito,
     resetCredito,
-    deleteCredito 
+    deleteCredito
 } = require("../controllers/CreditoController");
  
 // Middleware de autenticación
@@ -32,6 +34,12 @@ router.get("/usuario/:id_usuario", [
     validarErrores
 ], getCreditoPorUsuario);
 
+// Obtener top 5 con más crédito
+router.get("/tops", [
+    query("id_rol").isInt().withMessage("El ID debe ser un numero entero"),
+    validarErrores
+], getTopTecnicosConMasCredito);
+
 //Crear credito
 router.post("/", [
     body("id_usuario").isInt().withMessage("El ID debe ser un numero entero"),
@@ -49,6 +57,6 @@ router.put("/reset/:id_usuario", [
 router.delete("/eliminar/:id_usuario", [
     param("id_usuario").isInt().withMessage("El ID debe ser un numero entero"),
     validarErrores
-], deleteCredito);
+], deleteCredito); 
 
 module.exports = router;

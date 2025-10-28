@@ -1,6 +1,8 @@
+const { sequelize } = require("../config/database");
 const Referido = require("../models/referidosModel");
 const Usuario = require("../models/usuariosModel");
 const { Op } = require("sequelize");
+const Ciudad = require("../models/ciudadesModel");
 
 // Obtener todos los referidos
 const getAllReferidos = async (req, res) => {
@@ -95,8 +97,7 @@ const getReferidorByUser = async (req, res) => {
             error: "Error al obtener el referidor" 
         });
     }
-};
-
+}; 
 // Crear Referido
 const createReferido = async (req, res) => {
     try {
@@ -132,9 +133,56 @@ const createReferido = async (req, res) => {
     }
 };
 
+// Obtener el top 5 de usuarios con más referidos
+const getTopUsuariosConMasReferidos = async (req, res) => {
+    try {
+        const [results] = await sequelize.query(`
+            SELECT 
+                u.id_usuario,
+                u.nombre,
+                c.nombre_ciudad as ciudad,
+                COUNT(r.id_referido) as cantidad_referidos,
+                MAX(r.fecha_referido) as fecha
+            FROM 
+                referido r
+            JOIN 
+                usuario u ON r.id_referidor = u.id_usuario
+            LEFT JOIN 
+                ciudad c ON u.id_ciudad = c.id_ciudad
+            GROUP BY 
+                r.id_referidor, u.id_usuario, c.nombre_ciudad
+            ORDER BY 
+                cantidad_referidos DESC
+            LIMIT 5
+        `);
+
+        // Formatear la respuesta
+        const resultado = results.map(item => ({
+            nombre: item.nombre || 'Usuario desconocido',
+            ciudad: item.ciudad || 'Sin ciudad',
+            cantidad_referidos: parseInt(item.cantidad_referidos) || 0,
+            fecha: item.fecha
+        }));
+
+        res.json({
+            success: true,
+            data: resultado
+        });
+
+    } catch (error) {
+        console.error('Error al obtener el top de usuarios con más referidos:', error);
+        res.status(500).json({
+            success: false,
+            error: "Error al obtener el top de usuarios con más referidos",
+            details: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllReferidos,
     getReferidosByUser,
     getReferidorByUser,
-    createReferido
+    createReferido,
+    getTopUsuariosConMasReferidos
 };

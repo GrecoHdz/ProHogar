@@ -6,7 +6,8 @@ const {
     getAllReferidos, 
     getReferidosByUser, 
     getReferidorByUser,
-    createReferido
+    createReferido,
+    getTopUsuariosConMasReferidos
 } = require("../controllers/ReferidoController");
  
 // Middleware para validar errores
@@ -31,6 +32,9 @@ router.get("/:id_referidor", [
 router.get("/referidor/:id_referido_usuario", [
     param("id_referido_usuario").isInt().withMessage("El ID debe ser un numero entero")
 ], validarErrores, getReferidorByUser, authMiddleware);
+
+// Obtener top 5 usuarios con más referidos
+router.get("/top/usuarios", authMiddleware, getTopUsuariosConMasReferidos);
 
 //Crear referido
 router.post("/", [

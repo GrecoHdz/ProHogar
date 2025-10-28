@@ -1,4 +1,9 @@
+const { sequelize } = require("../config/database");
 const CreditoUsuario = require("../models/creditoUsuariosModel");
+const Usuarios = require("../models/usuariosModel");
+const Ciudades = require("../models/ciudadesModel");
+const Rol = require("../models/rolesModel");
+const { Op } = require('sequelize');
 
 //Obtener todos los creditos
 const getAllCreditos = async (req, res) => {
@@ -163,10 +168,76 @@ const deleteCredito = async (req, res) => {
     }
 };
 
+// Obtener top 5 técnicos con más crédito
+const getTopTecnicosConMasCredito = async (req, res) => {
+    try {
+        // Obtener el ID del rol desde los parámetros de consulta
+        const { id_rol } = req.query;
+
+        // Validar que se proporcione un ID de rol
+        if (!id_rol) {
+            return res.status(400).json({
+                success: false,
+                error: 'Se requiere el parámetro id_rol en la consulta'
+            });
+        }
+
+        const topTecnicos = await CreditoUsuario.findAll({
+            include: [{
+                model: Usuarios,
+                as: 'usuario',
+                where: { id_rol: id_rol },
+                attributes: ['id_usuario', 'nombre', 'email', 'telefono', 'id_ciudad'],
+                include: [{
+                    model: Ciudades,
+                    as: 'ciudad',
+                    attributes: ['nombre_ciudad'],
+                    required: false
+                }],
+                required: true
+            }],
+            where: {
+                monto_credito: {
+                    [Op.gt]: 0  // Solo créditos mayores a 0
+                }
+            },
+            attributes: [
+                'id_usuario',
+                [sequelize.fn('ROUND', sequelize.col('monto_credito'), 2), 'monto_credito'],
+                'fecha'
+            ],
+            order: [['monto_credito', 'DESC']],
+            limit: 5
+        });
+
+        // Formatear la respuesta
+        const resultado = topTecnicos.map(tecnico => ({ 
+            nombre: tecnico.usuario?.nombre || 'Técnico',
+            ciudad: tecnico.usuario?.ciudad?.nombre_ciudad || 'Sin ciudad',
+            monto_credito: parseFloat(tecnico.monto_credito) || 0,
+            fecha: tecnico.fecha
+        }));
+
+        res.json({
+            success: true,
+            data: resultado
+        });
+
+    } catch (error) {
+        console.error('Error al obtener los técnicos con más crédito:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener los técnicos con más crédito',
+            details: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllCreditos,
     getCreditoPorUsuario,
     createCredito,
     resetCredito,
-    deleteCredito
+    deleteCredito,
+    getTopTecnicosConMasCredito
 };

@@ -5,14 +5,15 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     obtenerUsuarios, 
     obtenerTecnicosPorCiudad,
+    obtenerUsuariosPorCiudad,
     obtenerUsuarioPorNombre, 
     obtenerUsuarioPorIdentidad, 
-    obtenerUsuarioPorId,
+    obtenerUsuarioPorId, 
     crearUsuario, 
     actualizarUsuario, 
     actualizarPassword,
     eliminarUsuario 
-} = require("../controllers/UsuarioController");
+} = require("../controllers/UsuarioController"); 
  
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
@@ -23,7 +24,7 @@ const validarErrores = (req, res, next) => {
     next();
   }; 
 //Obtener todos los Usuarios
-router.get("/", validarErrores, obtenerUsuarios, authMiddleware);
+router.get("/", validarErrores, authMiddleware, obtenerUsuarios);
 
 //Obtener Usuario por ID
 router.get("/id/:id", 
@@ -31,14 +32,19 @@ router.get("/id/:id",
         param("id").isString().withMessage("El ID debe ser una cadena de caracteres")
     ], 
     validarErrores, 
-    obtenerUsuarioPorId, authMiddleware);
+    authMiddleware, obtenerUsuarioPorId);
 
 //Obtener todos los Tecnicos por ciudad
 router.get("/tecnicos", [
     query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
   ],
-  validarErrores, obtenerTecnicosPorCiudad, authMiddleware);
+  validarErrores, authMiddleware, obtenerTecnicosPorCiudad);
   
+//Obtener todos los Usuarios por ciudad
+router.get("/usuarios", [
+    query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
+  ],
+  validarErrores, authMiddleware, obtenerUsuariosPorCiudad);
 
 //Obtener Usuario por nombre
 router.get("/:nombre", 
@@ -46,7 +52,7 @@ router.get("/:nombre",
         param("nombre").isString().withMessage("El nombre debe ser una cadena de caracteres")
     ], 
     validarErrores, 
-    obtenerUsuarioPorNombre, authMiddleware);
+    authMiddleware, obtenerUsuarioPorNombre);
 
 //Obtener Usuario por identidad
 router.get("/identidad/:identidad", 
@@ -54,7 +60,7 @@ router.get("/identidad/:identidad",
         param("identidad").isString().withMessage("La identidad debe ser una cadena de caracteres")
     ], 
     validarErrores, 
-    obtenerUsuarioPorIdentidad, authMiddleware);
+    authMiddleware, obtenerUsuarioPorIdentidad);
 
 //Crear Usuario
 router.post("/", 
@@ -79,9 +85,9 @@ router.put("/:id",
         body("telefono").optional().isString().withMessage("El telefono debe ser una cadena de caracteres"), 
         body("password_hash").optional().isString().withMessage("El password_hash debe ser una cadena de caracteres"),
         body("id_ciudad").optional().isInt().withMessage("El id_ciudad debe ser un numero entero"),
-        body("activo").optional().isBoolean().withMessage("El activo debe ser un booleano")
+        body("activo").optional().isString().withMessage("El activo debe ser un string")
     ], 
-    validarErrores,actualizarUsuario, authMiddleware);
+    validarErrores,authMiddleware,actualizarUsuario);
 
 //Actualizar Contraseña
 router.put("/cambio-clave/:id", 
@@ -90,14 +96,14 @@ router.put("/cambio-clave/:id",
         body("currentPassword").isString().withMessage("La contraseña actual debe ser una cadena de caracteres"), 
         body("newPassword").isString().withMessage("La nueva contraseña debe ser una cadena de caracteres")
     ], 
-    validarErrores,actualizarPassword, authMiddleware);
+    validarErrores,actualizarPassword);
 
 //Eliminar Usuario
 router.delete("/:id", 
     [
         param("id").isString().withMessage("El ID debe ser una cadena de caracteres")
     ], 
-    validarErrores,eliminarUsuario, authMiddleware);
+    validarErrores,authMiddleware,eliminarUsuario);
 
 module.exports = router;
 
