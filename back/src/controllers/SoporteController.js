@@ -4,11 +4,29 @@ const { Op } = require('sequelize');
 //Obtener todos los Soportes
 const obtenerSoportes = async (req, res) => {
     try {
-        const soportes = await Soporte.findAll();
-        res.json(soportes);
+        const { limit = 10, offset = 0 } = req.query;
+        
+        const { count, rows: soportes } = await Soporte.findAndCountAll({
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            order: [['fecha_creacion', 'DESC']] // Ordenar por fecha de creación más reciente
+        });
+        
+        res.json({
+            success: true,
+            data: soportes,
+            pagination: {
+                total: count,
+                limit: parseInt(limit),
+                offset: parseInt(offset)
+            }
+        });
     } catch (error) {
         console.error("Error al obtener soportes:", error);
-        res.status(500).json({ error: "Error al obtener soportes" });
+        res.status(500).json({ 
+            success: false,
+            error: "Error al obtener soportes" 
+        });
     }
 };
 

@@ -4,6 +4,7 @@ const { body, param, query, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     getAllMovimientos,
+    obtenerEstadisticasDashboard,
     getMovimientosPorUsuario,
     getIngresosMensuales,
     getServiciosPorMes,
@@ -35,6 +36,9 @@ router.get("/", validarErrores, getAllMovimientos);
 router.get("/:id_usuario", [
     param("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero")
 ], validarErrores, getMovimientosPorUsuario);
+
+//Obtener estadisticas del dashboard admin
+router.get("/estadisticas/admin", validarErrores, obtenerEstadisticasDashboard);
 
 //Obtener ingresos mensuales por tecnico
 router.get("/ingresos/mensuales/:id_tecnico", [

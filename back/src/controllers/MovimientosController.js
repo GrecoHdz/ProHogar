@@ -3,7 +3,10 @@ const Cotizacion = require("../models/cotizacionModel");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
 const { Op, Sequelize } = require('sequelize');
-
+const sequelize = require('../config/database');
+const Membresia = require('../models/membresiaModel');
+const PagoVisita = require('../models/pagoVisitaModel');
+const Usuario = require('../models/usuariosModel');
 
 // Obtener todos los movimientos
 const getAllMovimientos = async (req, res) => {
@@ -13,6 +16,159 @@ const getAllMovimientos = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al obtener los movimientos" });
+    }
+};
+
+//Obtener estadisticas del dashboard admin
+const obtenerEstadisticasDashboard = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        
+        // Obtener total de usuarios (usa 'fecha' como campo de fecha)
+        const whereUsuario = {};
+        if (fechaInicio || fechaFin) {
+            whereUsuario.fecha_registro = {};
+            if (fechaInicio) whereUsuario.fecha_registro[Op.gte] = new Date(fechaInicio);
+            if (fechaFin) {
+                const fechaFinObj = new Date(fechaFin);
+                fechaFinObj.setHours(23, 59, 59, 999);
+                whereUsuario.fecha_registro[Op.lte] = fechaFinObj;
+            }
+        }
+        const totalUsuarios = await Usuario.count({ where: whereUsuario });
+
+        // Obtener total de servicios (usa 'fecha_solicitud' como campo de fecha)
+        const whereServicio = {};
+        if (fechaInicio || fechaFin) {
+            whereServicio.fecha_solicitud = {};
+            if (fechaInicio) whereServicio.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            if (fechaFin) {
+                const fechaFinObj = new Date(fechaFin);
+                fechaFinObj.setHours(23, 59, 59, 999);
+                whereServicio.fecha_solicitud[Op.lte] = fechaFinObj;
+            }
+        }
+        const totalServicios = await SolicitudServicio.count({ where: whereServicio });
+
+        // Obtener total de membresías activas
+        const totalMembresiasActivas = await Membresia.count({
+            where: {
+                estado: 'activa',
+                ...(fechaInicio || fechaFin ? {
+                    fecha: {
+                        ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
+                        ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                    }
+                } : {})
+            }
+        });
+
+        // Obtener ingresos totales de diferentes fuentes
+        // Obtener todas las cotizaciones confirmadas en el rango de fechas
+        const whereCotizacion = {
+            estado: 'confirmado',
+            ...(fechaInicio || fechaFin ? {
+                fecha: {
+                    ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
+                    ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                }
+            } : {})
+        };
+        
+        const cotizaciones = await Cotizacion.findAll({
+            where: whereCotizacion,
+            attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+            raw: true
+        });
+        
+        // Calcular el total usando JavaScript
+        const totalCotizaciones = cotizaciones.reduce((total, cotizacion) => {
+            const descuento = cotizacion.descuento_membresia || 0;
+            const credito = cotizacion.credito_usado || 0;
+            return total + (cotizacion.monto_manodeobra - descuento - credito);
+        }, 0);
+        
+        const [
+            ingresosMembresias,
+            ingresosVisitas
+        ] = await Promise.all([
+            // Ingresos por membresías activadas
+            Membresia.sum('monto', {
+                where: {
+                    estado: {
+                        [Op.in]: ['activa', 'vencida']
+                    },
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
+                            ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                        }
+                    } : {})
+                }
+            }),
+            // Ingresos por pagos de visita (usa 'fecha' como campo de fecha)
+            PagoVisita.sum('monto', {
+                where: {
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
+                            ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                        }
+                    } : {})
+                }
+            })
+        ]);
+
+        // Calcular el total sumando todas las fuentes de ingreso
+        const ingresosTotales = (totalCotizaciones || 0) + 
+                              (ingresosMembresias || 0) + 
+                              (ingresosVisitas || 0);
+
+        // Verificar si hay servicios pendientes (sin filtro de fecha)
+        const serviciosPendientes = await SolicitudServicio.count({
+            where: {
+                estado: {
+                    [Op.in]: ['pendiente', 'pendiente_asignacion', 'verificando_pagoservicio', 'verificando_pagovisita']
+                }
+            }
+        });
+
+        // Verificar si hay membresías pendientes (sin filtro de fecha)
+        const membresiasPendientes = await Membresia.count({
+            where: {
+                estado: 'pendiente'
+            }
+        });
+
+        // Formatear respuesta
+        const estadisticas = {
+            totalUsuarios: totalUsuarios || 0,
+            totalServicios: totalServicios || 0,
+            totalMembresiasActivas: totalMembresiasActivas || 0,
+            serviciosPendiente: serviciosPendientes > 0 ? 'si' : 'no',
+            totalServiciosPendientes: serviciosPendientes || 0,
+            membresiasPendiente: membresiasPendientes > 0 ? 'si' : 'no',
+            totalMembresiasPendientes: membresiasPendientes || 0,
+            ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2),
+            desgloseIngresos: {
+                servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
+                membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
+                visitas: parseFloat(ingresosVisitas || 0).toFixed(2)
+            }
+        };
+
+        res.json({
+            success: true,
+            data: estadisticas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas del dashboard:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener estadísticas del dashboard',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -824,6 +980,7 @@ const getTransacciones = async (req, res) => {
 // Exportar controladores
 module.exports = {
     getAllMovimientos,
+    obtenerEstadisticasDashboard,
     getMovimientosPorUsuario,
     getTransacciones,
     getIngresosMensuales,
