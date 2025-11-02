@@ -6,13 +6,15 @@ const {
     obtenerUsuarios, 
     obtenerTecnicosPorCiudad,
     obtenerUsuariosPorCiudad,
+    obtenerAdministradores,
     obtenerUsuarioPorNombre, 
     obtenerUsuarioPorIdentidad, 
     obtenerUsuarioPorId, 
     crearUsuario, 
     actualizarUsuario, 
     actualizarPassword,
-    eliminarUsuario 
+    eliminarUsuario,
+    obtenerEstadisticasUsuarios
 } = require("../controllers/UsuarioController"); 
  
 // Middleware para validar errores
@@ -45,6 +47,12 @@ router.get("/usuarios", [
     query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
   ],
   validarErrores, authMiddleware, obtenerUsuariosPorCiudad);
+
+//Obtener todos los Administradores
+router.get("/administradores", validarErrores, authMiddleware, obtenerAdministradores);
+
+// Obtener estadísticas de usuarios
+router.get("/estadisticas", validarErrores, obtenerEstadisticasUsuarios);
 
 //Obtener Usuario por nombre
 router.get("/:nombre", 

@@ -34,7 +34,7 @@ const getReferidosByUser = async (req, res) => {
             include: [{
                 model: Usuario,
                 as: 'usuario',
-                attributes: ['nombre']
+                attributes: ['nombre','estado']
             }],
             attributes: ['fecha_referido'],
             order: [['fecha_referido', 'DESC']],
@@ -46,7 +46,8 @@ const getReferidosByUser = async (req, res) => {
         // Mapear los resultados para incluir solo el nombre y la fecha
         const referidosSimples = referidos.map(referido => ({
             nombre: referido.usuario?.nombre || 'Usuario no encontrado',
-            fecha: referido.fecha_referido
+            fecha: referido.fecha_referido,
+            estado: referido.usuario?.estado || 'Usuario no encontrado'
         }));
         
         const totalPages = Math.ceil(count / limit);

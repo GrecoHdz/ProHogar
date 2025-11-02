@@ -20,6 +20,11 @@ const obtenerSolicitudesServicios = async (req, res) => {
       // Construcción de condiciones
       const whereCondition = {};
       const andConditions = [];
+
+      // Filtrar por técnico si se proporciona el ID
+      if (req.query.id_tecnico) {
+        whereCondition.id_tecnico = req.query.id_tecnico;
+      }
   
       // Filtro por mes (año y mes)
       if (month) {
@@ -338,14 +343,35 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
 const obtenerSolicitudesPorTecnico = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
-        const limit = parseInt(req.query.limit) || 10; // Límite de items por página, por defecto 3
-        const offset = parseInt(req.query.offset) || 0; // Offset inicial
+        const { 
+            limit = 10, 
+            offset = 0,
+            fechaInicio, 
+            fechaFin 
+        } = req.query;
+
+        // Crear objeto de condiciones base
+        const whereClause = {
+            id_tecnico: id_tecnico
+        };
+
+        // Agregar filtro de fechas si están presentes
+        if (fechaInicio || fechaFin) {
+            whereClause.fecha_solicitud = {};
+            if (fechaInicio) {
+                whereClause.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                // Ajustar la fecha fin para incluir todo el día
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereClause.fecha_solicitud[Op.lte] = finDia;
+            }
+        }
 
         // Obtener solicitudes con límite y offset
         const solicitudes = await SolicitudServicio.findAll({
-            where: {
-                id_tecnico: id_tecnico
-            },
+            where: whereClause,
             include: [{
                 model: Servicio,
                 as: 'servicio',
@@ -357,13 +383,15 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
                 attributes: ['nombre','telefono'] 
             }],
             order: [['fecha_solicitud', 'DESC']],
-            limit: limit,
-            offset: offset
+            limit: parseInt(limit),
+            offset: parseInt(offset)
         });
 
-        // Contar total de solicitudes para este técnico
+        // Contar total de solicitudes para este técnico con los mismos filtros
+        const countWhereClause = { ...whereClause };
+        
         const totalSolicitudes = await SolicitudServicio.count({
-            where: { id_tecnico: id_tecnico }
+            where: countWhereClause
         });
 
         // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
@@ -378,7 +406,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         // Contar solicitudes finalizadas (completadas) y pendientes de pago
         const finalizadas = await SolicitudServicio.count({
             where: {
-                id_tecnico: id_tecnico,
+                ...whereClause,
                 [Op.or]: [
                     { estado: 'finalizado' },
                     { estado: 'pendiente_pagoservicio' }
@@ -389,7 +417,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         // Contar solicitudes activas (ni finalizadas ni canceladas)
         const activas = await SolicitudServicio.count({
             where: {
-                id_tecnico: id_tecnico,
+                ...whereClause,
                 [Op.and]: [
                     { estado: { [Op.ne]: 'finalizado' } },
                     { estado: { [Op.ne]: 'cancelado' } },
@@ -400,13 +428,13 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         });
 
         // Verificar si hay más resultados
-        const hasMore = (offset + solicitudes.length) < totalSolicitudes;
+        const hasMore = (parseInt(offset) + solicitudes.length) < totalSolicitudes;
 
         res.json({
             solicitudes: solicitudesFormateadas,
             total: totalSolicitudes,
             hasMore: hasMore,
-            offset: offset + solicitudes.length, // Nuevo offset para la próxima carga
+            offset: parseInt(offset) + solicitudes.length, // Nuevo offset para la próxima carga
             finalizadas,
             activas,
         });

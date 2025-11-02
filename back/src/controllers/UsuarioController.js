@@ -2,11 +2,13 @@
 const Usuario = require("../models/usuariosModel");
 const Ciudad = require("../models/ciudadesModel");
 const Rol = require("../models/rolesModel");
-const Credito = require("../models/creditoUsuariosModel");
+const CreditoUsuario = require('../models/creditoUsuariosModel');
+const Movimiento = require('../models/movimientosModel');
 const Calificaciones = require("../models/calificacionesModels");
-const { Op, fn, col } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
+const Referido = require('../models/referidosModel');
 
 
 //Obtener todos los Usuarios
@@ -19,6 +21,36 @@ const obtenerUsuarios = async (req, res) => {
         res.status(500).json({ error: "Error al obtener usuarios" });
     }
 };  
+ 
+//Obtener stats de usuarios para admin
+const obtenerEstadisticasUsuarios = async (req, res) => {
+    try {
+        // Obtener total de usuarios
+        const totalUsuarios = await Usuario.count();
+        
+        // Obtener total de referidos
+        const totalReferidos = await Referido.count();
+        
+        // Obtener suma total de créditos
+        const totalCreditos = await CreditoUsuario.sum('monto_credito') || 0;
+        
+        res.json({
+            success: true,
+            data: {
+                totalUsuarios,
+                totalReferidos,
+                totalCreditos
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas de usuarios:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener estadísticas de usuarios',
+            details: error.message
+        });
+    }
+};
  
 // Obtener todos los técnicos de una ciudad (con filtros)
 const obtenerTecnicosPorCiudad = async (req, res) => {
@@ -77,48 +109,97 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         });
       }
   
-      // 📊 Obtener promedios de calificaciones
-      const calificaciones = await Calificaciones.findAll({
-        attributes: [
-          "id_usuario_calificado",
-          [fn("AVG", col("calificacion")), "promedio"]
-        ],
-        group: ["id_usuario_calificado"]
-      });
+      // Obtener IDs de los técnicos
+      const tecnicosIds = tecnicos.map(t => t.id_usuario);
   
+      // 📊 Obtener promedios de calificaciones y créditos
+      const [calificaciones, creditos] = await Promise.all([
+        Calificaciones.findAll({
+          attributes: [
+            "id_usuario_calificado",
+            [fn("AVG", col("calificacion")), "promedio"]
+          ],
+          where: {
+            id_usuario_calificado: { [Op.in]: tecnicosIds }
+          },
+          group: ["id_usuario_calificado"]
+        }),
+        CreditoUsuario.findAll({
+          where: {
+            id_usuario: { [Op.in]: tecnicosIds }
+          },
+          attributes: ['id_usuario', 'monto_credito']
+        })
+      ]);
+  
+      // Crear mapas de datos
       const mapaPromedios = {};
       calificaciones.forEach(c => {
         mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio"));
       });
   
-      // 🧮 Agregar promedio a cada técnico
-      const tecnicosConPromedio = tecnicos.map(t => {
+      const mapaCreditos = {};
+      creditos.forEach(c => {
+        mapaCreditos[c.id_usuario] = parseFloat(c.monto_credito) || 0;
+      });
+  
+      // 💰 Calcular saldo total real por técnico (ingresos - retiros + crédito)
+      const saldosTotales = {};
+      await Promise.all(
+        tecnicosIds.map(async (id_usuario) => {
+          const [ingresos, retiros] = await Promise.all([
+            Movimiento.sum('monto', {
+              where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+              }
+            }),
+            Movimiento.sum('monto', {
+              where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: 'retiro'
+              }
+            })
+          ]);
+  
+          const saldoMovimientos = (ingresos || 0) - (retiros || 0);
+          const saldoCredito = mapaCreditos[id_usuario] || 0;
+          saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
+        })
+      );
+  
+      // 🧮 Armar respuesta final
+      const tecnicosConDatos = tecnicos.map(t => {
         const data = t.toJSON();
         const { id_ciudad, ...rest } = data;
         return {
           ...rest,
           ciudad: { id_ciudad, ...data.ciudad },
-          promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0
+          promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0,
+          saldo_total: saldosTotales[data.id_usuario] ?? 0
         };
       });
   
-      // 📦 Total general (sin limit/offset)
+      // 📦 Total general
       const total = await Usuario.count({ where: whereCondition });
   
       return res.json({
+        success: true,
         total,
-        tecnicos: tecnicosConPromedio
+        tecnicos: tecnicosConDatos
       });
   
     } catch (error) {
       console.error("Error al obtener técnicos:", error);
       return res.status(500).json({
+        success: false,
         error: "Error al obtener técnicos",
         detalle: error.message
       });
     }
-  };
-  
+}; 
  
 // Obtener todos los usuarios de una ciudad (con filtros)
 const obtenerUsuariosPorCiudad = async (req, res) => {
@@ -229,8 +310,90 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
         detalle: error.message
       });
     }
-  };
-  
+};
+
+//Obtener todos los administradores
+const obtenerAdministradores = async (req, res) => {
+    const { nombre, estado, id_ciudad, limit = 10, offset = 0 } = req.query;
+
+    try {
+        // Obtener el ID del rol de administrador
+        const rolAdmin = await Rol.findOne({
+            where: { nombre_rol: 'Admin' },
+            attributes: ['id_rol'],
+            raw: true
+        });
+
+        if (!rolAdmin) {
+            return res.status(404).json({
+                success: false,
+                error: 'No se encontró el rol de Administrador'
+            });
+        }
+
+        // Construir condiciones de búsqueda
+        const whereCondition = { id_rol: rolAdmin.id_rol };
+        if (estado) whereCondition.estado = estado;
+        if (nombre) whereCondition.nombre = { [Op.like]: `%${nombre}%` };
+        if (id_ciudad) whereCondition.id_ciudad = id_ciudad;
+
+        // Consultar administradores
+        const administradores = await Usuario.findAll({
+            attributes: [
+                "id_usuario",
+          "nombre",
+          "identidad",
+          "email",
+          "telefono",
+          "estado",
+          "id_ciudad"
+            ],
+            where: whereCondition,
+            include: [
+                { 
+                    model: Ciudad, 
+                    as: "ciudad", 
+                    attributes: ["id_ciudad", "nombre_ciudad"] 
+                },
+                { 
+                    model: Rol, 
+                    as: "rol", 
+                    attributes: ["nombre_rol"] 
+                }
+            ],
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            order: [["nombre", "ASC"]]
+        });
+
+        // Obtener total de administradores
+        const total = await Usuario.count({ where: whereCondition });
+
+        // Formatear respuesta
+        const administradoresFormateados = administradores.map(admin => {
+            const adminData = admin.get({ plain: true });
+            return {
+                ...adminData,
+                ciudad: adminData.ciudad || null,
+                rol: adminData.rol
+            };
+        });
+
+        return res.json({
+            success: true,
+            total,
+            administradores: administradoresFormateados
+        });
+
+    } catch (error) {
+        console.error("Error al obtener administradores:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al obtener administradores",
+            detalle: error.message
+        });
+    }
+};
 
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
@@ -786,6 +949,8 @@ module.exports = {
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,
     obtenerUsuariosPorCiudad,
+    obtenerAdministradores,
+    obtenerEstadisticasUsuarios,
     obtenerUsuarioPorId,
     obtenerUsuarioPorNombre,
     obtenerUsuarioPorIdentidad,
@@ -794,3 +959,4 @@ module.exports = {
     actualizarPassword,
     eliminarUsuario
 };
+

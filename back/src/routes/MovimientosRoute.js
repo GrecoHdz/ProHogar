@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { body, param, validationResult } = require("express-validator");
+const { body, param, query, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     getAllMovimientos,
@@ -13,7 +13,8 @@ const {
     getIngresosyRetirosdeReferidos,
     crearMovimiento,
     actualizarMovimiento,
-    eliminarMovimiento 
+    eliminarMovimiento,
+    getTransacciones
 } = require("../controllers/MovimientosController");
 
 // Middleware de autenticación
@@ -49,6 +50,15 @@ router.get("/servicios/mensuales/:id_tecnico", [
 router.get("/servicios/tipo/:id_tecnico", [
     param("id_tecnico").isInt().withMessage("El id_tecnico debe ser un numero entero")
 ], validarErrores, getServiciosPorTipo);
+
+// Obtener transacciones con paginación y filtros
+router.get("/creditos/:id_usuario", [
+    param("id_usuario").isInt().withMessage("El id_usuario debe ser un número entero"),
+    query("page").optional().isInt({ min: 1 }).withMessage("La página debe ser un número entero mayor a 0"),
+    query("limit").optional().isInt({ min: 1 }).withMessage("El límite debe ser un número entero mayor a 0"),
+    query("startDate").optional().isISO8601().withMessage("La fecha de inicio debe tener un formato válido"),
+    query("endDate").optional().isISO8601().withMessage("La fecha de fin debe tener un formato válido")
+], validarErrores, getTransacciones);
 
 //Obtener estadisticas generales por tecnico
 router.get("/estadisticas/:id_tecnico", [

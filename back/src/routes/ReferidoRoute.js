@@ -26,12 +26,12 @@ router.get("/", [
 //Obtener referidos de un usuario
 router.get("/:id_referidor", [
     param("id_referidor").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, getReferidosByUser, authMiddleware);
+], validarErrores, authMiddleware, getReferidosByUser);
 
 //Obtener referidor de un usuario
 router.get("/referidor/:id_referido_usuario", [
     param("id_referido_usuario").isInt().withMessage("El ID debe ser un numero entero")
-], validarErrores, getReferidorByUser, authMiddleware);
+], validarErrores, authMiddleware, getReferidorByUser);
 
 // Obtener top 5 usuarios con más referidos
 router.get("/top/usuarios", authMiddleware, getTopUsuariosConMasReferidos);

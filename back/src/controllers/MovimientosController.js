@@ -673,10 +673,159 @@ const eliminarMovimiento = async (req, res) => {
     }
 }; 
 
+// ✅ Obtener transacciones con datos de cotización y suma total de montos
+const getTransacciones = async (req, res) => {
+    try {
+      const { id_usuario } = req.params;
+      const { 
+        page = 1, 
+        limit = 5, 
+        startDate, 
+        endDate
+      } = req.query;
+  
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
+  
+      // 📅 Condiciones base
+      const where = { id_usuario };
+  
+      if (startDate && endDate) {
+        where.fecha = {
+          [Op.between]: [new Date(startDate), new Date(endDate)]
+        };
+      }
+  
+      // 📊 Contar total de registros
+      const total = await Movimiento.count({ where });
+  
+      // 📦 Obtener movimientos con relación a cotización
+      const movimientos = await Movimiento.findAll({
+        where,
+        order: [['fecha', 'DESC']],
+        limit: limitNum,
+        offset: offset,
+        attributes: [
+          'id_movimiento',
+          'descripcion',
+          'monto',
+          'tipo',
+          'fecha',
+          'estado',
+          'id_cotizacion'
+        ],
+        include: [
+          {
+            model: Cotizacion,
+            as: 'cotizacion',
+            required: false,
+            attributes: [
+              'id_cotizacion',
+              'id_solicitud',
+              'monto_manodeobra',
+              'descuento_membresia',
+              'credito_usado'
+            ]
+          }
+        ]
+      });
+  
+      // 💰 Calcular saldo disponible total
+      const totalIngresos = await Movimiento.sum('monto', {
+        where: {
+          id_usuario,
+          estado: 'completado',
+          tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+        }
+      });
+
+      const totalRetiros = await Movimiento.sum('monto', {
+        where: {
+          id_usuario,
+          estado: 'completado',
+          tipo: 'retiro'
+        }
+      });
+
+      // Calcular saldo disponible para el rango de fechas si se especificó
+      let saldoRangoFechas = null;
+      if (startDate && endDate) {
+        const ingresosRango = await Movimiento.sum('monto', {
+          where: {
+            ...where,
+            estado: 'completado',
+            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+          }
+        });
+
+        const retirosRango = await Movimiento.sum('monto', {
+          where: {
+            ...where,
+            estado: 'completado',
+            tipo: 'retiro'
+          }
+        });
+
+        saldoRangoFechas = parseFloat((ingresosRango || 0) - (retirosRango || 0));
+      }
+
+      const saldoDisponible = parseFloat((totalIngresos || 0) - (totalRetiros || 0));
+  
+      // 🧩 Formatear respuesta
+      const transacciones = movimientos.map(mov => {
+        const data = mov.get({ plain: true });
+  
+        return {
+          id_movimiento: data.id_movimiento,
+          descripcion: data.descripcion || 'Transacción',
+          monto: parseFloat(data.monto),
+          tipo: data.tipo,
+          fecha: data.fecha,
+          estado: data.estado,
+          cotizacion: data.cotizacion
+            ? { 
+                id_solicitud: data.cotizacion.id_solicitud,
+                monto_manodeobra: parseFloat(data.cotizacion.monto_manodeobra || 0),
+                descuento_membresia: parseFloat(data.cotizacion.descuento_membresia || 0),
+                credito_usado: parseFloat(data.cotizacion.credito_usado || 0)
+              }
+            : null
+        };
+      });
+  
+      // 📤 Respuesta final
+      res.json({
+        success: true,
+        data: transacciones,
+        saldoDisponible,
+        saldoRangoFechas: saldoRangoFechas !== null ? saldoRangoFechas : saldoDisponible,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      });
+  
+    } catch (error) {
+      console.error('Error al obtener transacciones:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener las transacciones',
+        details: error.message
+      });
+    }
+  };
+  
+  
+
+
 // Exportar controladores
 module.exports = {
     getAllMovimientos,
     getMovimientosPorUsuario,
+    getTransacciones,
     getIngresosMensuales,
     getServiciosPorMes,
     getServiciosPorTipo,
