@@ -7,6 +7,8 @@ const {
     obtenerPagoPorId,
     obtenerPagosPorUsuario,
     obtenerUltimoPagoPorSolicitud,
+    confirmarPagoVisita,
+    denegarPagoVisita,
     crearPago,
     actualizarPago,
     eliminarPago
@@ -46,6 +48,16 @@ router.post("/", [
     body("num_comprobante").isString().withMessage("El número de comprobante debe ser una cadena de caracteres"),
     body("fecha").isISO8601().withMessage("La fecha debe tener un formato válido (ISO 8601)")
 ], validarErrores, crearPago);
+
+//Confirmar un pago
+router.post("/confirmar", [ 
+    body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo")
+], validarErrores, confirmarPagoVisita);
+
+//Denegar un pago
+router.post("/denegar", [
+    body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo")
+], validarErrores, denegarPagoVisita);
 
 //Actualizar un pago
 router.put("/:id", [

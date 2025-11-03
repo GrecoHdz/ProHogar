@@ -507,7 +507,7 @@ const crearUsuario = async (req, res) => {
     let rolCliente;
     try {
         rolCliente = await Rol.findOne({
-            where: { nombre_rol: 'Cliente' },
+            where: { nombre_rol: 'Usuario' },
             attributes: ['id_rol'],
             raw: true
         });
@@ -515,7 +515,7 @@ const crearUsuario = async (req, res) => {
         if (!rolCliente) {
             return res.status(500).json({
                 success: false,
-                error: 'No se pudo determinar el rol por defecto (Cliente)'
+                error: 'No se pudo determinar el rol por defecto (Usuario)'
             });
         }
     } catch (error) {
@@ -627,11 +627,16 @@ const crearUsuario = async (req, res) => {
         if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
             const errors = error.errors?.map(err => ({
                 field: err.path,
-                message: err.message
+                message: err.message,
+                type: err.type,
+                value: err.value
             })) || [];
+            
+            console.error('Errores de validación:', errors);
             
             // Si es un error de duplicación pero no se pudo manejar antes
             if (error.name === 'SequelizeUniqueConstraintError' && errors.length === 0) {
+                console.error('Error de restricción única sin detalles:', error);
                 let field = 'dato';
                 const errorMessage = error.original?.message || '';
                 
@@ -657,15 +662,21 @@ const crearUsuario = async (req, res) => {
         }
         
         // Para otros errores
-        res.status(500).json({ 
+        return res.status(500).json({
             status: 500,
-            error: "Error al crear usuario",
-            message: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            error: "Error interno del servidor",
+            message: "Ocurrió un error al crear el usuario",
+            details: process.env.NODE_ENV === 'development' ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+                originalError: error.original
+            } : undefined
         });
     }
 };
 
+// ...
 // Obtener datos para Gráfico de crecimiento de usuarios
 const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
     try {
