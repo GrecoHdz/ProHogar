@@ -5,7 +5,7 @@ const Rol = require("../models/rolesModel");
 const CreditoUsuario = require('../models/creditoUsuariosModel');
 const Movimiento = require('../models/movimientosModel');
 const Calificaciones = require("../models/calificacionesModels");
-const { Op, fn, col, literal } = require('sequelize');
+const { Op, fn, col, literal, Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
 const Referido = require('../models/referidosModel');
@@ -666,6 +666,92 @@ const crearUsuario = async (req, res) => {
     }
 };
 
+// Obtener datos para Gráfico de crecimiento de usuarios
+const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        
+        // Establecer fechas por defecto (últimos 12 meses)
+        const endDate = fechaFin ? new Date(fechaFin) : new Date();
+        const startDate = fechaInicio ? new Date(fechaInicio) : new Date();
+        startDate.setMonth(startDate.getMonth() - 11);
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+
+        // Asegurar que el final del rango sea el último día del mes
+        const endOfMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+
+        // Generar etiquetas para los 12 meses
+        const labels = [];
+        const data = [];
+        const currentMonth = new Date(startDate);
+
+        while (currentMonth <= endDate) {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
+            
+            labels.push(`${monthName} ${year}`);
+            data.push(0); // Inicializar contador en 0
+            
+            // Mover al siguiente mes
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+        }
+
+        // Obtener el conteo de usuarios por mes
+        const usuariosPorMes = await Usuario.findAll({
+            where: {
+                fecha_registro: {
+                    [Op.between]: [startDate, endOfMonth]
+                }
+            },
+            attributes: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'year'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'month'],
+                [Sequelize.fn('COUNT', Sequelize.col('id_usuario')), 'total']
+            ],
+            group: [
+                Sequelize.fn('YEAR', Sequelize.col('fecha_registro')),
+                Sequelize.fn('MONTH', Sequelize.col('fecha_registro'))
+            ],
+            order: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'ASC'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'ASC']
+            ],
+            raw: true
+        });
+
+        // Mapear los resultados a los meses correspondientes
+        usuariosPorMes.forEach(item => {
+            const monthIndex = (item.year - startDate.getFullYear()) * 12 + (item.month - startDate.getMonth() - 1);
+            if (monthIndex >= 0 && monthIndex < data.length) {
+                data[monthIndex] = parseInt(item.total);
+            }
+        });
+
+        // Calcular total acumulado
+        const total = data.reduce((sum, count) => sum + count, 0);
+
+        res.json({
+            success: true,
+            data: {
+                labels: labels,
+                data: data,
+                total: total
+            }
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas de crecimiento de usuarios:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las estadísticas de crecimiento de usuarios',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Actualizar Usuario
 const actualizarUsuario = async (req, res) => {
     const { id } = req.params;  
@@ -946,6 +1032,7 @@ const eliminarUsuario = async (req, res) => {
 };
 
 module.exports = {
+    obtenerGraficaCrecimientoUsuarios,
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,
     obtenerUsuariosPorCiudad,

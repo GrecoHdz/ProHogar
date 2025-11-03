@@ -248,8 +248,7 @@ const obtenerSolicitudesServicios = async (req, res) => {
         .status(500)
         .json({ error: 'Error al obtener las solicitudes de servicios' });
     }
-  };
-  
+};
 
 //Obtener todas las solicitudes de servicios por servicio
 const obtenerSolicitudServicioPorServicio = async (req, res) => {
@@ -265,6 +264,72 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
         res.status(500).json({ error: "Error al obtener las solicitudes de servicios por servicio" });
     }
 };
+
+// Obtener datos para Gráfico de solicitudes de servicios por tipo
+const obtenerGraficaServiciosPorTipo = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        
+        // Construir condición de fecha si se proporciona
+        const whereCondition = {};
+        if (fechaInicio || fechaFin) {
+            whereCondition.fecha_solicitud = {};
+            if (fechaInicio) {
+                whereCondition.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereCondition.fecha_solicitud[Op.lte] = finDia;
+            }
+        }
+
+        // Obtener el conteo de servicios por tipo
+        const serviciosPorTipo = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [{
+                model: Servicio,
+                as: 'servicio',
+                attributes: ['id_servicio', 'nombre']
+            }],
+            attributes: [
+                [Sequelize.col('servicio.id_servicio'), 'id_servicio'],
+                [Sequelize.col('servicio.nombre'), 'nombre_servicio'],
+                [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'total']
+            ],
+            group: ['servicio.id_servicio', 'servicio.nombre'],
+            order: [[Sequelize.literal('total'), 'DESC']],
+            raw: true
+        });
+
+        // Formatear los datos para el gráfico
+        const datosGrafico = {
+            labels: [],
+            data: []
+        };
+
+        // Llenar los datos del gráfico
+        serviciosPorTipo.forEach(item => {
+            datosGrafico.labels.push(item.nombre_servicio);
+            datosGrafico.data.push(parseInt(item.total));
+        });
+
+        res.json({
+            success: true,
+            data: datosGrafico,
+            total: serviciosPorTipo.reduce((sum, item) => sum + parseInt(item.total), 0)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas de servicios por tipo:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las estadísticas de servicios por tipo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 
 //Obtener todas las solicitudes de servicios por usuario con el nombre del servicio
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
@@ -497,9 +562,165 @@ const eliminarSolicitudServicio = async (req, res) => {
     }
 };
 
+// Obtener datos para Gráfico de servicios por mes
+const obtenerGraficaServiciosPorMes = async (req, res) => {
+    try {
+        const { fechaActual } = req.query;
+        const endDate = fechaActual ? new Date(fechaActual) : new Date();
+        
+        // Calcular la fecha de inicio (12 meses atrás)
+        const startDate = new Date(endDate);
+        startDate.setMonth(startDate.getMonth() - 11); // 11 meses + el mes actual = 12 meses
+        startDate.setDate(1); // Primer día del mes
+        startDate.setHours(0, 0, 0, 0);
+
+        // Asegurar que el final del rango sea el último día del mes a la última hora
+        const endOfMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+
+        // Generar los 12 meses para asegurar que todos los meses aparezcan
+        const meses = [];
+        const data = [];
+        const currentMonth = new Date(startDate);
+
+        while (currentMonth <= endDate) {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
+            
+            meses.push(`${monthName} ${year}`);
+            
+            // Inicializar contador para este mes
+            data.push(0);
+            
+            // Mover al siguiente mes
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+        }
+
+        // Obtener el conteo de servicios por mes
+        const serviciosPorMes = await SolicitudServicio.findAll({
+            where: {
+                fecha_solicitud: {
+                    [Op.between]: [startDate, endOfMonth]
+                }
+            },
+            attributes: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), 'year'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), 'month'],
+                [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total']
+            ],
+            group: [
+                Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')),
+                Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud'))
+            ],
+            order: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), 'ASC'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), 'ASC']
+            ],
+            raw: true
+        });
+
+        // Mapear los resultados a los meses correspondientes
+        serviciosPorMes.forEach(item => {
+            const monthIndex = (item.year - startDate.getFullYear()) * 12 + (item.month - startDate.getMonth() - 1);
+            if (monthIndex >= 0 && monthIndex < data.length) {
+                data[monthIndex] = parseInt(item.total);
+            }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                labels: meses,
+                data: data
+            },
+            total: data.reduce((sum, count) => sum + count, 0)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas de servicios por mes:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las estadísticas de servicios por mes',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+// Obtener datos para Gráfico de servicios por ciudad
+const obtenerGraficaServiciosPorCiudad = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        
+        // Construir condición de fecha si se proporciona
+        const whereCondition = {};
+        if (fechaInicio || fechaFin) {
+            whereCondition.fecha_solicitud = {};
+            if (fechaInicio) {
+                whereCondition.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereCondition.fecha_solicitud[Op.lte] = finDia;
+            }
+        }
+
+        // Obtener el conteo de servicios por ciudad
+        const serviciosPorCiudad = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [{
+                model: Ciudad,
+                as: 'ciudad',
+                attributes: ['id_ciudad', 'nombre_ciudad'],
+                required: true
+            }],
+            attributes: [
+                'id_ciudad',
+                [Sequelize.fn('COUNT', Sequelize.col('SolicitudServicio.id_solicitud')), 'total']
+            ],
+            group: ['SolicitudServicio.id_ciudad', 'ciudad.nombre_ciudad'],
+            order: [[Sequelize.literal('total'), 'DESC']],
+            raw: true,
+            nest: true
+        });
+
+        // Formatear los datos para el gráfico
+        const datosGrafico = {
+            labels: [],
+            data: []
+        };
+
+        // Llenar los datos del gráfico
+        serviciosPorCiudad.forEach(item => {
+            if (item.ciudad && item.ciudad.nombre_ciudad) {  // Solo incluir si tiene ciudad asignada
+                datosGrafico.labels.push(item.ciudad.nombre_ciudad);
+                datosGrafico.data.push(parseInt(item.total));
+            }
+        });
+
+        res.json({
+            success: true,
+            data: datosGrafico,
+            total: serviciosPorCiudad.reduce((sum, item) => sum + (item.nombre_ciudad ? parseInt(item.total) : 0), 0)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas de servicios por ciudad:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las estadísticas de servicios por ciudad',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 module.exports = {
     obtenerSolicitudesPorTecnico,
     obtenerSolicitudesServicios,
+    obtenerGraficaServiciosPorTipo,
+    obtenerGraficaServiciosPorMes,
+    obtenerGraficaServiciosPorCiudad,
     obtenerSolicitudServicioPorServicio,
     obtenerSolicitudServicioPorUsuario,
     crearSolicitudServicio,

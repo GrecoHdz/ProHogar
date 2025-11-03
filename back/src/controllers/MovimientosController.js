@@ -28,11 +28,9 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         const whereUsuario = {};
         if (fechaInicio || fechaFin) {
             whereUsuario.fecha_registro = {};
-            if (fechaInicio) whereUsuario.fecha_registro[Op.gte] = new Date(fechaInicio);
+            if (fechaInicio) whereUsuario.fecha_registro[Op.gte] = ajustarFechaLocal(fechaInicio, true);
             if (fechaFin) {
-                const fechaFinObj = new Date(fechaFin);
-                fechaFinObj.setHours(23, 59, 59, 999);
-                whereUsuario.fecha_registro[Op.lte] = fechaFinObj;
+                whereUsuario.fecha_registro[Op.lte] = ajustarFechaLocal(fechaFin);
             }
         }
         const totalUsuarios = await Usuario.count({ where: whereUsuario });
@@ -41,11 +39,9 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         const whereServicio = {};
         if (fechaInicio || fechaFin) {
             whereServicio.fecha_solicitud = {};
-            if (fechaInicio) whereServicio.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            if (fechaInicio) whereServicio.fecha_solicitud[Op.gte] = ajustarFechaLocal(fechaInicio, true);
             if (fechaFin) {
-                const fechaFinObj = new Date(fechaFin);
-                fechaFinObj.setHours(23, 59, 59, 999);
-                whereServicio.fecha_solicitud[Op.lte] = fechaFinObj;
+                whereServicio.fecha_solicitud[Op.lte] = ajustarFechaLocal(fechaFin);
             }
         }
         const totalServicios = await SolicitudServicio.count({ where: whereServicio });
@@ -56,8 +52,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                 estado: 'activa',
                 ...(fechaInicio || fechaFin ? {
                     fecha: {
-                        ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
-                        ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                        ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                        ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
                     }
                 } : {})
             }
@@ -100,8 +96,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                     },
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
-                            ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
-                            ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
                         }
                     } : {})
                 }
@@ -109,10 +105,11 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             // Ingresos por pagos de visita (usa 'fecha' como campo de fecha)
             PagoVisita.sum('monto', {
                 where: {
+                    estado: 'pagado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
-                            ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
-                            ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
                         }
                     } : {})
                 }
@@ -849,7 +846,10 @@ const getTransacciones = async (req, res) => {
   
       if (startDate && endDate) {
         where.fecha = {
-          [Op.between]: [new Date(startDate), new Date(endDate)]
+          [Op.between]: [
+            ajustarFechaLocal(startDate, true), // Inicio del día
+            ajustarFechaLocal(endDate)         // Fin del día
+          ]
         };
       }
   
@@ -977,19 +977,246 @@ const getTransacciones = async (req, res) => {
   
 
 
+// Función para ajustar fechas a la zona horaria local
+const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
+    if (!fecha) return null;
+    
+    // Si es una cadena de fecha, convertir a objeto Date
+    const date = typeof fecha === 'string' ? new Date(fecha) : fecha;
+    
+    // Crear una nueva fecha ajustada a la zona horaria local
+    const fechaLocal = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        inicioDelDia ? 0 : 23,
+        inicioDelDia ? 0 : 59,
+        inicioDelDia ? 0 : 59,
+        inicioDelDia ? 0 : 999
+    );
+    
+    return fechaLocal;
+};
+
+// Obtener reporte de ingresos y gráfico mensual
+const obtenerReporteIngresos = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin, mesActual } = req.query;
+        
+        // Validar que mesActual tenga el formato correcto (YYYY-MM)
+        let fechaReferencia = new Date();
+        if (mesActual && /^\d{4}-(0[1-9]|1[0-2])$/.test(mesActual)) {
+            const [anio, mes] = mesActual.split('-').map(Number);
+            // Crear fecha en la zona horaria local
+            fechaReferencia = new Date(anio, mes - 1, 1);
+        }
+        
+        // 1. Obtener ingresos por diferentes fuentes con filtros de fecha
+        const [
+            ingresosMembresias,
+            ingresosVisitas,
+            cotizaciones,
+            totalRetiros,
+            totalComisiones
+        ] = await Promise.all([
+            // Ingresos por membresías activadas
+            Membresia.sum('monto', {
+                where: {
+                    estado: {
+                        [Op.in]: ['activa', 'vencida']
+                    },
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }),
+            // Ingresos por pagos de visita
+            PagoVisita.sum('monto', {
+                where: {
+                    estado: 'pagado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }),
+            // Obtener cotizaciones confirmadas para calcular ingresos por servicios
+            Cotizacion.findAll({
+                where: {
+                    estado: 'confirmado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                },
+                attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                raw: true
+            }),
+            // Obtener total de retiros
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'retiro',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }),
+            // Obtener total de comisiones por referidos
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'ingreso_referido',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            })
+        ]);
+
+        // Calcular ingresos por servicios (cotizaciones)
+        const ingresosServicios = cotizaciones.reduce((total, cotizacion) => {
+            const descuento = cotizacion.descuento_membresia || 0;
+            const credito = cotizacion.credito_usado || 0;
+            return total + (cotizacion.monto_manodeobra - descuento - credito);
+        }, 0);
+
+        // Calcular ingresos totales (solo sumamos ingresos, no restamos retiros ni comisiones aquí)
+        const ingresosTotales = (ingresosServicios || 0) + 
+                              (ingresosMembresias || 0) + 
+                              (ingresosVisitas || 0);
+                              
+        // Calcular ganancia neta (ingresos - retiros - comisiones)
+        const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
+
+        // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
+        const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const meses = [];
+        
+        // Generar arreglo de los 12 meses anteriores al mes de referencia
+        for (let i = 11; i >= 0; i--) {
+            const fecha = new Date(fechaReferencia);
+            fecha.setMonth(fecha.getMonth() - i);
+            
+            meses.push({
+                mes: fecha.getMonth() + 1,
+                anio: fecha.getFullYear(),
+                nombre: `${mesesNombres[fecha.getMonth()]} ${fecha.getFullYear()}`
+            });
+        }
+
+        // Obtener ingresos por mes para el gráfico
+        const ingresosPorMes = await Promise.all(meses.map(async ({ mes, anio }) => {
+            // Usar la zona horaria local para el cálculo de fechas
+            const fechaInicio = new Date(anio, mes - 1, 1, 0, 0, 0);
+            const ultimoDiaMes = new Date(anio, mes, 0);
+            const fechaFin = new Date(anio, mes - 1, ultimoDiaMes.getDate(), 23, 59, 59, 999);
+
+            // Obtener ingresos por membresías
+            const ingresosMembresiasMes = await Membresia.sum('monto', {
+                where: {
+                    estado: { [Op.in]: ['activa', 'vencida'] },
+                    fecha: { 
+                        [Op.between]: [
+                            fechaInicio,
+                            fechaFin
+                        ] 
+                    }
+                }
+            }) || 0;
+
+            // Obtener ingresos por visitas
+            const ingresosVisitasMes = await PagoVisita.sum('monto', {
+                where: { fecha: { [Op.between]: [fechaInicio, fechaFin] } }
+            }) || 0;
+
+            // Obtener ingresos por servicios (cotizaciones)
+            const cotizacionesMes = await Cotizacion.findAll({
+                where: {
+                    estado: 'confirmado',
+                    fecha: { 
+                        [Op.between]: [
+                            fechaInicio,
+                            fechaFin
+                        ] 
+                    }
+                },
+                attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                raw: true
+            });
+
+            const ingresosServiciosMes = cotizacionesMes.reduce((total, cotizacion) => {
+                const descuento = cotizacion.descuento_membresia || 0;
+                const credito = cotizacion.credito_usado || 0;
+                return total + (cotizacion.monto_manodeobra - descuento - credito);
+            }, 0);
+
+            return {
+                mes: mes,
+                anio: anio,
+                total: (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0)
+            };
+        }));
+
+        // Formatear respuesta
+        const reporte = {
+            resumen: {
+                ingresosTotales: parseFloat(ingresosTotales).toFixed(2),
+                ingresosServicios: parseFloat(ingresosServicios || 0).toFixed(2),
+                ingresosMembresias: parseFloat(ingresosMembresias || 0).toFixed(2),
+                ingresosVisitas: parseFloat(ingresosVisitas || 0).toFixed(2),
+                retiros: parseFloat(totalRetiros || 0).toFixed(2),
+                comisiones: parseFloat(totalComisiones || 0).toFixed(2),
+                gananciaNeta: parseFloat(gananciaNeta).toFixed(2)
+            },
+            grafico: {
+                etiquetas: meses.map(m => m.nombre),
+                datos: ingresosPorMes.map(item => parseFloat(item.total).toFixed(2))
+            }
+        };
+
+        res.json({
+            success: true,
+            data: reporte
+        });
+
+    } catch (error) {
+        console.error('Error al generar el reporte de ingresos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al generar el reporte de ingresos',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 // Exportar controladores
 module.exports = {
     getAllMovimientos,
+    crearMovimiento,
+    actualizarMovimiento,
+    eliminarMovimiento,
     obtenerEstadisticasDashboard,
+    obtenerReporteIngresos,
     getMovimientosPorUsuario,
-    getTransacciones,
     getIngresosMensuales,
     getServiciosPorMes,
     getServiciosPorTipo,
     getEstadisticasGenerales,
     getIngresosTotalesReferidos,
     getIngresosyRetirosdeReferidos,
-    crearMovimiento,
-    actualizarMovimiento,
-    eliminarMovimiento
+    getTransacciones,
 };

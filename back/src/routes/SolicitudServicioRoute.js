@@ -1,10 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { body, param, validationResult } = require("express-validator"); 
+const { body, param, validationResult, query } = require("express-validator"); 
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     obtenerSolicitudesServicios, 
     obtenerSolicitudServicioPorServicio,
+    obtenerGraficaServiciosPorTipo,
+    obtenerGraficaServiciosPorMes,
+    obtenerGraficaServiciosPorCiudad,
     obtenerSolicitudServicioPorUsuario,
     crearSolicitudServicio, 
     actualizarSolicitudServicio, 
@@ -30,6 +33,20 @@ router.get("/", validarErrores, obtenerSolicitudesServicios);
 router.get("/servicio/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
 ], validarErrores, obtenerSolicitudServicioPorServicio);
+
+// Obtener datos para Gráfico de solicitudes de servicios por tipo
+router.get("/grafica/servicios", validarErrores, obtenerGraficaServiciosPorTipo);
+
+// Obtener datos para Gráfico de servicios por mes
+router.get("/grafica/servicios-por-mes", [
+    query('fechaActual').optional().isISO8601().withMessage('La fecha debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, obtenerGraficaServiciosPorMes);
+
+// Obtener datos para Gráfico de servicios por ciudad
+router.get("/grafica/servicios-por-ciudad", [
+    query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, obtenerGraficaServiciosPorCiudad);
 
 // Obtener todas las solicitudes asignadas a un técnico
 router.get("/tecnico/:id_tecnico", [

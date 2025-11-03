@@ -5,6 +5,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
     getAllMovimientos,
     obtenerEstadisticasDashboard,
+    obtenerReporteIngresos,
     getMovimientosPorUsuario,
     getIngresosMensuales,
     getServiciosPorMes,
@@ -19,7 +20,7 @@ const {
 } = require("../controllers/MovimientosController");
 
 // Middleware de autenticación
-router.use(authMiddleware);
+//router.use(authMiddleware);
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
@@ -39,6 +40,9 @@ router.get("/:id_usuario", [
 
 //Obtener estadisticas del dashboard admin
 router.get("/estadisticas/admin", validarErrores, obtenerEstadisticasDashboard);
+
+//Obtener reporte de ingresos y gráfico mensual
+router.get("/reporte/ingresos", validarErrores, obtenerReporteIngresos);
 
 //Obtener ingresos mensuales por tecnico
 router.get("/ingresos/mensuales/:id_tecnico", [

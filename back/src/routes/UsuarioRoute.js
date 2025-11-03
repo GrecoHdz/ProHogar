@@ -14,7 +14,8 @@ const {
     actualizarUsuario, 
     actualizarPassword,
     eliminarUsuario,
-    obtenerEstadisticasUsuarios
+    obtenerEstadisticasUsuarios,
+    obtenerGraficaCrecimientoUsuarios
 } = require("../controllers/UsuarioController"); 
  
 // Middleware para validar errores
@@ -47,6 +48,11 @@ router.get("/usuarios", [
     query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
   ],
   validarErrores, authMiddleware, obtenerUsuariosPorCiudad);
+
+// Obtener datos para Gráfico de crecimiento de usuarios
+router.get("/grafica/crecimiento-usuarios", [
+    query('fechaActual').optional().isISO8601().withMessage('La fecha debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, authMiddleware, obtenerGraficaCrecimientoUsuarios);
 
 //Obtener todos los Administradores
 router.get("/administradores", validarErrores, authMiddleware, obtenerAdministradores);
