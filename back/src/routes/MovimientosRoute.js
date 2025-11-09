@@ -6,6 +6,7 @@ const {
     getAllMovimientos,
     obtenerEstadisticasDashboard,
     obtenerReporteIngresos,
+    obtenerRetiros,
     getMovimientosPorUsuario,
     getIngresosMensuales,
     getServiciosPorMes,
@@ -32,6 +33,9 @@ const validarErrores = (req, res, next) => {
 
 //Obtener todos los movimientos
 router.get("/", validarErrores, getAllMovimientos);
+
+//Obtener retiros
+router.get("/retiros", validarErrores, obtenerRetiros);
 
 //Obtener movimientos por usuario
 router.get("/:id_usuario", [

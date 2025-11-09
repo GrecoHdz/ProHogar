@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, param, validationResult, query } = require("express-validator"); 
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { 
+    obtenerEstadisticasPagos,
     obtenerSolicitudesServicios, 
     obtenerSolicitudServicioPorServicio,
     obtenerGraficaServiciosPorTipo,
@@ -26,7 +27,10 @@ const validarErrores = (req, res, next) => {
     next();
   }; 
 
-//Obtener todas las solicitudes de servicios
+// Obtener estadísticas de pagos con filtros
+router.get("/solicitudes", validarErrores, obtenerEstadisticasPagos);
+
+  //Obtener todas las solicitudes de servicios
 router.get("/", validarErrores, obtenerSolicitudesServicios);
 
 //Obtener todas las solicitudes de servicios por servicio

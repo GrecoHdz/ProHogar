@@ -1,14 +1,128 @@
+const { Sequelize, Op } = require("sequelize");
 const Membresia = require("../models/membresiaModel");
 const Config = require("../models/configModel");
+const Usuario = require("../models/usuariosModel");
+const Cuenta = require("../models/cuentasModel");
 
-//Obtener todas las membresias
+// Obtener todas las membresias con información de usuario y cuenta
 const obtenerMembresias = async (req, res) => {
     try {
-        const membresias = await Membresia.findAll();
-        res.json(membresias);
+        // Obtener parámetros de paginación y búsqueda
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        const offset = parseInt(req.query.offset) || 0;
+        const searchTerm = req.query.search || '';
+        const estado = req.query.estado;
+        const month = req.query.month; // Formato: 'YYYY-MM'
+
+        // Construir condiciones de búsqueda
+        const whereCondition = {};
+        const andConditions = [];
+
+        // Filtro por término de búsqueda
+        if (searchTerm) {
+            andConditions.push({
+                [Op.or]: [
+                    { '$usuario.nombre$': { [Op.like]: `%${searchTerm}%` } },
+                    { '$usuario.telefono$': { [Op.like]: `%${searchTerm}%` } },
+                    { num_transaccion: { [Op.like]: `%${searchTerm}%` } }
+                ]
+            });
+        }
+
+        // Filtro por estado
+        if (estado) {
+            whereCondition.estado = estado;
+        }
+
+        // Filtro por mes
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            andConditions.push(
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Membresia.fecha')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Membresia.fecha')), monthNum)
+            );
+        }
+
+        // Combinar condiciones
+        if (andConditions.length > 0) {
+            whereCondition[Op.and] = andConditions;
+        }
+
+        // Obtener total de registros
+        const total = await Membresia.count({
+            where: whereCondition,
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    attributes: []
+                }
+            ]
+        });
+
+        // Obtener membresías con paginación
+        const [membresias, stats] = await Promise.all([
+            Membresia.findAll({
+                where: whereCondition,
+                attributes: { exclude: ['id_usuario', 'id_cuenta'] },
+                include: [
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        attributes: ['nombre', 'telefono']
+                    },
+                    {
+                        model: Cuenta,
+                        as: 'cuenta',
+                        attributes: ['banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    }
+                ],
+                order: [['fecha', 'DESC']],
+                limit,
+                offset,
+                raw: true,
+                nest: true
+            }),
+            
+            // Consulta de estadísticas
+            Membresia.findAll({
+                attributes: [
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'activa' OR estado = 'vencida' THEN 1 END)"), 'activas'], 
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazada' THEN 1 END)"), 'rechazadas'],
+                    [Sequelize.literal("SUM(CASE WHEN estado IN ('activa', 'vencida') THEN monto ELSE 0 END)"), 'total']
+                ],
+                where: whereCondition,
+                raw: true
+            })
+        ]);
+        
+        // Procesar estadísticas
+        const statsData = stats[0] || { activas: 0, pendientes: 0, rechazadas: 0, total: 0 };
+        const estadisticas = {
+            aprobados: (parseInt(statsData.activas) || 0) + (parseInt(statsData.vencidas) || 0),
+            rechazados: parseInt(statsData.rechazadas) || 0,
+            pendientes: parseInt(statsData.pendientes) || 0,
+            total: parseFloat(statsData.total) || 0
+        };
+        
+        res.json({
+            success: true,
+            data: membresias,
+            total,
+            page: Math.floor(offset / limit) + 1,
+            totalPages: Math.ceil(total / limit),
+            hasMore: offset + limit < total,
+            estadisticas
+        });
     } catch (error) {
-        console.error("Error al obtener membresias:", error);
-        res.status(500).json({ error: "Error al obtener membresias" });
+        console.error("Error al obtener membresías:", error);
+        res.status(500).json({ 
+            success: false,
+            error: "Error al obtener membresías",
+            details: error.message 
+        });
     }
 };
 

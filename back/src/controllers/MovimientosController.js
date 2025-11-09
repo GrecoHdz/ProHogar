@@ -8,6 +8,321 @@ const Membresia = require('../models/membresiaModel');
 const PagoVisita = require('../models/pagoVisitaModel');
 const Usuario = require('../models/usuariosModel');
  
+// Obtener todos los retiros con información detallada y filtros
+const obtenerRetiros = async (req, res) => {
+    try {
+        // Obtener parámetros de paginación y búsqueda
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        const offset = parseInt(req.query.offset) || 0;
+        const searchTerm = req.query.search || '';
+        const estado = req.query.estado;
+        const month = req.query.month; // Formato: 'YYYY-MM'
+        const metodoPago = req.query.metodo_pago;
+
+        // Construir condiciones de búsqueda
+        const whereCondition = { tipo: 'retiro' }; // Solo retiros
+        const andConditions = [];
+
+        // Filtro por término de búsqueda
+        if (searchTerm) {
+            andConditions.push({
+                [Op.or]: [
+                    { '$usuario.nombre$': { [Op.like]: `%${searchTerm}%` } },
+                    { '$usuario.telefono$': { [Op.like]: `%${searchTerm}%` } },
+                    { referencia: { [Op.like]: `%${searchTerm}%` } },
+                    { concepto: { [Op.like]: `%${searchTerm}%` } }
+                ]
+            });
+        }
+
+        // Filtro por estado
+        if (estado) {
+            whereCondition.estado = estado;
+        }
+
+        // Filtro por método de pago
+        if (metodoPago) {
+            whereCondition.metodo_pago = metodoPago;
+        }
+
+        // Filtro por mes (año y mes)
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            andConditions.push(
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Movimiento.fecha')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Movimiento.fecha')), monthNum)
+            );
+        }
+
+        // Combinar condiciones
+        if (andConditions.length > 0) {
+            whereCondition[Op.and] = andConditions;
+        }
+
+        // Configuración base de la consulta
+        const queryOptions = {
+            where: whereCondition,
+            order: [['fecha', 'DESC']],
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    required: false,
+                    attributes: ['nombre']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    required: false,
+                    attributes: ['id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        required: false,
+                        attributes: ['colonia', 'id_servicio', 'id_solicitud'],
+                        include: [{
+                            model: Servicio,
+                            as: 'servicio',
+                            required: false,
+                            attributes: ['nombre']
+                        }]
+                    }]
+                }
+            ],
+            attributes: [
+                'id_movimiento', 
+                'monto', 
+                'fecha', 
+                'estado', 
+                'tipo', 
+                'id_cotizacion', 
+                'id_usuario'
+            ],
+            raw: false,
+            distinct: true
+        };
+
+        // Obtener estadísticas de movimientos por estado
+        const stats = await Movimiento.findAll({
+            where: whereCondition,
+            attributes: [
+                'estado',
+                [Sequelize.fn('COUNT', Sequelize.col('id_movimiento')), 'total']
+            ],
+            group: ['estado'],
+            raw: true
+        });
+
+        // Inicializar estadísticas
+        const statsData = {
+            pendientes: 0,
+            completados: 0,
+            rechazados: 0,
+            total: 0
+        };
+
+        // Procesar estadísticas
+        stats.forEach(stat => {
+            const estado = stat.estado ? stat.estado.toLowerCase() : 'pendiente';
+            const total = parseInt(stat.total) || 0;
+            
+            if (estado.includes('pendiente')) {
+                statsData.pendientes += total;
+            } else if (estado.includes('completado') || estado.includes('aprobado')) {
+                statsData.completados += total;
+            } else if (estado.includes('rechazado') || estado.includes('cancelado')) {
+                statsData.rechazados += total;
+            }
+            
+            statsData.total += total;
+        });
+
+        // Obtener total de registros para la paginación
+        const total = statsData.total;
+        const totalPages = Math.ceil(total / limit);
+
+        // Aplicar paginación
+        queryOptions.limit = limit;
+        queryOptions.offset = offset;
+
+        // Obtener movimientos con paginación
+        const { count, rows: movimientos } = await Movimiento.findAndCountAll(queryOptions);
+
+        // Formatear la respuesta
+        const movimientosFormateados = await Promise.all(movimientos.map(async movimiento => {
+            const datosMovimiento = movimiento.get({ plain: true });
+            const esIngreso = datosMovimiento.tipo === 'ingreso';
+            const esRetiro = datosMovimiento.tipo === 'retiro';
+            const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
+            
+            // Calcular el monto según el tipo de movimiento
+            let monto;
+            if (esIngreso && datosMovimiento.cotizacion) {
+                const cotizacion = datosMovimiento.cotizacion;
+                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
+                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
+                                parseFloat(cotizacion.descuento_membresia || 0) - 
+                                parseFloat(cotizacion.credito_usado || 0));
+                monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
+            } else {
+                monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
+            }
+            
+            const base = {
+                id_movimiento: datosMovimiento.id_movimiento,
+                id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
+                monto: monto,
+                fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
+                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                tipo: datosMovimiento.tipo,
+                nombre_usuario: datosMovimiento.usuario ? 
+                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
+                    'Usuario no encontrado'
+            };
+
+            // Agregar campos específicos para ingresos
+            if (esIngreso && datosMovimiento.cotizacion) {
+                const solicitud = datosMovimiento.cotizacion.solicitud;
+                base.colonia = solicitud?.colonia || 'Sin colonia especificada';
+                base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
+            } 
+            // Agregar campos específicos para retiros
+            else if (esRetiro) {
+                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+            }
+
+            return base;
+        }));
+
+        // Obtener todos los registros coincidentes para calcular totales
+        const allMovimientos = await Movimiento.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    required: false,
+                    attributes: ['nombre']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    required: false,
+                    attributes: ['id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        required: false,
+                        attributes: ['colonia', 'id_servicio', 'id_solicitud'],
+                        include: [{
+                            model: Servicio,
+                            as: 'servicio',
+                            required: false,
+                            attributes: ['nombre']
+                        }]
+                    }]
+                }
+            ],
+            order: [['fecha', 'DESC']],
+            raw: true,
+            nest: true
+        });
+
+        // Formatear todos los movimientos para calcular totales
+        const allMovimientosFormateados = await Promise.all(allMovimientos.map(async movimiento => {
+            const datosMovimiento = movimiento;
+            const esIngreso = datosMovimiento.tipo === 'ingreso';
+            const esRetiro = datosMovimiento.tipo === 'retiro';
+            const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
+            
+            // Calcular el monto según el tipo de movimiento
+            let monto;
+            if (esIngreso && datosMovimiento.cotizacion) {
+                const cotizacion = datosMovimiento.cotizacion;
+                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
+                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
+                                parseFloat(cotizacion.descuento_membresia || 0) - 
+                                parseFloat(cotizacion.credito_usado || 0));
+                monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
+            } else {
+                monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
+            }
+            
+            const base = {
+                id_movimiento: datosMovimiento.id_movimiento,
+                id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
+                monto: monto,
+                fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
+                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                tipo: datosMovimiento.tipo,
+                nombre_usuario: datosMovimiento.usuario ? 
+                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
+                    'Usuario no encontrado'
+            };
+
+            // Agregar campos específicos para ingresos
+            if (esIngreso && datosMovimiento.cotizacion) {
+                const solicitud = datosMovimiento.cotizacion.solicitud;
+                base.colonia = solicitud?.colonia || 'Sin colonia especificada';
+                base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
+            } 
+            // Agregar campos específicos para retiros
+            else if (esRetiro) {
+                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+            }
+
+            return base;
+        }));
+
+        // Calcular totales de TODOS los registros coincidentes
+        const totales = allMovimientosFormateados.reduce((acc, mov) => {
+            const monto = parseFloat(mov.monto) || 0;
+            const estado = mov.estado?.toLowerCase() || '';
+            
+            // Solo contabilizar retiros con estado 'completado'
+            if (mov.tipo === 'retiro' && estado === 'completado') {
+                acc.retiros += monto;
+            }
+
+            return acc;
+        }, { retiros: 0 });
+
+        // Enviar respuesta
+        // Calcular el total de montos de los movimientos con estado 'completado'
+        const totalMonto = allMovimientosFormateados.reduce((sum, mov) => {
+            const estado = mov.estado?.toLowerCase() || '';
+            if (estado === 'completado') {
+                return sum + (parseFloat(mov.monto) || 0);
+            }
+            return sum;
+        }, 0);
+        
+        // Crear objeto de estadísticas mensuales
+        const monthlyStats = {
+            pendientes: parseInt(statsData.pendientes) || 0,
+            aprobados: parseInt(statsData.completados) || 0,
+            rechazados: parseInt(statsData.rechazados) || 0,
+            total: totalMonto
+        };
+
+        res.json({
+            movimientos: movimientosFormateados,
+            totales,
+            estadisticas: monthlyStats,
+            paginacion: {
+                total,
+                totalPages,
+                limit,
+                offset
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ mensaje: 'Error al obtener retiros' });
+    }
+};
+
 // Obtener todos los movimientos con información detallada
 const getAllMovimientos = async (req, res) => {
     try {
@@ -1453,7 +1768,8 @@ const obtenerReporteIngresos = async (req, res) => {
 
 // Exportar controladores
 module.exports = {
-    getAllMovimientos,
+    obtenerRetiros,
+    getAllMovimientos, 
     crearMovimiento,
     actualizarMovimiento,
     eliminarMovimiento,

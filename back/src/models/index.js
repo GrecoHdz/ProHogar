@@ -129,9 +129,11 @@ const setupAssociations = () => {
   }); 
 
   // Relación Usuario - Membresía
-  Usuario.hasOne(Membresia, { 
+  Usuario.hasMany(Membresia, { 
     foreignKey: 'id_usuario',
-    as: 'membresia'
+    as: 'membresias',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
   });
   
   Membresia.belongsTo(Usuario, { 
@@ -139,6 +141,21 @@ const setupAssociations = () => {
     as: 'usuario',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
+  });
+
+  // Relación Membresía - Cuenta
+  Membresia.belongsTo(Cuenta, {
+    foreignKey: 'id_cuenta',
+    as: 'cuenta',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  });
+
+  Cuenta.hasMany(Membresia, {
+    foreignKey: 'id_cuenta',
+    as: 'membresias',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
   });
 
   // Relación Usuario - Cuenta

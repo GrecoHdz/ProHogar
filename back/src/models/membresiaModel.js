@@ -28,7 +28,7 @@ const Membresia = sequelize.define("Membresia", {
         allowNull: false
     },
     estado: {
-        type: DataTypes.ENUM("activa", "vencida", "pendiente"),
+        type: DataTypes.ENUM("activa", "vencida", "pendiente", "rechazada"),
         allowNull: false
     }
 }, {

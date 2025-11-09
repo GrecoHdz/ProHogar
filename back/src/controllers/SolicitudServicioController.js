@@ -8,12 +8,128 @@ const Cuenta = require("../models/cuentasModel");
 const Cotizacion = require("../models/cotizacionModel"); 
 const { Op, Sequelize } = require("sequelize"); 
 
+// Obtener estadísticas de pagos con filtros
+const obtenerEstadisticasPagos = async (req, res) => {
+    try {
+        // Obtener parámetros de filtro
+        const month = req.query.month; // Formato esperado: 'YYYY-MM'
+        const id_tecnico = req.query.id_tecnico;
+        const serviceType = req.query.serviceType;
+
+        // Construcción de condiciones
+        const whereCondition = {};
+        const andConditions = [];
+
+        // Filtrar por técnico si se proporciona el ID
+        if (id_tecnico) {
+            whereCondition.id_tecnico = id_tecnico;
+        }
+
+        // Filtro por mes (año y mes)
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            andConditions.push(
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), monthNum)
+            );
+        }
+
+        // Filtro por tipo de servicio
+        if (serviceType) {
+            whereCondition.id_servicio = parseInt(serviceType);
+        }
+
+        // Combinar condiciones
+        if (andConditions.length > 0) {
+            whereCondition[Op.and] = andConditions;
+        }
+
+        // Obtener estadísticas
+        const [estadisticas, serviciosMasSolicitados] = await Promise.all([
+            // Estadísticas generales
+            SolicitudServicio.findAll({
+                attributes: [
+                    [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total_solicitudes'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'completado' THEN 1 END)"), 'completadas'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'cancelado' THEN 1 END)"), 'canceladas'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'en_proceso' THEN 1 END)"), 'en_proceso'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente_asignacion' THEN 1 END)"), 'pendientes_asignacion'],
+                    [Sequelize.literal("AVG(TIMESTAMPDIFF(HOUR, fecha_solicitud, NOW()))"), 'tiempo_promedio_horas']
+                ],
+                where: whereCondition,
+                raw: true
+            }),
+            
+            // Servicios más solicitados
+            SolicitudServicio.findAll({
+                attributes: [
+                    'id_servicio',
+                    [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total'],
+                    [Sequelize.col('servicio.nombre'), 'nombre_servicio']
+                ],
+                include: [{
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: []
+                }],
+                where: whereCondition,
+                group: ['id_servicio', 'servicio.nombre'],
+                order: [[Sequelize.literal('total'), 'DESC']],
+                limit: 5, // Top 5 servicios más solicitados
+                raw: true
+            })
+        ]);
+
+        // Procesar estadísticas
+        const statsData = estadisticas[0] || { 
+            completadas: 0, 
+            canceladas: 0, 
+            en_proceso: 0, 
+            pendientes_asignacion: 0 
+        };
+
+        // Calcular total sumando todos los estados
+        const total = Object.values(statsData).reduce((sum, value) => sum + (parseInt(value) || 0), 0);
+
+        // Crear objeto de estadísticas
+        const monthlyStats = {
+            aprobados: parseInt(statsData.completadas) || 0,
+            rechazados: parseInt(statsData.canceladas) || 0,
+            pendientes: parseInt(statsData.pendientes_asignacion) + parseInt(statsData.en_proceso) || 0,
+            total: total
+        };
+
+        // Formatear respuesta
+        const resultado = {
+            tiempo_promedio_horas: parseFloat(estadisticas[0]?.tiempo_promedio_horas) || 0,
+            servicios_mas_solicitados: serviciosMasSolicitados.map(s => ({
+                id_servicio: s.id_servicio,
+                nombre: s.nombre_servicio,
+                total: parseInt(s.total) || 0
+            }))
+        };
+
+        // Enviar respuesta
+        res.json({
+            success: true,
+            data: resultado
+        });
+    } catch (error) {
+        console.error("Error al obtener estadísticas de solicitudes:", error);
+        res.status(500).json({ 
+            success: false,
+            error: "Error al obtener estadísticas de solicitudes",
+            details: error.message 
+        });
+    }
+};
+
 //Obtener todas las solicitudes de servicios con paginación 
 const obtenerSolicitudesServicios = async (req, res) => {
     try {
       // Obtener parámetros de paginación y filtros
       let limit = parseInt(req.query.limit) || 10; // Por defecto 10 elementos
-      limit = Math.min(limit, 100); // Máximo 100 por rendimiento
+      limit = Math.min(limit, 10); // Máximo 100 por rendimiento
       const offset = parseInt(req.query.offset) || 0;
       const month = req.query.month; // Formato esperado: 'YYYY-MM'
   
@@ -67,19 +183,42 @@ const obtenerSolicitudesServicios = async (req, res) => {
         whereCondition[Op.and] = andConditions;
       }
   
-      // 1️⃣ Obtener el conteo total con include (para evitar el error del alias)
-      const total = await SolicitudServicio.count({
-        where: whereCondition,
-        include: [
-          {
-            model: Usuario,
-            as: 'cliente',
-            attributes: [] // Solo para habilitar el alias '$cliente.nombre$'
-          }
-        ],
-        distinct: true,
-        col: 'id_solicitud'
-      });
+      // Obtener estadísticas de solicitudes por estado
+      const [total, stats] = await Promise.all([
+        // 1️⃣ Obtener el conteo total con include (para evitar el error del alias)
+        SolicitudServicio.count({
+          where: whereCondition,
+          include: [
+            {
+              model: Usuario,
+              as: 'cliente',
+              attributes: []
+            }
+          ],
+          distinct: true,
+          col: 'id_solicitud'
+        }),
+        
+        // Obtener conteo por estado
+        SolicitudServicio.findAll({
+          attributes: [
+            [Sequelize.literal("COUNT(CASE WHEN estado = 'completado' OR estado = 'finalizado' OR estado = 'calificado' THEN 1 END)"), 'aprobados'],
+            [Sequelize.literal("COUNT(CASE WHEN estado = 'cancelado' THEN 1 END)"), 'rechazados'],
+            [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente_pagoservicio' THEN 1 END)"), 'pendientes']
+          ],
+          where: whereCondition,
+          raw: true
+        })
+      ]);
+      
+      // Procesar estadísticas
+      const statsData = stats[0] || { aprobados: 0, rechazados: 0, pendientes: 0 };
+      const monthlyStats = {
+        aprobados: parseInt(statsData.aprobados) || 0,
+        rechazados: parseInt(statsData.rechazados) || 0,
+        pendientes: parseInt(statsData.pendientes) || 0,
+        total: parseInt(statsData.aprobados || 0) + parseInt(statsData.rechazados || 0) + parseInt(statsData.pendientes || 0)
+      };
   
       // 2️⃣ Obtener los registros paginados
       const solicitudes = await SolicitudServicio.findAll({
@@ -240,7 +379,8 @@ const obtenerSolicitudesServicios = async (req, res) => {
         total,
         page: Math.floor(offset / limit) + 1,
         totalPages: Math.ceil(total / limit),
-        hasMore: offset + limit < total
+        hasMore: offset + limit < total,
+        estadisticas: monthlyStats
       });
     } catch (error) {
       console.error(error);
@@ -716,6 +856,7 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
 };
 
 module.exports = {
+    obtenerEstadisticasPagos,
     obtenerSolicitudesPorTecnico,
     obtenerSolicitudesServicios,
     obtenerGraficaServiciosPorTipo,
