@@ -1,4 +1,5 @@
 
+const { sequelize } = require("../config/database");
 const Usuario = require("../models/usuariosModel");
 const Ciudad = require("../models/ciudadesModel");
 const Rol = require("../models/rolesModel");
@@ -11,14 +12,198 @@ const saltRounds = 10; // Número de rondas de hashing
 const Referido = require('../models/referidosModel');
 
 
-//Obtener todos los Usuarios
+// Obtener todos los usuarios con filtros, paginación y estadísticas
 const obtenerUsuarios = async (req, res) => {
     try {
-        const usuarios = await Usuario.findAll({ attributes: { exclude: ['password_hash'] } });
-        res.json(usuarios);
+        // Obtener parámetros de paginación y búsqueda
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        const offset = parseInt(req.query.offset) || 0;
+        const estado = req.query.estado;
+        const rol = req.query.rol;
+        const month = req.query.month; // Formato: 'YYYY-MM'
+
+        // Construir condiciones de búsqueda
+        const whereCondition = {};
+        const andConditions = [];
+
+        // Filtro por estado
+        if (estado) {
+            whereCondition.estado = estado;
+        }
+
+        // Filtro por rol
+        if (rol) {
+            whereCondition['$rol.id_rol$'] = rol;
+        }
+
+        // Filtro por mes de registro
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            andConditions.push(
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Usuario.fecha_registro')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Usuario.fecha_registro')), monthNum)
+            );
+        }
+
+        // Combinar condiciones
+        if (andConditions.length > 0) {
+            whereCondition[Op.and] = andConditions;
+        }
+
+        // Obtener total de registros
+        const total = await Usuario.count({
+            where: whereCondition,
+            include: [
+                {
+                    model: Rol,
+                    as: 'rol',
+                    attributes: []
+                }
+            ]
+        });
+
+        // Obtener usuarios con paginación
+        const [usuarios, stats] = await Promise.all([
+            Usuario.findAll({
+                where: whereCondition,
+                attributes: { 
+                    exclude: ['password_hash', 'id_ciudad', 'id_rol'],
+                    include: [
+                        // Contar servicios solicitados como cliente
+                        [
+                            sequelize.literal(`(
+                                SELECT COUNT(*) 
+                                FROM solicitudservicio 
+                                WHERE solicitudservicio.id_usuario = Usuario.id_usuario
+                            )`),
+                            'total_servicios_cliente'
+                        ],
+                        // Contar servicios asignados como técnico
+                        [
+                            sequelize.literal(`(
+                                SELECT COUNT(*) 
+                                FROM solicitudservicio 
+                                WHERE solicitudservicio.id_tecnico = Usuario.id_usuario
+                            )`),
+                            'total_servicios_tecnico'
+                        ],
+                        // Contar membresías pagadas por usuario
+                        [
+                            sequelize.literal(`(
+                                SELECT COUNT(*) 
+                                FROM pagomembresia 
+                                WHERE pagomembresia.id_usuario = Usuario.id_usuario
+                                AND pagomembresia.estado = 'activa'
+                            )`),
+                            'total_membresias'
+                        ]
+                    ]
+                },
+                include: [
+                    {
+                        model: Rol,
+                        as: 'rol',
+                        attributes: ['nombre_rol']
+                    },
+                    {
+                        model: Ciudad,
+                        as: 'ciudad',
+                        attributes: ['nombre_ciudad']
+                    },
+                    // Incluir membresías para conteo
+                    {
+                        model: sequelize.models.Membresia,
+                        as: 'membresias',
+                        attributes: [],
+                        required: false,
+                        where: { estado: 'activa' }
+                    }
+                ],
+                group: ['usuario.id_usuario'],
+                order: [['fecha_registro', 'DESC']],
+                limit,
+                offset,
+                raw: true,
+                nest: true
+            }),
+            
+            // Consulta de estadísticas - Dividida en consultas separadas para evitar problemas de GROUP BY
+            Promise.all([
+                // Contar usuarios por estado
+                Usuario.findAll({
+                    attributes: [
+                        [Sequelize.fn('COUNT', Sequelize.literal("CASE WHEN estado = 'activo' THEN 1 END")), 'activos'],
+                        [Sequelize.fn('COUNT', Sequelize.literal("CASE WHEN estado = 'inactivo' THEN 1 END")), 'inactivos'],
+                        [Sequelize.fn('COUNT', Sequelize.literal("CASE WHEN estado = 'deshabilitado' THEN 1 END")), 'deshabilitados'],
+                        [Sequelize.fn('COUNT', '*'), 'total']
+                    ],
+                    include: [
+                        {
+                            model: Rol,
+                            as: 'rol',
+                            attributes: [],
+                            where: rol ? { id_rol: rol } : {}
+                        }
+                    ],
+                    raw: true
+                }),
+                // Contar usuarios que han solicitado servicios
+                sequelize.query(
+                    'SELECT COUNT(DISTINCT id_usuario) as usuarios_que_solicitaron_servicios FROM solicitudservicio',
+                    { type: sequelize.QueryTypes.SELECT }
+                ),
+                // Contar técnicos activos
+                sequelize.query(
+                    'SELECT COUNT(DISTINCT id_tecnico) as tecnicos_activos FROM solicitudservicio WHERE id_tecnico IS NOT NULL',
+                    { type: sequelize.QueryTypes.SELECT }
+                ),
+                // Contar usuarios con membresías activas
+                sequelize.query(
+                    "SELECT COUNT(DISTINCT id_usuario) as usuarios_con_membresia FROM pagomembresia WHERE estado = 'activa'",
+                    { type: sequelize.QueryTypes.SELECT }
+                )
+            ])
+        ]);
+        
+        // Procesar estadísticas de las consultas separadas
+        const [estados, usuariosServicios, tecnicosActivos, usuariosMembresias] = stats;
+        
+        const estadisticas = {
+            activos: parseInt(estados[0]?.activos) || 0,
+            inactivos: parseInt(estados[0]?.inactivos) || 0,
+            deshabilitados: parseInt(estados[0]?.deshabilitados) || 0,
+            total: parseInt(estados[0]?.total) || 0,
+            usuarios_que_solicitaron_servicios: parseInt(usuariosServicios[0]?.usuarios_que_solicitaron_servicios) || 0,
+            tecnicos_activos: parseInt(tecnicosActivos[0]?.tecnicos_activos) || 0,
+            usuarios_con_membresia: parseInt(usuariosMembresias[0]?.usuarios_con_membresia) || 0
+        };
+        
+        // Procesar usuarios para asegurar que los contadores sean números
+        const usuariosProcesados = usuarios.map(usuario => ({
+            ...usuario,
+            total_servicios_cliente: parseInt(usuario.total_servicios_cliente) || 0,
+            total_servicios_tecnico: parseInt(usuario.total_servicios_tecnico) || 0,
+            total_servicios: (parseInt(usuario.total_servicios_cliente) || 0) + (parseInt(usuario.total_servicios_tecnico) || 0),
+            total_membresias: parseInt(usuario.total_membresias) || 0
+        }));
+        
+        res.json({
+            success: true,
+            data: usuariosProcesados,
+            total,
+            page: Math.floor(offset / limit) + 1,
+            totalPages: Math.ceil(total / limit),
+            hasMore: offset + limit < total,
+            estadisticas
+        });
     } catch (error) {
         console.error("Error al obtener usuarios:", error);
-        res.status(500).json({ error: "Error al obtener usuarios" });
+        res.status(500).json({ 
+            success: false,
+            error: "Error al obtener usuarios",
+            details: error.message 
+        });
     }
 };  
  
