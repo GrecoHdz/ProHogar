@@ -97,7 +97,8 @@ const obtenerRetiros = async (req, res) => {
                 'estado', 
                 'tipo', 
                 'id_cotizacion', 
-                'id_usuario'
+                'id_usuario',
+                'descripcion'
             ],
             raw: false,
             distinct: true
@@ -170,6 +171,7 @@ const obtenerRetiros = async (req, res) => {
             }
             
             const base = {
+                id_usuario: datosMovimiento.id_usuario || null,
                 id_movimiento: datosMovimiento.id_movimiento,
                 id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
                 monto: monto,
@@ -189,7 +191,7 @@ const obtenerRetiros = async (req, res) => {
             } 
             // Agregar campos específicos para retiros
             else if (esRetiro) {
-                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+                base.descripcion = datosMovimiento.descripcion;
             }
 
             return base;
@@ -249,13 +251,14 @@ const obtenerRetiros = async (req, res) => {
                 monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
             }
             
-            const base = {
+            const base = { 
                 id_movimiento: datosMovimiento.id_movimiento,
                 id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
                 monto: monto,
                 fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
                 estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
                 tipo: datosMovimiento.tipo,
+                descripcion: datosMovimiento.descripcion,
                 nombre_usuario: datosMovimiento.usuario ? 
                     `${datosMovimiento.usuario.nombre || ''}`.trim() : 
                     'Usuario no encontrado'
@@ -269,7 +272,7 @@ const obtenerRetiros = async (req, res) => {
             } 
             // Agregar campos específicos para retiros
             else if (esRetiro) {
-                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+                base.descripcion = datosMovimiento.descripcion;
             }
 
             return base;
@@ -308,7 +311,6 @@ const obtenerRetiros = async (req, res) => {
 
         res.json({
             movimientos: movimientosFormateados,
-            totales,
             estadisticas: monthlyStats,
             paginacion: {
                 total,

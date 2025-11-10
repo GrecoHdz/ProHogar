@@ -116,7 +116,7 @@ const obtenerPagos = async (req, res) => {
             ...pago 
         }) => ({
             ...pago,
-            usuario: usuario ? {
+            cliente: usuario ? {
                 id_usuario: usuario.id_usuario,
                 nombre: usuario.nombre,
                 telefono: usuario.telefono,
