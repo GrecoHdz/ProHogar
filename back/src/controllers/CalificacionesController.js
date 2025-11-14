@@ -29,7 +29,7 @@ const getCalificacionesPorUsuario = async (req, res) => {
             include: [
                 {
                     model: SolicitudServicio,
-                    as: 'solicitud',
+                    as: 'calificacionsolicitud',
                     attributes: ['id_solicitud'],
                     include: [
                         {
@@ -59,8 +59,8 @@ const getCalificacionesPorUsuario = async (req, res) => {
             calificacion: cal.calificacion,
             comentario: cal.comentario || '',
             fecha: cal.fecha,
-            nombre_servicio: cal.solicitud?.servicio?.nombre || 'Servicio',
-            nombre_cliente: cal.solicitud?.cliente?.nombre || 'Cliente'
+            nombre_servicio: cal.calificacionsolicitud?.servicio?.nombre || 'Servicio',
+            nombre_cliente: cal.calificacionsolicitud?.cliente?.nombre || 'Cliente'
         }));
         
         res.json({

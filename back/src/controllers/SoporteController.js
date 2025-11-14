@@ -1,4 +1,5 @@
 const Soporte = require("../models/soporteModel");
+const Usuario = require("../models/usuariosModel");
 const { Op } = require('sequelize');
 
 //Obtener todos los Soportes
@@ -9,7 +10,14 @@ const obtenerSoportes = async (req, res) => {
         const { count, rows: soportes } = await Soporte.findAndCountAll({
             limit: parseInt(limit),
             offset: parseInt(offset),
-            order: [['fecha_creacion', 'DESC']] // Ordenar por fecha de creación más reciente
+            order: [['fecha_creacion', 'DESC']], // Ordenar por fecha de creación más reciente
+            attributes: { exclude: ['id_usuario'] }, // Excluir el campo id_usuario
+            include: [{
+                model: Usuario,
+                as: 'usuario',
+                attributes: ['nombre', 'telefono'], // Solo incluir nombre y teléfono del usuario
+                required: true
+            }]
         });
         
         res.json({

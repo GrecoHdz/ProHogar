@@ -1,0 +1,395 @@
+const { Op } = require("sequelize");
+const { sequelize } = require("../config/database");
+const Notificacion = require("../models/notificacionesModel");
+const NotificacionDestinatario = require("../models/notificacionesDestinatariosModel");
+const Usuario = require("../models/usuariosModel"); // opcional si manejas roles
+const Rol = require("../models/rolesModel");
+
+// ============================================================
+// 1️⃣ Obtener todas las notificaciones
+// ============================================================
+const obtenerTodas = async (req, res) => {
+  try {
+    const notificaciones = await NotificacionDestinatario.findAll({
+      include: [
+        {
+          model: Notificacion,
+          attributes: ['titulo', 'creado_por'],
+          where: {
+            creado_por: 'Sistema'
+          },
+          required: true
+        },
+        {
+          model: Usuario,
+          as: 'usuario',
+          attributes: ['nombre'],
+          required: false
+        }
+      ],
+      attributes: ['id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
+      order: [["fecha_creacion", "DESC"]],
+      raw: true,
+      nest: true
+    });
+
+    // Formatear la respuesta para incluir solo los datos necesarios
+    const notificacionesFormateadas = notificaciones.map(notif => ({
+      id: notif.id_notificacion_destinatario,
+      titulo: notif.Notificacion.titulo,
+      nombreUsuario: notif.usuario ? 
+        `${notif.usuario.nombre}` : 
+        'Usuario no encontrado',
+      fecha: notif.fecha_creacion,
+      leido: notif.leido,
+      fechaLeido: notif.fecha_leido
+    }));
+
+    res.json({ success: true, data: notificacionesFormateadas });
+  } catch (error) {
+    console.error("Error al obtener notificaciones:", error);
+    res.status(500).json({ success: false, message: "Error al obtener notificaciones" });
+  }
+};
+
+// ============================================================
+// 2️⃣ Obtener notificaciones por usuario (personales + globales)
+// ============================================================
+const obtenerPorUsuario = async (req, res) => {
+  const { id_usuario } = req.params;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  try {
+    const { count, rows: notificaciones } = await NotificacionDestinatario.findAndCountAll({
+      include: [
+        {
+          model: Notificacion,
+          attributes: ['titulo', 'creado_por'],
+          required: true
+        }
+      ],
+      where: {
+        [Op.or]: [
+          { id_usuario },
+          { global: true }
+        ]
+      },
+      attributes: ['id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
+      order: [['fecha_creacion', 'DESC']],
+      limit,
+      offset,
+      raw: true,
+      nest: true
+    });
+
+    const totalPages = Math.ceil(count / limit);
+    
+    // Contar notificaciones no leídas
+    const unreadCount = await NotificacionDestinatario.count({
+      where: {
+        [Op.or]: [
+          { id_usuario, leido: false },
+          { global: true, leido: false }
+        ]
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      data: notificaciones.map(notif => ({
+        id: notif.id_notificacion_destinatario,
+        titulo: notif.Notificacion.titulo,
+        fecha: notif.fecha_creacion,
+        leido: notif.leido,
+        creadoPor: notif.Notificacion.creado_por
+      })),
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      },
+      unreadCount
+    });
+  } catch (error) {
+    console.error("Error al obtener notificaciones por usuario:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener notificaciones del usuario" 
+    });
+  }
+};
+
+// ============================================================
+// 3️⃣ Crear Notificación (solo registro base, sin destinatarios)
+// ============================================================
+const crearNotificacion = async (req, res) => {
+  const { tipo, titulo, creado_por } = req.body;
+
+  try {
+    const nueva = await Notificacion.create({
+      tipo,
+      titulo,
+      creado_por,
+      fecha_creacion: new Date(),
+    });
+
+    res.json({ success: true, data: nueva });
+  } catch (error) {
+    console.error("Error al crear notificación:", error);
+    res.status(500).json({ success: false, message: "Error al crear notificación" });
+  }
+};
+
+// ============================================================
+// 4️⃣ Enviar notificación (a un usuario, a rol o global)
+// ============================================================
+const enviarNotificacion = async (req, res) => {
+  const { id_notificacion, id_usuario, nombre_rol, global } = req.body;
+  // 🔹 id_notificacion → notificación ya existente
+  // 🔹 id_usuario → si es para un usuario específico
+  // 🔹 nombre_rol → si se envía a todos los de un rol
+  // 🔹 global → si es para todos (sin registros por usuario)
+
+  const t = await sequelize.transaction();
+
+  try {
+    // Verificar que la notificación exista
+    const notificacion = await Notificacion.findByPk(id_notificacion);
+    if (!notificacion) {
+      return res.status(404).json({
+        success: false,
+        message: "La notificación especificada no existe",
+      });
+    }
+
+    let destinatarios = [];
+
+    // 📍 Enviar a un usuario específico
+    if (id_usuario && !global && !nombre_rol) {
+      destinatarios.push({
+        id_notificacion,
+        id_usuario,
+        global: false,
+        leido: false,
+        fecha_creacion: new Date(),
+        fecha_leido: null,
+      });
+    }
+
+    // 📍 Enviar a todos los usuarios de un rol específico
+    else if (nombre_rol && !global) {
+      const rolUsuario = await Rol.findOne({
+        where: { nombre_rol },
+        attributes: ["id_rol"],
+        raw: true,
+      });
+
+      if (!rolUsuario) {
+        return res.status(404).json({
+          success: false,
+          message: `No se encontró el rol '${nombre_rol}'`,
+        });
+      }
+
+      const usuarios = await Usuario.findAll({
+        where: { id_rol: rolUsuario.id_rol },
+        attributes: ["id_usuario"],
+      });
+
+      destinatarios = usuarios.map((u) => ({
+        id_notificacion,
+        id_usuario: u.id_usuario,
+        global: false,
+        leido: false,
+        fecha_creacion: new Date(),
+        fecha_leido: null,
+      }));
+    }
+
+    // 🌍 Enviar como notificación global (sin usuarios)
+    else if (global) {
+      destinatarios.push({
+        id_notificacion,
+        id_usuario: null,
+        global: true,
+        leido: false,
+        fecha_creacion: new Date(),
+        fecha_leido: null,
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Debes especificar id_usuario, nombre_rol o global=true",
+      });
+    }
+
+    // Guardar los destinatarios
+    await NotificacionDestinatario.bulkCreate(destinatarios, { transaction: t });
+
+    await t.commit();
+
+    res.json({
+      success: true,
+      message: "Notificación enviada correctamente",
+      data: {
+        id_notificacion,
+        cantidad_destinatarios: destinatarios.length,
+      },
+    });
+  } catch (error) {
+    await t.rollback();
+    console.error("Error al enviar notificación:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al enviar notificación",
+    });
+  }
+};
+
+// ============================================================
+// 🔹 Obtener notificaciones creadas manualmente (no del sistema)
+// ============================================================
+const obtenerCreadasManualmente = async (req, res) => {
+    try {
+      const notificaciones = await Notificacion.findAll({
+        where: {
+          creado_por: {
+            [Op.ne]: "Sistema", // distinto de 'Sistema'
+          },
+        },
+        order: [["fecha_creacion", "DESC"]],
+        attributes: ["id_notificacion", "tipo", "titulo", "creado_por", "fecha_creacion"],
+      });
+  
+      res.json({ success: true, data: notificaciones });
+    } catch (error) {
+      console.error("Error al obtener notificaciones creadas manualmente:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al obtener notificaciones creadas manualmente",
+      });
+    }
+  };
+  
+// ============================================================
+// 5️⃣ Marcar todas las notificaciones de un usuario como leídas
+// ============================================================
+const marcarComoLeida = async (req, res) => {
+  console.log('=== SOLICITUD RECIBIDA ===');
+  console.log('Método:', req.method);
+  console.log('URL:', req.originalUrl);
+  console.log('Headers:', {
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers['authorization'] ? '*** (token presente)' : 'No presente'
+  });
+  console.log('Body recibido:', req.body);
+  
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    const errorResponse = { 
+      success: false, 
+      message: "Se requiere el ID de usuario" 
+    };
+    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    return res.status(400).json(errorResponse);
+  }
+
+  try {
+    const [updatedCount] = await NotificacionDestinatario.update(
+      { 
+        leido: true, 
+        fecha_leido: new Date() 
+      },
+      { 
+        where: { 
+          id_usuario,
+          leido: false // Solo actualizar las no leídas
+        } 
+      }
+    );
+    
+    const successResponse = { 
+      success: true, 
+      message: `Se marcaron ${updatedCount} notificaciones como leídas`,
+      updatedCount
+    };
+    console.log('=== RESPUESTA EXITOSA ===', successResponse);
+    return res.json(successResponse);
+  } catch (error) {
+    console.error("Error al marcar notificaciones como leídas:", error);
+    const errorResponse = { 
+      success: false, 
+      message: "Error al actualizar notificaciones",
+      error: error.message 
+    };
+    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    res.status(500).json(errorResponse);
+  }
+};
+
+// ============================================================
+// 6️⃣ Eliminar una notificación (y sus destinatarios)
+// ============================================================
+const eliminarNotificacion = async (req, res) => {
+  const { id_notificacion } = req.params;
+
+  const t = await sequelize.transaction();
+  try {
+    await NotificacionDestinatario.destroy({
+      where: { id_notificacion },
+      transaction: t,
+    });
+
+    await Notificacion.destroy({
+      where: { id_notificacion },
+      transaction: t,
+    });
+
+    await t.commit();
+
+    res.json({ success: true, message: "Notificación eliminada correctamente" });
+  } catch (error) {
+    await t.rollback();
+    console.error("Error al eliminar notificación:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar notificación" });
+  }
+};
+
+// ============================================================
+// 7️⃣ Eliminar todas las notificaciones leídas
+// ============================================================
+const eliminarLeidas = async (req, res) => {
+  try {
+    const eliminadas = await NotificacionDestinatario.destroy({
+      where: { leido: true },
+    });
+
+    res.json({
+      success: true,
+      message: `Se eliminaron ${eliminadas} notificaciones leídas.`,
+    });
+  } catch (error) {
+    console.error("Error al eliminar notificaciones leídas:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar notificaciones leídas" });
+  }
+};
+
+// ============================================================
+// Exportar funciones
+// ============================================================
+module.exports = {
+  obtenerTodas,
+  obtenerPorUsuario,
+  obtenerCreadasManualmente,
+  crearNotificacion,
+  enviarNotificacion,
+  marcarComoLeida,
+  eliminarNotificacion,
+  eliminarLeidas,
+};

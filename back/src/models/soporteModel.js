@@ -1,5 +1,6 @@
 const DataTypes = require("sequelize");
 const { sequelize } = require("../config/database");
+const Usuario = require("./usuariosModel");
 
 const Soporte = sequelize.define("Soporte", {
     id_soporte: {
@@ -32,6 +33,14 @@ const Soporte = sequelize.define("Soporte", {
     createdAt: 'fecha_creacion',
     updatedAt: 'fecha_actualizacion',
     tableName: "soporte"
+});
+
+// Definir la relación con Usuario
+Soporte.belongsTo(Usuario, {
+    foreignKey: 'id_usuario',
+    as: 'usuario',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
 });
 
 module.exports = Soporte;

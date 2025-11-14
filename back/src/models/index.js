@@ -13,6 +13,9 @@ const Movimiento = require('./movimientosModel');
 const Calificacion = require('./calificacionesModels');
 const CreditoUsuario = require('./creditoUsuariosModel');
 const Referido = require('./referidosModel');
+const Notificacion = require('./notificacionesModel');
+const NotificacionDestinatario = require('./notificacionesDestinatariosModel');
+
 
 // Función para configurar las asociaciones
 const setupAssociations = () => {
@@ -309,6 +312,26 @@ const setupAssociations = () => {
     onDelete: 'RESTRICT'
   }); 
 
+  // Relación Notificación - NotificaciónDestinatario
+  Notificacion.hasMany(NotificacionDestinatario, {
+    foreignKey: "id_notificacion",
+    as: "destinatarios",
+  });
+  NotificacionDestinatario.belongsTo(Notificacion, {
+    foreignKey: "id_notificacion",
+  });
+
+  // Relación Usuario - NotificaciónDestinatario
+  Usuario.hasMany(NotificacionDestinatario, {
+    foreignKey: "id_usuario",
+    as: "notificacionesDestinatario"
+  });
+  
+  NotificacionDestinatario.belongsTo(Usuario, {
+    foreignKey: "id_usuario",
+    as: "usuario"
+  });
+  
   console.log('Asociaciones configuradas correctamente');
 };
 
