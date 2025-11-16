@@ -37,7 +37,7 @@ const Movimiento = sequelize.define('Movimiento', {
         defaultValue: DataTypes.NOW
     },
     estado: {
-        type: DataTypes.ENUM('pendiente', 'completado'),
+        type: DataTypes.ENUM('pendiente', 'completado','rechazado'),
         allowNull: true,
         defaultValue: 'pendiente'
     }

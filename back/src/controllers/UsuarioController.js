@@ -1060,14 +1060,13 @@ const actualizarPassword = async (req, res) => {
     console.log('Solicitud de cambio de contraseña recibida:', {
         params: req.params,
         body: {
-            ...req.body,
-            currentPassword: req.body.currentPassword ? '***' : 'undefined',
+            ...req.body, 
             newPassword: req.body.newPassword ? '***' : 'undefined'
         }
     });
 
     const { id } = req.params;
-    const { currentPassword, newPassword } = req.body;
+    const { newPassword } = req.body;
     
     if (!id) {
         const error = "Se requiere el ID del usuario";
@@ -1078,8 +1077,8 @@ const actualizarPassword = async (req, res) => {
         });
     }
     
-    if (!currentPassword || !newPassword) {
-        const error = "Se requieren tanto la contraseña actual como la nueva";
+    if (!newPassword) {
+        const error = "Se requiere la nueva contraseña";
         console.error('Error de validación:', error);
         return res.status(400).json({ 
             status: 400,
@@ -1122,26 +1121,14 @@ const actualizarPassword = async (req, res) => {
                 'No tiene contraseña'
         });
         
-        // Verificar la contraseña actual
-        console.log('Verificando contraseña...');
-        console.log('Datos de verificación:', {
-            hashedPasswordInDb: usuario.password_hash,
-            currentPasswordLength: currentPassword.length,
-            firstFewCharsOfCurrentPassword: currentPassword.substring(0, 2) + '...',
-            isPasswordValid: await bcrypt.compare(currentPassword, usuario.password_hash)
-        });
+        // No se requiere validar la contraseña actual para el administrador
+        console.log('Actualizando contraseña sin validar la actual (solicitud de administrador)');
         
-        const isPasswordValid = await bcrypt.compare(currentPassword, usuario.password_hash);
+        // Verificar que la nueva contraseña sea diferente a la actual
+        const isSameAsCurrent = await bcrypt.compare(newPassword, usuario.password_hash);
         
-        if (!isPasswordValid) {
-            console.error('La contraseña actual no coincide');
-            // Verificar si la contraseña en la base de datos está hasheada correctamente
-            const isBcryptHash = usuario.password_hash.startsWith('$2b$');
-            console.error('Detalles de la contraseña:', {
-                isBcryptHash: isBcryptHash,
-                hashStartsWith: isBcryptHash ? usuario.password_hash.substring(0, 10) + '...' : 'No parece un hash bcrypt'
-            });
-            
+        if (isSameAsCurrent) {
+            console.error('La nueva contraseña no puede ser igual a la actual');
             return res.status(400).json({ 
                 status: 400,
                 error: "Contraseña actual incorrecta",

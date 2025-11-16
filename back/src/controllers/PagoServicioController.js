@@ -201,20 +201,23 @@ const processPayment = async (req, res) => {
 }; 
  
 const denyPayment = async (req, res) => {
+  console.log('📥 [DENEGAR PAGO] Datos recibidos:', {
+    body: req.body,
+    params: req.params,
+    query: req.query
+  });
+
   const t = await Cotizacion.sequelize.transaction();
 
   try {
-    const {
-      id_cotizacion,
-      id_solicitud,
-      id_usuario
-    } = req.body;
+    const { id_cotizacion, id_solicitud, id_usuario } = req.body;
 
-    console.log('🛰️ [DEBUG] Datos recibidos en /pagos/denegar:', req.body);
-
+    // Validación
     if (!id_cotizacion || !id_solicitud || !id_usuario) {
+      const errorMsg = 'Faltan campos requeridos.';
+      console.error('❌ [DENEGAR PAGO] Error:', errorMsg);
       await t.rollback();
-      return res.status(400).json({ success: false, message: 'Faltan campos requeridos.' });
+      return res.status(400).json({ success: false, message: errorMsg });
     }
 
     // 1️⃣ Obtener cotización
@@ -223,11 +226,9 @@ const denyPayment = async (req, res) => {
 
     const monto_credito_usado = parseFloat(cotizacion.credito_usado || 0);
 
-    // 2️⃣ Revertir estado de cotización
+    // 2️⃣ Revertir cotización
     await cotizacion.update(
-      {
-        id_cuenta: null,
-        num_comprobante: null,
+      { 
         descuento_membresia: null,
         credito_usado: null,
         estado: 'rechazado'
@@ -235,15 +236,13 @@ const denyPayment = async (req, res) => {
       { transaction: t }
     );
 
-    // 3️⃣ Revertir estado de solicitud
+    // 3️⃣ Revertir estado de la solicitud
     const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
-    if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
+    if (!solicitud) throw new Error('Solicitud no encontrada');
     await solicitud.update({ estado: 'pendiente_pagoservicio' }, { transaction: t });
 
-    // 4️⃣ Devolver crédito al usuario (si usó crédito)
-    console.log(`💰 [DEBUG] Monto de crédito usado: ${monto_credito_usado}`);
+    // 4️⃣ Devolver crédito usado
     if (monto_credito_usado > 0) {
-      // sumar el crédito devuelto al crédito actual (si existiera)
       const creditoUsuario = await CreditoUsuario.findOne({
         where: { id_usuario },
         transaction: t
@@ -261,22 +260,21 @@ const denyPayment = async (req, res) => {
         { transaction: t }
       );
 
-      console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario} (ahora ${nuevoCredito})`);
+      console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario}`);
     }
 
-    // 5️⃣ Buscar si el usuario tenía referidor (para quitar comisión)
+    // 5️⃣ Revertir comisión de referido (si existía)
     const referido = await Referido.findOne({
       where: { id_referido_usuario: id_usuario },
       transaction: t
     });
 
     if (referido && referido.id_referidor) {
-      // Buscar movimiento de comisión asociado a esta cotización (AHORA INCLUYE id_cotizacion)
       const movimientoComision = await Movimiento.findOne({
         where: {
           id_usuario: referido.id_referidor,
           id_referido: id_usuario,
-          id_cotizacion, // <-- agregado
+          id_cotizacion: id_cotizacion,
           tipo: 'ingreso_referido'
         },
         order: [['fecha', 'DESC']],
@@ -286,7 +284,7 @@ const denyPayment = async (req, res) => {
       if (movimientoComision) {
         const comision = parseFloat(movimientoComision.monto) || 0;
 
-        // 5.1️⃣ Restar la comisión al crédito del referidor (si existe)
+        // Restar crédito del referidor
         const creditoReferidor = await CreditoUsuario.findOne({
           where: { id_usuario: referido.id_referidor },
           transaction: t
@@ -294,6 +292,7 @@ const denyPayment = async (req, res) => {
 
         if (creditoReferidor) {
           const nuevoCreditoReferidor = Math.max(0, parseFloat(creditoReferidor.monto_credito) - comision);
+
           await CreditoUsuario.upsert(
             {
               id_usuario: referido.id_referidor,
@@ -302,38 +301,45 @@ const denyPayment = async (req, res) => {
             },
             { transaction: t }
           );
+
           console.log(`💸 [DEBUG] Comisión revertida (-${comision}) del referidor ${referido.id_referidor}`);
         }
 
-        // 5.2️⃣ Eliminar o marcar el movimiento de comisión
-        // Si prefieres eliminar:
+        // Borrar movimiento de comisión
         await Movimiento.destroy({
           where: { id_movimiento: movimientoComision.id_movimiento },
           transaction: t
         });
-
-        // Si prefieres marcar como 'anulado' en vez de eliminar, usa:
-        // await movimientoComision.update({ estado: 'anulado' }, { transaction: t });
-
       } else {
-        console.log('ℹ️ [INFO] No se encontró movimiento de referido para esta cotización.');
+        console.log('ℹ️ [INFO] No se encontró un movimiento de comisión para esta cotización.');
       }
-    } else {
-      console.log('ℹ️ [INFO] El usuario no tiene referidor asociado.');
     }
 
-    // ✅ Confirmar transacción
+    // 🟩 Guardar cambios
     await t.commit();
-    console.log('✅ [DEBUG] Pago denegado y transacción revertida correctamente');
 
-    return res.status(200).json({
+    const successResponse = {
       success: true,
-      message: 'Pago denegado correctamente. Todos los cambios han sido revertidos.'
-    });
+      message: 'Pago denegado correctamente. Todos los cambios han sido revertidos.',
+      detalles: {
+        id_cotizacion,
+        id_solicitud,
+        id_usuario,
+        monto_credito_devuelto: monto_credito_usado
+      }
+    };
+
+    console.log('✅ [DENEGAR PAGO] Proceso completado:', successResponse);
+
+    return res.status(200).json(successResponse);
 
   } catch (error) {
     await t.rollback();
-    console.error('[ERROR] Error al denegar pago:', error);
+
+    console.error('❌ [DENEGAR PAGO] Error crítico:', {
+      error: error.message,
+      stack: error.stack
+    });
 
     return res.status(500).json({
       success: false,

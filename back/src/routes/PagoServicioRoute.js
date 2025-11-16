@@ -22,7 +22,7 @@ router.post("/procesar", [
     body("monto_credito").isFloat().withMessage("El monto de crédito debe ser un número entero"),
     body("id_cuenta").isInt().withMessage("El ID de la cuenta debe ser un número entero"),
     body("num_comprobante").isString().withMessage("El número de comprobante debe ser una cadena de texto"),
-    body("descuento_membresia").isFloat().withMessage("El descuento por membresía debe ser un número decimal"),
+    body("descuento_membresia").optional().isFloat().withMessage("El descuento por membresía debe ser un número decimal"),
     body("monto_manodeobra").isFloat().withMessage("El monto de mano de obra debe ser un número decimal"),
     body("id_usuario").isInt().withMessage("El ID del usuario debe ser un número entero"),
     body("nombre").isString().withMessage("El nombre del usuario debe ser una cadena de texto"),

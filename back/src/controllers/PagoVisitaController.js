@@ -17,14 +17,25 @@ const obtenerPagos = async (req, res) => {
 
         // Construcción de condiciones
         const whereCondition = {};
+        const whereClauses = [];
         
         // Filtro por mes (año y mes)
         if (month) {
             const [year, monthNum] = month.split('-').map(Number);
-            whereCondition[Op.and] = [
+            whereClauses.push(
                 Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('PagoVisita.fecha')), year),
                 Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('PagoVisita.fecha')), monthNum)
-            ];
+            );
+        }
+        
+        // Filtro por estado
+        if (req.query.estado) {
+            whereClauses.push({ estado: req.query.estado });
+        }
+        
+        // Combinar condiciones con AND
+        if (whereClauses.length > 0) {
+            whereCondition[Op.and] = whereClauses;
         }
 
         // Obtener el conteo total
