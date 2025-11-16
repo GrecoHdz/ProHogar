@@ -96,7 +96,7 @@ const processPayment = async (req, res) => {
               id_cotizacion,
               tipo: 'ingreso_referido',
               monto: comision_referido_calc,
-              estado: 'completado'
+              estado: 'pendiente'
             },
             transaction: t
           });
@@ -110,7 +110,7 @@ const processPayment = async (req, res) => {
                 tipo: 'ingreso_referido',
                 monto: comision_referido_calc,
                 descripcion: `Comisión por referido - ${nombre || ''}`,
-                estado: 'completado',
+                estado: 'pendiente',
                 fecha: new Date()
               },
               { transaction: t }

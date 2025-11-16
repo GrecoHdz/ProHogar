@@ -13,7 +13,8 @@ const getAllCotizaciones = async (req, res) => {
 
         // Construir condiciones de búsqueda
         const whereCondition = {
-            id_cuenta: { [Op.ne]: null }  // Solo cotizaciones con id_cuenta no nulo
+            id_cuenta: { [Op.ne]: null },  // Solo cotizaciones con id_cuenta no nulo
+            estado: { [Op.in]: ['rechazado', 'pagado', 'confirmado'] },  // Excluir cotizaciones pendientes
         };
         const andConditions = [];
 
@@ -62,7 +63,7 @@ const getAllCotizaciones = async (req, res) => {
                 attributes: [
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'confirmado' THEN 1 END)"), 'aprobados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
-                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pagado' THEN 1 END)"), 'pendientes'],
                     [Sequelize.literal("SUM(CASE WHEN estado = 'confirmado' THEN (monto_manodeobra - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)) ELSE 0 END)"), 'total']
                 ],
                 where: whereCondition,

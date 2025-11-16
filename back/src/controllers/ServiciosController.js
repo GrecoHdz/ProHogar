@@ -40,10 +40,17 @@ const obtenerServicioPorId = async (req, res) => {
 const crearServicio = async (req, res) => {
     try {
         const servicio = await Servicio.create(req.body);
-        res.json(servicio);
+        res.json({ 
+            success: true,
+            message: 'Servicio creado correctamente',
+            data: servicio 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al crear el servicio" });
+        res.status(500).json({ 
+            success: false,
+            error: "Error al crear el servicio" 
+        });
     }
 };
 
@@ -52,13 +59,23 @@ const actualizarServicio = async (req, res) => {
     try {
         const servicio = await Servicio.findByPk(req.params.id);
         if (!servicio) {
-            return res.status(404).json({ error: "Servicio no encontrado" });
+            return res.status(404).json({ 
+                success: false,
+                error: "Servicio no encontrado" 
+            });
         }
         await servicio.update(req.body);
-        res.json(servicio);
+        res.json({ 
+            success: true,
+            message: 'Servicio actualizado correctamente',
+            data: servicio 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al actualizar el servicio" });
+        res.status(500).json({ 
+            success: false,
+            error: "Error al actualizar el servicio" 
+        });
     }
 };
 
@@ -67,13 +84,22 @@ const eliminarServicio = async (req, res) => {
     try {
         const servicio = await Servicio.findByPk(req.params.id);
         if (!servicio) {
-            return res.status(404).json({ error: "Servicio no encontrado" });
+            return res.status(404).json({ 
+                success: false,
+                error: "Servicio no encontrado" 
+            });
         }
         await servicio.destroy();
-        res.json({ message: "Servicio eliminado correctamente" });
+        res.json({ 
+            success: true,
+            message: "Servicio eliminado correctamente" 
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al eliminar el servicio" });
+        res.status(500).json({ 
+            success: false,
+            error: "Error al eliminar el servicio" 
+        });
     }
 };
 

@@ -97,10 +97,10 @@ const obtenerPagos = async (req, res) => {
             // Consulta de estadísticas
             PagoVisita.findAll({
                 attributes: [
-                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pagado' THEN 1 END)"), 'aprobados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'aceptado' THEN 1 END)"), 'aprobados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
-                    [Sequelize.literal("SUM(CASE WHEN estado = 'pagado' THEN monto ELSE 0 END)"), 'total']
+                    [Sequelize.literal("SUM(CASE WHEN estado = 'aceptado' THEN monto ELSE 0 END)"), 'total']
                 ],
                 where: whereCondition,
                 raw: true

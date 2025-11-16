@@ -6,7 +6,7 @@ const obtenerBeneficios = async (req, res) => {
     try {
         // Obtener beneficios de la base de datos
         const benefits = await MembresiaBeneficio.findAll({
-            attributes: ['mes_requerido', 'tipo_beneficio', 'descripcion'],
+            attributes: ['id_beneficio', 'mes_requerido', 'tipo_beneficio', 'descripcion'],
             raw: true
         });
 
