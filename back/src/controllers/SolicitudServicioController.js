@@ -585,7 +585,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             {
                 model: Usuario,
                 as: 'cliente',
-                attributes: ['nombre','telefono'] 
+                attributes: ['id_usuario','nombre','telefono'] 
             }],
             order: [['fecha_solicitud', 'DESC']],
             limit: parseInt(limit),
