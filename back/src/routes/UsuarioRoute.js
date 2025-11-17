@@ -89,7 +89,7 @@ router.post("/",
     validarErrores, 
     crearUsuario);
 
-//Actualizar Usuario
+// En UsuarioRoute.js
 router.put("/:id", 
     [
         param("id").isString().withMessage("El ID debe ser una cadena de caracteres"), 
@@ -99,9 +99,13 @@ router.put("/:id",
         body("telefono").optional().isString().withMessage("El telefono debe ser una cadena de caracteres"), 
         body("password_hash").optional().isString().withMessage("El password_hash debe ser una cadena de caracteres"),
         body("id_ciudad").optional().isInt().withMessage("El id_ciudad debe ser un numero entero"),
-        body("activo").optional().isString().withMessage("El activo debe ser un string")
+        body("id_rol").optional().isInt().withMessage("El id_rol debe ser un número entero"),
+        body("estado").optional().isString().withMessage("El estado debe ser una cadena de caracteres")
     ], 
-    validarErrores,authMiddleware,actualizarUsuario);
+    validarErrores, 
+    authMiddleware, 
+    actualizarUsuario
+);
 
 //Actualizar Contraseña
 router.put("/cambio-clave/:id", 

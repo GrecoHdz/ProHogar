@@ -176,7 +176,7 @@ const obtenerRetiros = async (req, res) => {
                 id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
                 monto: monto,
                 fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
-                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                estado: estadoNormalizado,
                 tipo: datosMovimiento.tipo,
                 nombre_usuario: datosMovimiento.usuario ? 
                     `${datosMovimiento.usuario.nombre || ''}`.trim() : 
@@ -387,7 +387,8 @@ const getAllMovimientos = async (req, res) => {
                 'estado', 
                 'tipo', 
                 'id_cotizacion', 
-                'id_usuario'
+                'id_usuario',
+                'descripcion'
             ],
             raw: false,
             distinct: true

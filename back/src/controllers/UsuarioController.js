@@ -153,9 +153,13 @@ const obtenerUsuarios = async (req, res) => {
                     'SELECT COUNT(DISTINCT id_usuario) as usuarios_que_solicitaron_servicios FROM solicitudservicio',
                     { type: sequelize.QueryTypes.SELECT }
                 ),
-                // Contar técnicos activos
+                // Contar técnicos activos (usuarios con rol de tecnico que están activos)
                 sequelize.query(
-                    'SELECT COUNT(DISTINCT id_tecnico) as tecnicos_activos FROM solicitudservicio WHERE id_tecnico IS NOT NULL',
+                    `SELECT COUNT(DISTINCT u.id_usuario) as tecnicos_activos 
+                     FROM usuario u
+                     INNER JOIN roles r ON u.id_rol = r.id_rol
+                     WHERE u.estado = 'activo' 
+                     AND r.nombre_rol = 'tecnico'`,
                     { type: sequelize.QueryTypes.SELECT }
                 ),
                 // Contar usuarios con membresías activas
@@ -957,37 +961,44 @@ const actualizarUsuario = async (req, res) => {
         email, 
         telefono, 
         id_ciudad,
+        id_rol,
         password_hash,
         activo,
         estado 
     } = req.body;
     
     if (!id) {
-        return res.status(400).json({ error: "Se requiere el ID del usuario" });
+        return res.status(400).json({ 
+            status: 400,
+            error: "Se requiere el ID del usuario" 
+        });
     }
     
     try {
         const usuario = await Usuario.findByPk(id);
         if (!usuario) {
             return res.status(404).json({ 
+                status: 404,
                 error: "Usuario no encontrado",
-                idBuscado: id
+                message: `No se encontró un usuario con el ID: ${id}`
             });
         }
         
         // Actualizar solo los campos que se proporcionaron en el body
-        if (nombre) usuario.nombre = nombre;
-        if (identidad) usuario.identidad = identidad;
-        if (email) usuario.email = email;
-        if (telefono) usuario.telefono = telefono;
-        if (id_ciudad) usuario.id_ciudad = id_ciudad;
+        if (nombre !== undefined) usuario.nombre = nombre;
+        if (identidad !== undefined) usuario.identidad = identidad;
+        if (email !== undefined) usuario.email = email;
+        if (telefono !== undefined) usuario.telefono = telefono;
+        if (id_ciudad !== undefined) usuario.id_ciudad = id_ciudad;
+        if (id_rol !== undefined) usuario.id_rol = id_rol;
+        
         if (password_hash) {
-            // Si se proporciona una nueva contraseña, hashearla
             const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
             usuario.password_hash = hashedPassword;
         }
+        
         if (activo !== undefined) usuario.activo = activo;
-        if (estado) usuario.estado = estado;
+        if (estado !== undefined) usuario.estado = estado;
         
         await usuario.save();
         
@@ -1003,34 +1014,28 @@ const actualizarUsuario = async (req, res) => {
     } catch (error) {
         console.error("Error al actualizar usuario:", error);
         
-        // Manejar errores de duplicación
         if (error.name === 'SequelizeUniqueConstraintError' || error.code === 'ER_DUP_ENTRY') {
             let field = 'dato';
             let value = '';
             
-            // Extraer el campo duplicado del mensaje de error
             const match = error.original?.message?.match(/Duplicate entry '(.+?)' for key '(.+?)'/);
             if (match) {
                 value = match[1];
                 const keyName = match[2];
                 
-                // Mapear el nombre del índice al nombre del campo
                 if (keyName.includes('telefono')) field = 'teléfono';
                 else if (keyName.includes('email')) field = 'correo electrónico';
                 else if (keyName.includes('identidad')) field = 'número de identidad';
                 
-                const message = `El ${field} "${value}" ya está en uso por otro usuario`;
-                
                 return res.status(400).json({ 
                     status: 400,
                     error: "Error de validación",
-                    message: message,
+                    message: `El ${field} "${value}" ya está en uso por otro usuario`,
                     field: field
                 });
             }
         }
         
-        // Manejar otros errores de validación de Sequelize
         if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
             const errors = error.errors.map(err => ({
                 field: err.path,
@@ -1045,7 +1050,6 @@ const actualizarUsuario = async (req, res) => {
             });
         }
         
-        // Para otros errores
         res.status(500).json({ 
             status: 500,
             error: "Error al actualizar el perfil",
@@ -1054,7 +1058,6 @@ const actualizarUsuario = async (req, res) => {
         });
     }
 };
- 
 // Actualizar contraseña con verificación de contraseña actual
 const actualizarPassword = async (req, res) => {
     console.log('Solicitud de cambio de contraseña recibida:', {

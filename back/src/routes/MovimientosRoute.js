@@ -100,7 +100,7 @@ router.post("/", [
 //Actualizar movimiento
 router.put("/:id", [
     param("id").isInt().withMessage("El id debe ser un numero entero"), 
-    body("estado").optional().isIn(["pendiente", "completado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
+    body("estado").optional().isIn(["pendiente", "completado","rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
 ], validarErrores, actualizarMovimiento);
 
 //Eliminar movimiento
