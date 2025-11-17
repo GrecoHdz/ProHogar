@@ -14,11 +14,6 @@ const {
 } = require("../controllers/notificacionesController");
 
 // ============================================================
-// Middleware de autenticación
-// ============================================================
-router.use(authMiddleware);
-
-// ============================================================
 // Middleware para validar errores
 // ============================================================
 const validarErrores = (req, res, next) => {
@@ -45,6 +40,7 @@ router.get(
       .withMessage("El ID de usuario debe ser un número entero positivo"),
   ],
   validarErrores,
+  authMiddleware,
   obtenerPorUsuario
 );
 
@@ -66,32 +62,39 @@ router.post(
       .withMessage("El campo 'creado_por' es requerido"),
   ],
   validarErrores,
+  authMiddleware,
   crearNotificacion
 );
-
-// 4️⃣ Enviar notificación (a usuario, por rol o global)
+ 
+// 4️⃣ Enviar notificación (ID, rol, global o automática por título)
 router.post(
   "/enviar",
-  [
+  [ 
     body("id_notificacion")
+      .optional()
       .isInt({ min: 1 })
-      .withMessage("Debe indicar una notificación válida (id_notificacion)"),
+      .withMessage("El ID de notificación debe ser un número entero positivo"), 
+    body("titulo")
+      .optional()
+      .isString()
+      .withMessage("El título debe ser una cadena válida"), 
     body("id_usuario")
       .optional()
       .isInt({ min: 1 })
-      .withMessage("El id_usuario debe ser un número entero positivo"),
+      .withMessage("El ID de usuario debe ser un número válido"), 
     body("nombre_rol")
       .optional()
       .isString()
-      .withMessage("El nombre_rol debe ser una cadena de texto"),
+      .withMessage("El nombre del rol debe ser un texto válido"), 
     body("global")
       .optional()
       .isBoolean()
-      .withMessage("El campo 'global' debe ser booleano"),
+      .withMessage("El campo global debe ser true o false"),
   ],
   validarErrores,
   enviarNotificacion
 );
+
 
 // 5️⃣ Marcar notificación como leída
 router.put(
@@ -102,6 +105,7 @@ router.put(
       .withMessage("El ID de usuario debe ser un número entero positivo"),
   ],
   validarErrores,
+  authMiddleware,
   marcarComoLeida
 );
 
@@ -114,13 +118,15 @@ router.delete(
       .withMessage("El ID debe ser un número entero positivo"),
   ],
   validarErrores,
+  authMiddleware,
   eliminarNotificacion
 );
 
 // 7️⃣ Eliminar todas las notificaciones leídas
-router.delete("/eliminar/leidas", eliminarLeidas);
+router.delete("/eliminar/leidas", authMiddleware, eliminarLeidas);
 
 // 8️⃣ Obtener notificaciones creadas manualmente
-router.get("/manuales", obtenerCreadasManualmente);
+router.get("/manuales", authMiddleware, obtenerCreadasManualmente); 
+
 
 module.exports = router;

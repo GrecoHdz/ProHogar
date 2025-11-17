@@ -146,20 +146,38 @@ const crearNotificacion = async (req, res) => {
 };
 
 // ============================================================
-// 4️⃣ Enviar notificación (a un usuario, a rol o global)
+// 4️⃣ Enviar notificación (a un usuario, a rol, global o automática por título)
 // ============================================================
 const enviarNotificacion = async (req, res) => {
-  const { id_notificacion, id_usuario, nombre_rol, global } = req.body;
-  // 🔹 id_notificacion → notificación ya existente
-  // 🔹 id_usuario → si es para un usuario específico
-  // 🔹 nombre_rol → si se envía a todos los de un rol
-  // 🔹 global → si es para todos (sin registros por usuario)
+  let { id_notificacion, titulo, id_usuario, nombre_rol, global } = req.body;
 
   const t = await sequelize.transaction();
 
   try {
-    // Verificar que la notificación exista
-    const notificacion = await Notificacion.findByPk(id_notificacion);
+    let notificacion = null;
+
+    // 🔍 1️⃣ Buscar notificación si viene por título (automática)
+    if (!id_notificacion && titulo) {
+      notificacion = await Notificacion.findOne({
+        where: { titulo },
+        raw: true,
+      });
+
+      if (!notificacion) {
+        return res.status(404).json({
+          success: false,
+          message: `No se encontró una notificación con el título '${titulo}'`,
+        });
+      }
+
+      id_notificacion = notificacion.id_notificacion;
+    }
+
+    // 🔍 2️⃣ Verificar notificación si se envía por ID
+    if (!notificacion) {
+      notificacion = await Notificacion.findByPk(id_notificacion, { raw: true });
+    }
+
     if (!notificacion) {
       return res.status(404).json({
         success: false,
@@ -169,7 +187,7 @@ const enviarNotificacion = async (req, res) => {
 
     let destinatarios = [];
 
-    // 📍 Enviar a un usuario específico
+    // 📍 3️⃣ Enviar a un usuario específico
     if (id_usuario && !global && !nombre_rol) {
       destinatarios.push({
         id_notificacion,
@@ -181,7 +199,7 @@ const enviarNotificacion = async (req, res) => {
       });
     }
 
-    // 📍 Enviar a todos los usuarios de un rol específico
+    // 📍 4️⃣ Enviar a todos los usuarios de un rol
     else if (nombre_rol && !global) {
       const rolUsuario = await Rol.findOne({
         where: { nombre_rol },
@@ -211,7 +229,7 @@ const enviarNotificacion = async (req, res) => {
       }));
     }
 
-    // 🌍 Enviar como notificación global (sin usuarios)
+    // 🌍 5️⃣ Enviar como notificación global (sin usuarios)
     else if (global) {
       destinatarios.push({
         id_notificacion,
@@ -221,14 +239,18 @@ const enviarNotificacion = async (req, res) => {
         fecha_creacion: new Date(),
         fecha_leido: null,
       });
-    } else {
+    }
+
+    // ❌ Sin destinatarios
+    else {
       return res.status(400).json({
         success: false,
-        message: "Debes especificar id_usuario, nombre_rol o global=true",
+        message:
+          "Debes especificar id_usuario, nombre_rol o global=true. También puedes usar 'titulo' en lugar de id_notificacion.",
       });
     }
 
-    // Guardar los destinatarios
+    // 💾 Guardar destinatarios
     await NotificacionDestinatario.bulkCreate(destinatarios, { transaction: t });
 
     await t.commit();
@@ -238,6 +260,7 @@ const enviarNotificacion = async (req, res) => {
       message: "Notificación enviada correctamente",
       data: {
         id_notificacion,
+        titulo: notificacion.titulo,
         cantidad_destinatarios: destinatarios.length,
       },
     });
@@ -247,9 +270,11 @@ const enviarNotificacion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error al enviar notificación",
+      error: error.message,
     });
   }
 };
+
 
 // ============================================================
 // 🔹 Obtener notificaciones creadas manualmente (no del sistema)
@@ -378,7 +403,7 @@ const eliminarLeidas = async (req, res) => {
     console.error("Error al eliminar notificaciones leídas:", error);
     res.status(500).json({ success: false, message: "Error al eliminar notificaciones leídas" });
   }
-};
+}; 
 
 // ============================================================
 // Exportar funciones
@@ -391,5 +416,5 @@ module.exports = {
   enviarNotificacion,
   marcarComoLeida,
   eliminarNotificacion,
-  eliminarLeidas,
+  eliminarLeidas
 };
