@@ -11,7 +11,7 @@ const {
   eliminarNotificacion,
   eliminarLeidas,
   obtenerCreadasManualmente
-} = require("../controllers/notificacionesController");
+} = require("../controllers/NotificacionesController");
 
 // ============================================================
 // Middleware para validar errores

@@ -59,6 +59,7 @@ const getCalificacionesPorUsuario = async (req, res) => {
             calificacion: cal.calificacion,
             comentario: cal.comentario || '',
             fecha: cal.fecha,
+            id_servicio: cal.calificacionsolicitud?.id_solicitud || 'Id',
             nombre_servicio: cal.calificacionsolicitud?.servicio?.nombre || 'Servicio',
             nombre_cliente: cal.calificacionsolicitud?.cliente?.nombre || 'Cliente'
         }));

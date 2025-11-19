@@ -24,9 +24,27 @@ const obtenerTodas = async (req, res) => {
           model: Usuario,
           as: 'usuario',
           attributes: ['nombre'],
-          required: false
+          required: false,
+          include: [{
+            model: Rol,
+            as: 'rol',
+            attributes: [],
+            where: {
+              nombre_rol: {
+                [Op.ne]: 'Admin' // Excluir usuarios con rol de administrador
+              }
+            },
+            required: false
+          }]
         }
       ],
+      where: {
+        // Solo incluir notificaciones para usuarios no administradores o notificaciones globales
+        [Op.or]: [
+          { id_usuario: null }, // Notificaciones globales
+          { '$usuario.rol.nombre_rol$': { [Op.ne]: 'Administrador' } } // Usuarios que no son administradores
+        ]
+      },
       attributes: ['id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
       order: [["fecha_creacion", "DESC"]],
       raw: true,

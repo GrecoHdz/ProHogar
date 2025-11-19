@@ -727,7 +727,7 @@ const obtenerEstadisticasDashboard = async (req, res) => {
     }
 };
 
-// Obtener movimientos para el tecnico
+// Obtener movimientos para el tecnico 
 const getMovimientosPorUsuario = async (req, res) => {
     try {
         const { mes, tipo, page = 1, limit = 10 } = req.query;
@@ -739,33 +739,33 @@ const getMovimientosPorUsuario = async (req, res) => {
         const offset = (pageNum - 1) * limitNum;
 
         const year = new Date().getFullYear();
-        const mesAjustado = parseInt(mes) - 1; // Ajustar el mes (0-11)
+        const mesAjustado = parseInt(mes) - 1;
         const startDate = new Date(year, mesAjustado, 1);
         const endDate = new Date(year, mesAjustado + 1, 0, 23, 59, 59);
         
-        // Configurar condiciones de búsqueda
+        // Condiciones base
         const where = {
-            id_usuario: id_usuario,
+            id_usuario,
             fecha: {
                 [Op.between]: [startDate, endDate]
             }
         };
 
-        // Filtrar por tipo si se especifica
+        // Filtros por tipo
         const esRetiro = tipo === 'retiros';
         const esIngreso = tipo === 'ingresos';
         
         if (esRetiro) where.tipo = 'retiro';
         if (esIngreso) where.tipo = 'ingreso';
 
-        // Configuración base de la consulta
+        // Configuración de consulta base
         const queryOptions = {
             where,
             order: [['fecha', 'DESC']],
             raw: false
         };
 
-        // Incluir relaciones necesarias para ingresos
+        // Si es ingreso, incluir relaciones
         if (esIngreso) {
             queryOptions.include = [{
                 model: Cotizacion,
@@ -784,163 +784,142 @@ const getMovimientosPorUsuario = async (req, res) => {
                     }]
                 }]
             }];
-            
-            // Asegurar que se incluyan los IDs de las relaciones
-            queryOptions.attributes = {
-                include: ['id_cotizacion']
-            };
-            
-            // Incluir los atributos necesarios del movimiento
+
             queryOptions.attributes = ['id_movimiento', 'monto', 'fecha', 'estado', 'tipo', 'id_cotizacion'];
-            queryOptions.raw = false;
         }
 
-        // Obtener total de registros para la paginación
-        const total = await Movimiento.count({ 
+        // Obtener total de registros para paginación
+        const total = await Movimiento.count({
             where: queryOptions.where,
             distinct: true,
-            col: 'id_movimiento' // Asegurar que cuente por el ID del movimiento
+            col: 'id_movimiento'
         });
-        
+
         const totalPages = Math.ceil(total / limitNum);
 
-        // Aplicar paginación a la consulta
+        // Aplicar paginación
         queryOptions.limit = limitNum;
         queryOptions.offset = offset;
-        queryOptions.distinct = true; // Importante para evitar duplicados en la paginación
+        queryOptions.distinct = true;
 
-        // Obtener movimientos con paginación
-        const { count, rows: movimientos } = await Movimiento.findAndCountAll({
+        // Obtener movimientos paginados
+        const { rows: movimientos } = await Movimiento.findAndCountAll({
             ...queryOptions,
-            // Solo obtener los IDs primero
             attributes: ['id_movimiento', 'id_cotizacion', 'tipo', 'monto', 'fecha', 'estado']
         });
-        
-        // Cargar las relaciones para cada movimiento
-        const movimientosConRelaciones = await Promise.all(movimientos.map(async movimiento => {
-            const include = [];
-            
-            if (movimiento.tipo === 'ingreso' && movimiento.id_cotizacion) {
-                // Cargar la cotización con sus relaciones
-                const cotizacion = await Cotizacion.findByPk(movimiento.id_cotizacion, {
-                    include: [{
-                        model: SolicitudServicio,
-                        as: 'solicitud',
-                        attributes: ['colonia', 'id_servicio', 'id_solicitud'],
+
+        // Cargar relaciones manualmente
+        const movimientosConRelaciones = await Promise.all(
+            movimientos.map(async mov => {
+                if (mov.tipo === 'ingreso' && mov.id_cotizacion) {
+                    const cotizacion = await Cotizacion.findByPk(mov.id_cotizacion, {
                         include: [{
-                            model: Servicio,
-                            as: 'servicio',
-                            attributes: ['nombre']
+                            model: SolicitudServicio,
+                            as: 'solicitud',
+                            attributes: ['colonia', 'id_servicio', 'id_solicitud'],
+                            include: [{
+                                model: Servicio,
+                                as: 'servicio',
+                                attributes: ['nombre']
+                            }]
                         }]
-                    }]
-                });
-                
-                return {
-                    ...movimiento.get({ plain: true }),
-                    cotizacion: cotizacion ? cotizacion.get({ plain: true }) : null
-                };
-            }
-            
-            return movimiento.get({ plain: true });
-        }));
-        
-        // Formatear la respuesta
-        const movimientosFormateados = movimientosConRelaciones.map(datosMovimiento => {
-            const esIngreso = datosMovimiento.tipo === 'ingreso';
-            const esRetiro = datosMovimiento.tipo === 'retiro';
-            
-            // Asegurar que el estado esté en minúsculas para consistencia
-            const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
-            
+                    });
+
+                    return {
+                        ...mov.get({ plain: true }),
+                        cotizacion: cotizacion ? cotizacion.get({ plain: true }) : null
+                    };
+                }
+                return mov.get({ plain: true });
+            })
+        );
+
+        // FORMATEAR RESULTADO PARA LA TABLA
+        const movimientosFormateados = movimientosConRelaciones.map(datos => {
+            const esIngreso = datos.tipo === 'ingreso';
+            const esRetiro = datos.tipo === 'retiro';
+            const estadoNormalizado = (datos.estado || '').toLowerCase();
+
             const base = {
-                id_movimiento: datosMovimiento.id_movimiento,
-                monto: parseFloat(datosMovimiento.monto).toFixed(2),
-                fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
+                id_movimiento: datos.id_movimiento,
+                monto: parseFloat(datos.monto).toFixed(2),
+                fecha: new Date(datos.fecha).toISOString().split('T')[0],
                 estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
-                tipo: datosMovimiento.tipo
+                tipo: datos.tipo
             };
 
-            // Agregar campos específicos para ingresos
             if (esIngreso) {
-                const cotizacion = datosMovimiento.cotizacion;
-                
-                if (cotizacion) {
-                    const solicitud = cotizacion.solicitud;
-                    
-                    if (solicitud) {
-                        const colonia = solicitud.colonia;
-                        const servicio = solicitud.servicio;
-                        
-                        // Agregar datos específicos de ingreso
-                        Object.assign(base, {
-                            colonia: colonia || 'Sin colonia especificada',
-                            servicio: servicio ? servicio.nombre : 'Servicio no especificado'
-                        });
-                    } else {
-                        // Si no hay solicitud, establecer valores por defecto
-                        Object.assign(base, {
-                            colonia: 'Sin colonia especificada',
-                            servicio: 'Servicio no especificado'
-                        });
-                    }
-                } else {
-                    Object.assign(base, {
-                        colonia: 'Sin colonia especificada',
-                        servicio: 'Servicio no especificado'
-                    });
-                }
-            } 
-            // Agregar campos específicos para retiros
-            else if (esRetiro) {
-                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+                const cot = datos.cotizacion;
+                const sol = cot?.solicitud;
+
+                Object.assign(base, {
+                    colonia: sol?.colonia || 'Sin colonia especificada',
+                    servicio: sol?.servicio?.nombre || 'Servicio no especificado'
+                });
+            } else if (esRetiro) {
+                base.descripcion = datos.descripcion || 'Retiro de fondos';
             }
 
             return base;
         });
 
-        // Calcular totales
-        const totales = movimientosFormateados.reduce((acc, mov) => {
-            const monto = parseFloat(mov.monto) || 0;
-            
-            // Para ingresos, verificar estado === 'completado'
-            if (mov.tipo === 'ingreso' && mov.estado?.toLowerCase() === 'completado') {
-                acc.ingresos += monto;
-            }
-            
-            // Para retiros, verificar estado === 'completado'
-            if (mov.tipo === 'retiro' && mov.estado?.toLowerCase() === 'completado') {
-                acc.retiros += monto;
-            }
-            
-            return acc;
-        }, { ingresos: 0, retiros: 0 });
+        // ============================
+        // 🔥 CALCULAR TOTALES DEL MES COMPLETO (sin paginación)
+        // ============================
+        const totalesReales = await Movimiento.findAll({
+            where: {
+                id_usuario,
+                fecha: {
+                    [Op.between]: [startDate, endDate]
+                }
+            },
+            attributes: [
+                'tipo',
+                'estado',
+                [Sequelize.fn('SUM', Sequelize.col('monto')), 'total']
+            ],
+            group: ['tipo', 'estado'],
+            raw: true
+        });
 
-        // Respuesta final
+        let totalIngresos = 0;
+        let totalRetiros = 0;
+
+        totalesReales.forEach(item => {
+            const completado = (item.estado || '').toLowerCase() === 'completado';
+            const monto = parseFloat(item.total) || 0;
+
+            if (item.tipo === 'ingreso' && completado) totalIngresos += monto;
+            if (item.tipo === 'retiro' && completado) totalRetiros += monto;
+        });
+
+        // RESPUESTA FINAL
         res.json({
             success: true,
             data: movimientosFormateados,
             summary: {
-                totalIngresos: totales.ingresos.toFixed(2),
-                totalRetiros: totales.retiros.toFixed(2),
+                totalIngresos: totalIngresos.toFixed(2),
+                totalRetiros: totalRetiros.toFixed(2),
                 mes: startDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
             },
             pagination: {
-                total: total,
+                total,
                 page: pageNum,
                 limit: limitNum,
-                totalPages: totalPages
+                totalPages
             }
         });
 
     } catch (error) {
         console.error('Error en getMovimientosPorUsuario:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener los movimientos del usuario',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
+
 
 //Obtener ingresos mensuales por tecnico
 const getIngresosMensuales = async (req, res) => {
