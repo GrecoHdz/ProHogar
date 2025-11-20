@@ -170,12 +170,32 @@ const obtenerSolicitudesServicios = async (req, res) => {
       // Filtro por búsqueda
       if (req.query.search) {
         const searchTerm = req.query.search;
-        andConditions.push({
-          [Op.or]: [
-            { id_solicitud: { [Op.like]: `%${searchTerm}%` } },
-            { '$cliente.nombre$': { [Op.like]: `%${searchTerm}%` } }
-          ]
+        
+        // Buscar usuarios que coincidan con el término de búsqueda
+        const usuarios = await Usuario.findAll({
+          where: {
+            nombre: { [Op.like]: `%${searchTerm}%` }
+          },
+          attributes: ['id_usuario'],
+          raw: true
         });
+        
+        const idsUsuarios = usuarios.map(u => u.id_usuario);
+        
+        // Si hay usuarios que coinciden, buscar por ID de usuario
+        if (idsUsuarios.length > 0) {
+          andConditions.push({
+            [Op.or]: [
+              { id_solicitud: { [Op.like]: `%${searchTerm}%` } },
+              { id_usuario: { [Op.in]: idsUsuarios } }
+            ]
+          });
+        } else {
+          // Si no hay usuarios que coincidan, buscar solo por ID de solicitud
+          andConditions.push({
+            id_solicitud: { [Op.like]: `%${searchTerm}%` }
+          });
+        }
       }
   
       // Combinar condiciones
@@ -185,16 +205,9 @@ const obtenerSolicitudesServicios = async (req, res) => {
   
       // Obtener estadísticas de solicitudes por estado
       const [total, stats] = await Promise.all([
-        // 1️⃣ Obtener el conteo total con include (para evitar el error del alias)
+        // 1️⃣ Obtener el conteo total sin incluir la relación para evitar problemas con el JOIN
         SolicitudServicio.count({
           where: whereCondition,
-          include: [
-            {
-              model: Usuario,
-              as: 'cliente',
-              attributes: []
-            }
-          ],
           distinct: true,
           col: 'id_solicitud'
         }),
