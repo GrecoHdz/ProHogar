@@ -433,10 +433,13 @@ const forgotPassword = async (req, res) => {
       attributes: ['id_usuario', 'nombre', 'email']
     });
 
+    // Por seguridad, siempre devolvemos éxito aunque el correo no exista
+    // Esto evita que se puedan enumerar correos electrónicos
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'No se encontró ningún usuario con ese correo electrónico'
+      console.log(`Intento de recuperación para correo no registrado: ${email}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Si el correo existe, se ha enviado un enlace de restablecimiento.'
       });
     }
 
