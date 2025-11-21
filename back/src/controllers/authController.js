@@ -2,11 +2,29 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
 const Usuario = require('../models/usuariosModel');
 const Rol = require('../models/rolesModel');
 const RefreshToken = require('../models/refreshtokenModel');
 const Ciudad = require('../models/ciudadesModel');
+
+// Configuración del transporte de correo
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true para el puerto 465, false para otros puertos
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    // No fallar en certificados inválidos
+    rejectUnauthorized: false
+  }
+});
 
 // Generar un token de acceso
 const generateAccessToken = (user) => {
@@ -404,4 +422,189 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
-module.exports = { login, refreshToken, logout, getCurrentUser };
+// Enviar correo para restablecer contraseña
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Buscar el usuario por email
+    const user = await Usuario.findOne({
+      where: { email },
+      attributes: ['id_usuario', 'nombre', 'email']
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se encontró ningún usuario con ese correo electrónico'
+      });
+    }
+
+    // Generar token de restablecimiento
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora de expiración
+
+    // Guardar el token en la base de datos
+    await user.update({
+      reset_password_token: resetToken,
+      reset_password_expires: resetTokenExpiry
+    });
+
+    // Crear el enlace de restablecimiento
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    
+    // Configurar el correo electrónico
+    const mailOptions = {
+      from: `"HogarSeguro" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: 'Restablece tu contraseña de HogarSeguro',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #10B981;">Restablece tu contraseña</h2>
+          <p>Hola ${user.nombre},</p>
+          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de HogarSeguro.</p>
+          <p>Por favor, haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+          <p>
+            <a href="${resetUrl}" 
+               style="display: inline-block; padding: 10px 20px; background-color: #10B981; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0;">
+              Restablecer contraseña
+            </a>
+          </p>
+          <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
+          <p>Este enlace expirará en 1 hora.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+          <p style="color: #718096; font-size: 0.9em;">
+            Si el botón no funciona, copia y pega esta URL en tu navegador:<br>
+            ${resetUrl}
+          </p>
+        </div>
+      `
+    };
+
+    // Enviar el correo electrónico
+    await transporter.sendMail(mailOptions);
+    
+    console.log('Correo de recuperación enviado a:', user.email);
+
+    res.status(200).json({
+      success: true,
+      message: 'Se ha enviado un enlace de restablecimiento a tu correo electrónico',
+      // En producción, no envíes el token en la respuesta
+      resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined
+    });
+
+  } catch (error) {
+    console.error('Error en forgotPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al procesar la solicitud de restablecimiento de contraseña',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Verificar token de restablecimiento
+const verifyResetToken = async (req, res) => {
+  const { token } = req.params;
+
+  if (!token) {
+    return res.status(400).json({
+      valid: false,
+      message: 'Token no proporcionado'
+    });
+  }
+
+  try {
+    // Buscar usuario por token
+    const user = await Usuario.findOne({
+      where: {
+        reset_password_token: token
+      },
+      attributes: ['id_usuario', 'email', 'reset_password_expires']
+    });
+
+    if (!user) {
+      return res.status(200).json({
+        valid: false,
+        message: 'El enlace de restablecimiento es inválido'
+      });
+    }
+
+    // Verificar si el token ha expirado
+    const now = new Date();
+    if (user.reset_password_expires < now) {
+      return res.status(200).json({
+        valid: false,
+        message: 'El enlace de restablecimiento ha expirado'
+      });
+    }
+
+    res.status(200).json({
+      valid: true,
+      message: 'Token válido'
+    });
+  } catch (error) {
+    console.error('Error al verificar el token de restablecimiento:', error);
+    res.status(500).json({
+      valid: false,
+      message: 'Error al verificar el token de restablecimiento',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Restablecer contraseña
+const resetPassword = async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  try {
+    // Buscar usuario por token y verificar que no haya expirado
+    const user = await Usuario.findOne({
+      where: {
+        reset_password_token: token,
+        reset_password_expires: { [Op.gt]: new Date() }
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'El enlace de restablecimiento es inválido o ha expirado'
+      });
+    }
+
+    // Hashear la nueva contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Actualizar la contraseña y limpiar el token
+    await user.update({
+      password_hash: hashedPassword,
+      reset_password_token: null,
+      reset_password_expires: null
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Contraseña restablecida exitosamente'
+    });
+
+  } catch (error) {
+    console.error('Error en resetPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al restablecer la contraseña'
+    });
+  }
+};
+
+module.exports = { 
+  login, 
+  refreshToken, 
+  logout, 
+  getCurrentUser, 
+  forgotPassword, 
+  resetPassword,
+  verifyResetToken 
+};

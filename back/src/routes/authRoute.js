@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, refreshToken, logout, getCurrentUser } = require('../controllers/authController');
+const { login, refreshToken, logout, getCurrentUser, forgotPassword, resetPassword, verifyResetToken } = require('../controllers/authController');
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require('../middleware/authMiddleware');
 
@@ -32,6 +32,25 @@ router.post('/logout',
 router.get('/me',
     authMiddleware, // Requiere autenticación
     getCurrentUser
+);
+
+// Ruta para solicitar restablecimiento de contraseña
+router.post('/forgot-password',
+    [
+        body('email', 'Por favor incluye un correo electrónico válido').isEmail()
+    ],
+    forgotPassword
+);
+
+// Ruta para verificar token de restablecimiento
+router.get('/verify-reset-token/:token', verifyResetToken);
+
+// Ruta para restablecer la contraseña con token
+router.post('/reset-password/:token',
+    [
+        body('password', 'La contraseña debe tener al menos 6 caracteres').isLength({ min: 6 })
+    ],
+    resetPassword
 );
 
 module.exports = router;
