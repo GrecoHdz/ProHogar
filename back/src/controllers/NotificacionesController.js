@@ -6,7 +6,7 @@ const Usuario = require("../models/usuariosModel"); // opcional si manejas roles
 const Rol = require("../models/rolesModel");
 
 // ============================================================
-// 1️⃣ Obtener todas las notificaciones
+// 1️⃣ Obtener todas las notificaciones del sistema
 // ============================================================
 const obtenerTodas = async (req, res) => {
   try {
@@ -15,63 +15,55 @@ const obtenerTodas = async (req, res) => {
         {
           model: Notificacion,
           attributes: ['titulo', 'creado_por'],
-          where: {
-            creado_por: 'Sistema'
-          },
+          where: { creado_por: 'Sistema' },
           required: true
         },
         {
           model: Usuario,
           as: 'usuario',
           attributes: ['nombre'],
-          required: false,
+          required: true,
           include: [{
             model: Rol,
             as: 'rol',
             attributes: [],
             where: {
-              nombre_rol: {
-                [Op.ne]: 'Admin' // Excluir usuarios con rol de administrador
-              }
+              nombre_rol: { [Op.ne]: 'Administrador' }
             },
-            required: false
+            required: true
           }]
         }
       ],
-      where: {
-        // Solo incluir notificaciones para usuarios no administradores o notificaciones globales
-        [Op.or]: [
-          { id_usuario: null }, // Notificaciones globales
-          { '$usuario.rol.nombre_rol$': { [Op.ne]: 'Administrador' } } // Usuarios que no son administradores
-        ]
-      },
-      attributes: ['id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
-      order: [["fecha_creacion", "DESC"]],
+      attributes: ['id_destinatario_notificacion', 'id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
+      order: [['fecha_creacion', 'DESC']],
       raw: true,
       nest: true
     });
 
-    // Formatear la respuesta para incluir solo los datos necesarios
     const notificacionesFormateadas = notificaciones.map(notif => ({
-      id: notif.id_notificacion_destinatario,
+      id: notif.id_destinatario_notificacion,
       titulo: notif.Notificacion.titulo,
-      nombreUsuario: notif.usuario ? 
-        `${notif.usuario.nombre}` : 
-        'Usuario no encontrado',
+      nombreUsuario: notif.usuario.nombre,
       fecha: notif.fecha_creacion,
       leido: notif.leido,
       fechaLeido: notif.fecha_leido
     }));
 
-    res.json({ success: true, data: notificacionesFormateadas });
+    res.json({
+      success: true,
+      data: notificacionesFormateadas
+    });
   } catch (error) {
     console.error("Error al obtener notificaciones:", error);
-    res.status(500).json({ success: false, message: "Error al obtener notificaciones" });
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener notificaciones"
+    });
   }
 };
 
 // ============================================================
-// 2️⃣ Obtener notificaciones por usuario (personales + globales)
+// 2️⃣ Obtener notificaciones por usuario (simplificado)
 // ============================================================
 const obtenerPorUsuario = async (req, res) => {
   const { id_usuario } = req.params;
@@ -88,13 +80,8 @@ const obtenerPorUsuario = async (req, res) => {
           required: true
         }
       ],
-      where: {
-        [Op.or]: [
-          { id_usuario },
-          { global: true }
-        ]
-      },
-      attributes: ['id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
+      where: { id_usuario },
+      attributes: ['id_destinatario_notificacion', 'id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
       order: [['fecha_creacion', 'DESC']],
       limit,
       offset,
@@ -103,21 +90,19 @@ const obtenerPorUsuario = async (req, res) => {
     });
 
     const totalPages = Math.ceil(count / limit);
-    
+
     // Contar notificaciones no leídas
     const unreadCount = await NotificacionDestinatario.count({
       where: {
-        [Op.or]: [
-          { id_usuario, leido: false },
-          { global: true, leido: false }
-        ]
+        id_usuario,
+        leido: false
       }
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       data: notificaciones.map(notif => ({
-        id: notif.id_notificacion_destinatario,
+        id: notif.id_destinatario_notificacion,
         titulo: notif.Notificacion.titulo,
         fecha: notif.fecha_creacion,
         leido: notif.leido,
@@ -135,15 +120,15 @@ const obtenerPorUsuario = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al obtener notificaciones por usuario:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error al obtener notificaciones del usuario" 
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener notificaciones del usuario"
     });
   }
 };
 
 // ============================================================
-// 3️⃣ Crear Notificación (solo registro base, sin destinatarios)
+// 3️⃣ Crear Notificación (solo registro base)
 // ============================================================
 const crearNotificacion = async (req, res) => {
   const { tipo, titulo, creado_por } = req.body;
@@ -153,53 +138,60 @@ const crearNotificacion = async (req, res) => {
       tipo,
       titulo,
       creado_por,
-      fecha_creacion: new Date(),
+      fecha_creacion: new Date()
     });
 
-    res.json({ success: true, data: nueva });
+    res.json({
+      success: true,
+      data: nueva
+    });
   } catch (error) {
     console.error("Error al crear notificación:", error);
-    res.status(500).json({ success: false, message: "Error al crear notificación" });
+    res.status(500).json({
+      success: false,
+      message: "Error al crear notificación"
+    });
   }
 };
 
 // ============================================================
-// 4️⃣ Enviar notificación (a un usuario, a rol, global o automática por título)
+// 4️⃣ Enviar notificación (a usuario, rol o global)
 // ============================================================
 const enviarNotificacion = async (req, res) => {
   let { id_notificacion, titulo, id_usuario, nombre_rol, global } = req.body;
-
   const t = await sequelize.transaction();
 
   try {
     let notificacion = null;
 
-    // 🔍 1️⃣ Buscar notificación si viene por título (automática)
+    // 🔍 1️⃣ Buscar notificación por título si no viene ID
     if (!id_notificacion && titulo) {
       notificacion = await Notificacion.findOne({
         where: { titulo },
-        raw: true,
+        raw: true
       });
 
       if (!notificacion) {
+        await t.rollback();
         return res.status(404).json({
           success: false,
-          message: `No se encontró una notificación con el título '${titulo}'`,
+          message: `No se encontró una notificación con el título '${titulo}'`
         });
       }
 
       id_notificacion = notificacion.id_notificacion;
     }
 
-    // 🔍 2️⃣ Verificar notificación si se envía por ID
+    // 🔍 2️⃣ Verificar que la notificación existe
     if (!notificacion) {
       notificacion = await Notificacion.findByPk(id_notificacion, { raw: true });
     }
 
     if (!notificacion) {
+      await t.rollback();
       return res.status(404).json({
         success: false,
-        message: "La notificación especificada no existe",
+        message: "La notificación especificada no existe"
       });
     }
 
@@ -210,66 +202,75 @@ const enviarNotificacion = async (req, res) => {
       destinatarios.push({
         id_notificacion,
         id_usuario,
-        global: false,
         leido: false,
         fecha_creacion: new Date(),
-        fecha_leido: null,
+        fecha_leido: null
       });
     }
-
     // 📍 4️⃣ Enviar a todos los usuarios de un rol
     else if (nombre_rol && !global) {
       const rolUsuario = await Rol.findOne({
         where: { nombre_rol },
-        attributes: ["id_rol"],
-        raw: true,
+        attributes: ['id_rol'],
+        raw: true
       });
 
       if (!rolUsuario) {
+        await t.rollback();
         return res.status(404).json({
           success: false,
-          message: `No se encontró el rol '${nombre_rol}'`,
+          message: `No se encontró el rol '${nombre_rol}'`
         });
       }
 
       const usuarios = await Usuario.findAll({
         where: { id_rol: rolUsuario.id_rol },
-        attributes: ["id_usuario"],
+        attributes: ['id_usuario']
       });
 
-      destinatarios = usuarios.map((u) => ({
+      destinatarios = usuarios.map(u => ({
         id_notificacion,
         id_usuario: u.id_usuario,
-        global: false,
         leido: false,
         fecha_creacion: new Date(),
-        fecha_leido: null,
+        fecha_leido: null
       }));
     }
-
-    // 🌍 5️⃣ Enviar como notificación global (sin usuarios)
+    // 🌍 5️⃣ Enviar como notificación global (a TODOS los usuarios)
     else if (global) {
-      destinatarios.push({
+      const todosUsuarios = await Usuario.findAll({
+        attributes: ['id_usuario']
+      });
+
+      if (todosUsuarios.length === 0) {
+        await t.rollback();
+        return res.status(404).json({
+          success: false,
+          message: "No hay usuarios registrados para enviar la notificación global"
+        });
+      }
+
+      destinatarios = todosUsuarios.map(u => ({
         id_notificacion,
-        id_usuario: null,
-        global: true,
+        id_usuario: u.id_usuario,
         leido: false,
         fecha_creacion: new Date(),
-        fecha_leido: null,
-      });
+        fecha_leido: null
+      }));
     }
-
-    // ❌ Sin destinatarios
+    // ❌ Sin destinatarios válidos
     else {
+      await t.rollback();
       return res.status(400).json({
         success: false,
-        message:
-          "Debes especificar id_usuario, nombre_rol o global=true. También puedes usar 'titulo' en lugar de id_notificacion.",
+        message: "Debes especificar id_usuario, nombre_rol o global=true. También puedes usar 'titulo' en lugar de id_notificacion."
       });
     }
 
-    // 💾 Guardar destinatarios
-    await NotificacionDestinatario.bulkCreate(destinatarios, { transaction: t });
+    // 💾 Guardar todos los destinatarios
+    await NotificacionDestinatario.bulkCreate(destinatarios, {
+      transaction: t
+    });
 
     await t.commit();
 
@@ -280,7 +281,8 @@ const enviarNotificacion = async (req, res) => {
         id_notificacion,
         titulo: notificacion.titulo,
         cantidad_destinatarios: destinatarios.length,
-      },
+        tipo_envio: global ? 'Global' : (nombre_rol ? `Rol: ${nombre_rol}` : 'Usuario individual')
+      }
     });
   } catch (error) {
     await t.rollback();
@@ -288,56 +290,52 @@ const enviarNotificacion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error al enviar notificación",
-      error: error.message,
+      error: error.message
     });
   }
 };
 
-
 // ============================================================
-// 🔹 Obtener notificaciones creadas manualmente (no del sistema)
+// 5️⃣ Obtener notificaciones creadas manualmente (no del sistema)
 // ============================================================
 const obtenerCreadasManualmente = async (req, res) => {
-    try {
-      const notificaciones = await Notificacion.findAll({
-        where: {
-          creado_por: {
-            [Op.ne]: "Sistema", // distinto de 'Sistema'
-          },
-        },
-        order: [["fecha_creacion", "DESC"]],
-        attributes: ["id_notificacion", "tipo", "titulo", "creado_por", "fecha_creacion"],
-      });
-  
-      res.json({ success: true, data: notificaciones });
-    } catch (error) {
-      console.error("Error al obtener notificaciones creadas manualmente:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error al obtener notificaciones creadas manualmente",
-      });
-    }
-  };
-  
+  try {
+    const notificaciones = await Notificacion.findAll({
+      where: {
+        creado_por: { [Op.ne]: 'Sistema' }
+      },
+      order: [['fecha_creacion', 'DESC']],
+      attributes: ['id_notificacion', 'tipo', 'titulo', 'creado_por', 'fecha_creacion']
+    });
+
+    res.json({
+      success: true,
+      data: notificaciones
+    });
+  } catch (error) {
+    console.error("Error al obtener notificaciones creadas manualmente:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener notificaciones creadas manualmente"
+    });
+  }
+};
+
 // ============================================================
-// 5️⃣ Marcar todas las notificaciones de un usuario como leídas
+// 6️⃣ Marcar todas las notificaciones de un usuario como leídas
 // ============================================================
 const marcarComoLeida = async (req, res) => {
   console.log('=== SOLICITUD RECIBIDA ===');
   console.log('Método:', req.method);
   console.log('URL:', req.originalUrl);
-  console.log('Headers:', {
-    'content-type': req.headers['content-type'],
-    'authorization': req.headers['authorization'] ? '*** (token presente)' : 'No presente'
-  });
   console.log('Body recibido:', req.body);
-  
+
   const { id_usuario } = req.body;
 
   if (!id_usuario) {
-    const errorResponse = { 
-      success: false, 
-      message: "Se requiere el ID de usuario" 
+    const errorResponse = {
+      success: false,
+      message: "Se requiere el ID de usuario"
     };
     console.log('=== RESPUESTA DE ERROR ===', errorResponse);
     return res.status(400).json(errorResponse);
@@ -345,20 +343,20 @@ const marcarComoLeida = async (req, res) => {
 
   try {
     const [updatedCount] = await NotificacionDestinatario.update(
-      { 
-        leido: true, 
-        fecha_leido: new Date() 
+      {
+        leido: true,
+        fecha_leido: new Date()
       },
-      { 
-        where: { 
+      {
+        where: {
           id_usuario,
-          leido: false // Solo actualizar las no leídas
-        } 
+          leido: false
+        }
       }
     );
-    
-    const successResponse = { 
-      success: true, 
+
+    const successResponse = {
+      success: true,
       message: `Se marcaron ${updatedCount} notificaciones como leídas`,
       updatedCount
     };
@@ -366,10 +364,10 @@ const marcarComoLeida = async (req, res) => {
     return res.json(successResponse);
   } catch (error) {
     console.error("Error al marcar notificaciones como leídas:", error);
-    const errorResponse = { 
-      success: false, 
+    const errorResponse = {
+      success: false,
       message: "Error al actualizar notificaciones",
-      error: error.message 
+      error: error.message
     };
     console.log('=== RESPUESTA DE ERROR ===', errorResponse);
     res.status(500).json(errorResponse);
@@ -377,51 +375,75 @@ const marcarComoLeida = async (req, res) => {
 };
 
 // ============================================================
-// 6️⃣ Eliminar una notificación (y sus destinatarios)
+// 7️⃣ Eliminar una notificación y todos sus destinatarios
 // ============================================================
 const eliminarNotificacion = async (req, res) => {
   const { id_notificacion } = req.params;
-
   const t = await sequelize.transaction();
+
   try {
-    await NotificacionDestinatario.destroy({
+    const deleted = await NotificacionDestinatario.destroy({
       where: { id_notificacion },
-      transaction: t,
+      transaction: t
     });
 
     await Notificacion.destroy({
       where: { id_notificacion },
-      transaction: t,
+      transaction: t
     });
 
     await t.commit();
 
-    res.json({ success: true, message: "Notificación eliminada correctamente" });
+    res.json({
+      success: true,
+      message: "Notificación eliminada correctamente",
+      destinatarios_eliminados: deleted
+    });
   } catch (error) {
     await t.rollback();
     console.error("Error al eliminar notificación:", error);
-    res.status(500).json({ success: false, message: "Error al eliminar notificación" });
+    res.status(500).json({
+      success: false,
+      message: "Error al eliminar notificación"
+    });
   }
 };
 
 // ============================================================
-// 7️⃣ Eliminar todas las notificaciones leídas
+// 8️⃣ Eliminar todas las notificaciones leídas
 // ============================================================
 const eliminarLeidas = async (req, res) => {
   try {
     const eliminadas = await NotificacionDestinatario.destroy({
-      where: { leido: true },
+      where: { leido: true }
     });
 
     res.json({
       success: true,
-      message: `Se eliminaron ${eliminadas} notificaciones leídas.`,
+      message: `Se eliminaron ${eliminadas} notificaciones leídas.`
     });
   } catch (error) {
     console.error("Error al eliminar notificaciones leídas:", error);
-    res.status(500).json({ success: false, message: "Error al eliminar notificaciones leídas" });
+    res.status(500).json({
+      success: false,
+      message: "Error al eliminar notificaciones leídas"
+    });
   }
-}; 
+};
+
+// ============================================================
+// EXPORTS
+// ============================================================
+module.exports = {
+  obtenerTodas,
+  obtenerPorUsuario,
+  crearNotificacion,
+  enviarNotificacion,
+  obtenerCreadasManualmente,
+  marcarComoLeida,
+  eliminarNotificacion,
+  eliminarLeidas
+};
 
 // ============================================================
 // Exportar funciones

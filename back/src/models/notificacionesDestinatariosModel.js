@@ -15,10 +15,6 @@ const NotificacionDestinatario = sequelize.define("NotificacionDestinatario", {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    global: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false
-    },
     leido: {
         type: DataTypes.BOOLEAN,
         allowNull: false
