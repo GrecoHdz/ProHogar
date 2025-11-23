@@ -128,11 +128,11 @@ const obtenerEstadisticasPagos = async (req, res) => {
 const obtenerSolicitudesServicios = async (req, res) => {
     try {
       // Obtener parámetros de paginación y filtros
-      let limit = parseInt(req.query.limit) || 10; // Por defecto 10 elementos
-      limit = Math.min(limit, 10); // Máximo 100 por rendimiento
+      let limit = parseInt(req.query.limit) || 10;
+      limit = Math.min(limit, 100); // Aumentado a 100 como máximo para mejor rendimiento
       const offset = parseInt(req.query.offset) || 0;
-      const month = req.query.month; // Formato esperado: 'YYYY-MM'
-  
+      const month = req.query.month;
+
       // Construcción de condiciones
       const whereCondition = {};
       const andConditions = [];
@@ -171,7 +171,6 @@ const obtenerSolicitudesServicios = async (req, res) => {
       if (req.query.search) {
         const searchTerm = req.query.search;
         
-        // Buscar usuarios que coincidan con el término de búsqueda
         const usuarios = await Usuario.findAll({
           where: {
             nombre: { [Op.like]: `%${searchTerm}%` }
@@ -182,7 +181,6 @@ const obtenerSolicitudesServicios = async (req, res) => {
         
         const idsUsuarios = usuarios.map(u => u.id_usuario);
         
-        // Si hay usuarios que coinciden, buscar por ID de usuario
         if (idsUsuarios.length > 0) {
           andConditions.push({
             [Op.or]: [
@@ -191,7 +189,6 @@ const obtenerSolicitudesServicios = async (req, res) => {
             ]
           });
         } else {
-          // Si no hay usuarios que coincidan, buscar solo por ID de solicitud
           andConditions.push({
             id_solicitud: { [Op.like]: `%${searchTerm}%` }
           });
@@ -203,16 +200,16 @@ const obtenerSolicitudesServicios = async (req, res) => {
         whereCondition[Op.and] = andConditions;
       }
   
-      // Obtener estadísticas de solicitudes por estado
-      const [total, stats] = await Promise.all([
-        // 1️⃣ Obtener el conteo total sin incluir la relación para evitar problemas con el JOIN
+      // Obtener estadísticas de solicitudes por estado (sin filtros para los contadores históricos)
+      const [total, stats, totalActivos, totalCompletados, totalGeneral] = await Promise.all([
+        // Contador total de solicitudes que coinciden con los filtros actuales
         SolicitudServicio.count({
           where: whereCondition,
           distinct: true,
           col: 'id_solicitud'
         }),
         
-        // Obtener conteo por estado
+        // Estadísticas detalladas por estado (con filtros aplicados)
         SolicitudServicio.findAll({
           attributes: [
             [Sequelize.literal("COUNT(CASE WHEN estado = 'completado' OR estado = 'finalizado' OR estado = 'calificado' THEN 1 END)"), 'aprobados'],
@@ -221,6 +218,34 @@ const obtenerSolicitudesServicios = async (req, res) => {
           ],
           where: whereCondition,
           raw: true
+        }),
+        
+        // Contar TODAS las solicitudes activas (sin filtros)
+        SolicitudServicio.count({
+          where: {
+            estado: {
+              [Op.notIn]: ['finalizado', 'calificado', 'cancelado']
+            }
+          },
+          distinct: true,
+          col: 'id_solicitud'
+        }),
+        
+        // Contar TODAS las solicitudes completadas (sin filtros)
+        SolicitudServicio.count({
+          where: {
+            estado: {
+              [Op.in]: ['finalizado', 'calificado']
+            }
+          },
+          distinct: true,
+          col: 'id_solicitud'
+        }),
+        
+        // Contar TODAS las solicitudes (sin filtros)
+        SolicitudServicio.count({
+          distinct: true,
+          col: 'id_solicitud'
         })
       ]);
       
@@ -232,8 +257,8 @@ const obtenerSolicitudesServicios = async (req, res) => {
         pendientes: parseInt(statsData.pendientes) || 0,
         total: parseInt(statsData.aprobados || 0) + parseInt(statsData.rechazados || 0) + parseInt(statsData.pendientes || 0)
       };
-  
-      // 2️⃣ Obtener los registros paginados
+
+      // Obtener los registros paginados
       const solicitudes = await SolicitudServicio.findAll({
         where: whereCondition,
         include: [
@@ -296,110 +321,85 @@ const obtenerSolicitudesServicios = async (req, res) => {
         order: [['fecha_solicitud', 'DESC']],
         limit,
         offset,
-        raw: true,
-        nest: true
+        distinct: true,  // Asegura que no haya duplicados
+        subQuery: false  // Útil para consultas complejas con includes
       });
-  
-      // 3️⃣ Formatear respuesta
-      const solicitudesFormateadas = solicitudes.map(
-        ({
-          id_servicio,
-          servicio,
-          tecnico,
-          id_usuario,
-          id_tecnico,
-          cliente,
-          id_cliente,
-          ciudad,
-          id_ciudad,
-          calificacion,
-          pagoVisita,
-          cotizacion,
-          ...solicitud
-        }) => ({
-          ...solicitud,
-          servicio: servicio
-            ? {
-                id_servicio: servicio.id_servicio,
-                nombre: servicio.nombre
-              }
-            : null,
-          tecnico: tecnico
-            ? {
-                id_tecnico: tecnico.id_usuario,
-                nombre: tecnico.nombre
-              }
-            : null,
-          cliente: cliente
-            ? {
-                id_cliente: cliente.id_usuario,
-                nombre: cliente.nombre,
-                telefono: cliente.telefono
-              }
-            : null,
-          ciudad: ciudad
-            ? {
-                id_ciudad: ciudad.id_ciudad,
-                nombre: ciudad.nombre_ciudad
-              }
-            : null,
-          calificacion: calificacion
-            ? {
-                calificacion: calificacion.calificacion,
-                comentario: calificacion.comentario
-              }
-            : null,
-          pagoVisita: pagoVisita
-            ? {
-                monto: pagoVisita.monto,
-                num_comprobante: pagoVisita.num_comprobante,
-                fecha: pagoVisita.fecha,
-                cuenta: pagoVisita.cuenta
-                  ? {
-                      banco: pagoVisita.cuenta.banco,
-                      num_cuenta: pagoVisita.cuenta.num_cuenta,
-                      tipo: pagoVisita.cuenta.tipo
-                    }
-                  : null
-              }
-            : null,
-          cotizacion: cotizacion
-            ? {
-                id_cotizacion: cotizacion.id_cotizacion,
-                num_comprobante: cotizacion.num_comprobante,
-                monto_manodeobra: cotizacion.monto_manodeobra,
-                descuento_membresia: cotizacion.descuento_membresia,
-                credito_usado: cotizacion.credito_usado,
-                total:
-                  (cotizacion.monto_manodeobra || 0) -
-                  (cotizacion.descuento_membresia || 0) -
-                  (cotizacion.credito_usado || 0),
-                cuenta: cotizacion.cuenta
-                  ? {
-                      banco: cotizacion.cuenta.banco,
-                      num_cuenta: cotizacion.cuenta.num_cuenta,
-                      tipo: cotizacion.cuenta.tipo
-                    }
-                  : null
-              }
-            : null
-        })
-      );
-  
-      // 4️⃣ Enviar respuesta
+
+      // Formatear respuesta manualmente para mayor control
+      const solicitudesFormateadas = solicitudes.map(solicitud => {
+        const plainSolicitud = solicitud.get({ plain: true });
+        
+        return {
+          ...plainSolicitud,
+          servicio: plainSolicitud.servicio ? {
+            id_servicio: plainSolicitud.servicio.id_servicio,
+            nombre: plainSolicitud.servicio.nombre
+          } : null,
+          tecnico: plainSolicitud.tecnico ? {
+            id_tecnico: plainSolicitud.tecnico.id_usuario,
+            nombre: plainSolicitud.tecnico.nombre
+          } : null,
+          cliente: plainSolicitud.cliente ? {
+            id_cliente: plainSolicitud.cliente.id_usuario,
+            nombre: plainSolicitud.cliente.nombre,
+            telefono: plainSolicitud.cliente.telefono
+          } : null,
+          ciudad: plainSolicitud.ciudad ? {
+            id_ciudad: plainSolicitud.ciudad.id_ciudad,
+            nombre: plainSolicitud.ciudad.nombre_ciudad
+          } : null,
+          calificacion: plainSolicitud.calificacion ? {
+            calificacion: plainSolicitud.calificacion.calificacion,
+            comentario: plainSolicitud.calificacion.comentario
+          } : null,
+          pagoVisita: plainSolicitud.pagoVisita ? {
+            monto: plainSolicitud.pagoVisita.monto,
+            num_comprobante: plainSolicitud.pagoVisita.num_comprobante,
+            fecha: plainSolicitud.pagoVisita.fecha,
+            cuenta: plainSolicitud.pagoVisita.cuenta ? {
+              banco: plainSolicitud.pagoVisita.cuenta.banco,
+              num_cuenta: plainSolicitud.pagoVisita.cuenta.num_cuenta,
+              tipo: plainSolicitud.pagoVisita.cuenta.tipo
+            } : null
+          } : null,
+          cotizacion: plainSolicitud.cotizacion ? {
+            id_cotizacion: plainSolicitud.cotizacion.id_cotizacion,
+            num_comprobante: plainSolicitud.cotizacion.num_comprobante,
+            monto_manodeobra: plainSolicitud.cotizacion.monto_manodeobra,
+            descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
+            credito_usado: plainSolicitud.cotizacion.credito_usado,
+            total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
+                   (plainSolicitud.cotizacion.descuento_membresia || 0) -
+                   (plainSolicitud.cotizacion.credito_usado || 0),
+            cuenta: plainSolicitud.cotizacion.cuenta ? {
+              banco: plainSolicitud.cotizacion.cuenta.banco,
+              num_cuenta: plainSolicitud.cotizacion.cuenta.num_cuenta,
+              tipo: plainSolicitud.cotizacion.cuenta.tipo
+            } : null
+          } : null
+        };
+      });
+
+      // Enviar respuesta con contadores históricos
       res.json({
         data: solicitudesFormateadas,
-        total,
+        total,  // Total de registros que coinciden con los filtros actuales
         page: Math.floor(offset / limit) + 1,
         totalPages: Math.ceil(total / limit),
         hasMore: offset + limit < total,
-        estadisticas: monthlyStats
+        contadores: {
+          total: totalGeneral || 0,  // Total histórico sin filtros
+          activos: totalActivos || 0,  // Activos históricos sin filtros
+          completados: totalCompletados || 0  // Completados históricos sin filtros
+        },
+        estadisticas: monthlyStats  // Estadísticas con filtros aplicados
       });
     } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: 'Error al obtener las solicitudes de servicios' });
+      console.error('Error en obtenerSolicitudesServicios:', error);
+      res.status(500).json({ 
+        error: 'Error al obtener las solicitudes de servicios',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
 };
 
