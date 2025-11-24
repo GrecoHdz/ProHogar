@@ -13,6 +13,7 @@ const {
     getServiciosPorTipo,
     getEstadisticasGenerales,
     getIngresosTotalesReferidos,
+    getTopUsuariosCredito,
     getIngresosyRetirosdeReferidos,
     crearMovimiento,
     actualizarMovimiento,
@@ -71,6 +72,9 @@ router.get("/creditos/:id_usuario", [
     query("startDate").optional().isISO8601().withMessage("La fecha de inicio debe tener un formato válido"),
     query("endDate").optional().isISO8601().withMessage("La fecha de fin debe tener un formato válido")
 ], validarErrores, getTransacciones);
+
+//Obtener top 5 usuarios con más crédito
+router.get("/toptecnicos/creditos", validarErrores, getTopUsuariosCredito);
 
 //Obtener estadisticas generales por tecnico
 router.get("/estadisticas/:id_tecnico", [

@@ -5,6 +5,11 @@ const { Op } = require('sequelize');
 const obtenerRoles = async (req, res) => {
     try {
         const roles = await Rol.findAll({
+            where: {
+                nombre_rol: {
+                    [Op.ne]: 'sa' // Excluir el rol 'sa'
+                }
+            },
             order: [['nombre_rol', 'ASC']]
         });
         res.json(roles);

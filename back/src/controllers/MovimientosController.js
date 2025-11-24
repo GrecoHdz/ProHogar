@@ -7,6 +7,7 @@ const sequelize = require('../config/database');
 const Membresia = require('../models/membresiaModel');
 const PagoVisita = require('../models/pagoVisitaModel');
 const Usuario = require('../models/usuariosModel');
+const Rol = require('../models/rolesModel');
  
 // Obtener todos los retiros con información detallada y filtros
 const obtenerRetiros = async (req, res) => {
@@ -919,8 +920,7 @@ const getMovimientosPorUsuario = async (req, res) => {
         });
     }
 };
-
-
+ 
 //Obtener ingresos mensuales por tecnico
 const getIngresosMensuales = async (req, res) => {
     try {
@@ -962,7 +962,7 @@ const getIngresosMensuales = async (req, res) => {
       console.error('Error en getIngresosMensuales:', error);
       res.status(500).json({ error: 'Error al obtener ingresos mensuales' });
     }
-  };
+};
 
 //Obtener cantidad de servicios por mes
 const getServiciosPorMes = async (req, res) => {
@@ -1511,9 +1511,63 @@ const getTransacciones = async (req, res) => {
     }
   };
   
-  
+const getTopUsuariosCredito = async (req, res) => {
+    try {
+        // Obtener el top 5 de técnicos con más crédito
+        const topUsuarios = await Movimiento.findAll({
+            attributes: [
+                'id_usuario',
+                [Sequelize.literal(`
+                    SUM(CASE 
+                        WHEN Movimiento.tipo IN ('ingreso', 'ingreso_referido') AND Movimiento.estado = 'completado' THEN Movimiento.monto 
+                        WHEN Movimiento.tipo = 'retiro' AND Movimiento.estado = 'completado' THEN -Movimiento.monto 
+                        ELSE 0 
+                    END)
+                `), 'saldo_total']
+            ],
+            group: ['Movimiento.id_usuario'],
+            order: [['saldo_total', 'DESC']],
+            limit: 5,
+            include: [{
+                model: Usuario,
+                as: 'usuario',
+                attributes: ['nombre'],
+                include: [{
+                    model: Rol,   
+                    as: 'rol', 
+                    where: {
+                        nombre_rol: 'tecnico'  
+                    },
+                    attributes: [] 
+                }],
+                required: true
+            }],
+            raw: true,
+            nest: true
+        });
 
+        // Formatear la respuesta
+        const resultado = topUsuarios.map(item => ({ 
+            nombre: item.usuario?.nombre ? 
+                   `${item.usuario.nombre}`.trim() : 
+                   'Técnico sin nombre',
+            saldo_total: parseFloat(item.saldo_total) || 0
+        }));
 
+        res.json({
+            success: true,
+            data: resultado
+        });
+
+    } catch (error) {
+        console.error('Error al obtener top técnicos por crédito:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener el top de técnicos por crédito',
+            details: error.message
+        });
+    }
+};
 // Función para ajustar fechas a la zona horaria local
 const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
     if (!fecha) return null;
@@ -1760,6 +1814,7 @@ module.exports = {
     getMovimientosPorUsuario,
     getIngresosMensuales,
     getServiciosPorMes,
+    getTopUsuariosCredito,
     getServiciosPorTipo,
     getEstadisticasGenerales,
     getIngresosTotalesReferidos,
