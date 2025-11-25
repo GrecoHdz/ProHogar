@@ -84,7 +84,8 @@ router.post("/",
         body("email").isString().withMessage("El email debe ser una cadena de caracteres"), 
         body("telefono").isString().withMessage("El telefono debe ser una cadena de caracteres"), 
         body("id_ciudad").isInt().withMessage("El id_ciudad debe ser un numero entero"),
-        body("password_hash").isString().withMessage("El password_hash debe ser una cadena de caracteres")
+        body("password_hash").isString().withMessage("El password_hash debe ser una cadena de caracteres"),
+        body("es_tecnico").isBoolean().withMessage("El es_tecnico debe ser un booleano")
     ], 
     validarErrores, 
     crearUsuario);

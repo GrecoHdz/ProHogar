@@ -454,7 +454,7 @@ const forgotPassword = async (req, res) => {
     });
 
     // Crear el enlace de restablecimiento
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URLL}/reset-password/${resetToken}`;
     
     // Configurar el correo electrónico
     const mailOptions = {

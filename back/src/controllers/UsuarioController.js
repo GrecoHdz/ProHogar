@@ -692,72 +692,42 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
 
 //Crear Usuario
 const crearUsuario = async (req, res) => {
-    // Obtener el ID del rol de Cliente por defecto
-    let rolCliente;
-    try {
-        rolCliente = await Rol.findOne({
-            where: { nombre_rol: 'Usuario' },
-            attributes: ['id_rol'],
-            raw: true
-        });
-
-        if (!rolCliente) {
-            return res.status(500).json({
-                success: false,
-                error: 'No se pudo determinar el rol por defecto (Usuario)'
-            });
-        }
-    } catch (error) {
-        console.error("Error al obtener el rol de Cliente:", error);
-        return res.status(500).json({
-            success: false,
-            error: 'Error al obtener el rol por defecto',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-
     const { 
         nombre, 
-        id_rol = rolCliente.id_rol, // Usar el ID del rol de Cliente por defecto
         identidad, 
         email, 
         telefono, 
         password_hash,
-        id_ciudad
+        id_ciudad,
+        es_tecnico 
     } = req.body;
-    
-    // Validar campos requeridos
-    const camposRequeridos = [
-        { campo: 'nombre', mensaje: 'El nombre es requerido' },
-        { campo: 'identidad', mensaje: 'El número de identidad es requerido' },
-        { campo: 'email', mensaje: 'El correo electrónico es requerido' },
-        { campo: 'telefono', mensaje: 'El teléfono es requerido' },
-        { campo: 'password_hash', mensaje: 'La contraseña es requerida' },
-        { campo: 'id_ciudad', mensaje: 'La ciudad es requerida' }
-    ];
-    
-    // Verificar campos requeridos
-    for (const { campo, mensaje } of camposRequeridos) {
-        if (!req.body[campo]) {
-            return res.status(400).json({
-                status: 400,
-                error: "Error de validación",
-                message: mensaje,
-                field: campo
+     
+    let rolAsignado;
+    try {
+        const nombreRol = es_tecnico ? 'Tecnico' : 'Usuario';
+        
+        rolAsignado = await Rol.findOne({
+            where: { nombre_rol: nombreRol },
+            attributes: ['id_rol'],
+            raw: true
+        });
+
+        if (!rolAsignado) {
+            return res.status(500).json({
+                success: false,
+                error: `No se pudo determinar el rol ${nombreRol}`
             });
         }
-    }
-    
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        return res.status(400).json({
-            status: 400,
-            error: "Error de validación",
-            message: "El formato del correo electrónico no es válido",
-            field: 'email'
+    } catch (error) {
+        console.error("Error al obtener el rol:", error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al obtener el rol',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
+
+    const id_rol = rolAsignado.id_rol;
     
     try {
         // Verificar si ya existe un usuario con el mismo email, teléfono o identidad
@@ -806,8 +776,9 @@ const crearUsuario = async (req, res) => {
         
         res.status(201).json({
             status: 201,
-            message: "Usuario creado exitosamente",
-            id_usuario: usuario.id_usuario
+            message: `${es_tecnico ? 'Técnico' : 'Usuario'} creado exitosamente`,
+            id_usuario: usuario.id_usuario,
+            rol: es_tecnico ? 'Tecnico' : 'Usuario'
         });
     } catch (error) {
         console.error("Error al crear usuario:", error);
@@ -865,7 +836,6 @@ const crearUsuario = async (req, res) => {
     }
 };
 
-// ...
 // Obtener datos para Gráfico de crecimiento de usuarios
 const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
     try {
