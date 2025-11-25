@@ -70,7 +70,7 @@ const obtenerMembresias = async (req, res) => {
                     {
                         model: Usuario,
                         as: 'usuario',
-                        attributes: ['nombre', 'telefono']
+                        attributes: ['id_usuario', 'nombre', 'telefono']
                     },
                     {
                         model: Cuenta,

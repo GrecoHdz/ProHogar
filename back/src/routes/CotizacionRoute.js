@@ -49,7 +49,7 @@ router.get("/solicitud/:id_solicitud", [
 //Crear Cotizacion 
 router.post("/", [ 
     body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo"), 
-    body("monto_manodeobra").isFloat({ min: 1 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
+    body("monto_manodeobra").isFloat({ min: 0 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
     body("monto_materiales").isFloat({ min: 0 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("comentario").isString().withMessage("El comentario debe ser una cadena de caracteres"),
     body("fecha").isISO8601().withMessage("La fecha debe tener un formato válido (ISO 8601)"),
@@ -60,8 +60,8 @@ router.put("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
     body("id_cuenta").optional().isInt({ min: 1 }).withMessage("El ID de la cuenta debe ser un número entero positivo"),
     body("num_comprobante").optional().isString().withMessage("El número de comprobante debe ser una cadena de caracteres"),
-    body("monto_manodeobra").optional().isFloat({ min: 1 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
-    body("monto_materiales").optional().isFloat({ min: 1 }).withMessage("El monto de materiales debe ser un número entero positivo"),
+    body("monto_manodeobra").optional().isFloat({ min: 0 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
+    body("monto_materiales").optional().isFloat({ min: 0 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("descuento_membresia").optional().isFloat({ min: 0 }).withMessage("El descuento de membresia debe ser un número entero positivo"),
     body("credito_usado").optional().isFloat({ min: 0 }).withMessage("El crédito usado debe ser un número entero positivo"),
     body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres"), 

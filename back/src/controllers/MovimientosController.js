@@ -845,7 +845,7 @@ const getMovimientosPorUsuario = async (req, res) => {
                 id_movimiento: datos.id_movimiento,
                 monto: parseFloat(datos.monto).toFixed(2),
                 fecha: new Date(datos.fecha).toISOString().split('T')[0],
-                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                estado: estadoNormalizado === 'completado' ? 'Completado' : estadoNormalizado === 'rechazado' ? 'Rechazado' : 'Pendiente',
                 tipo: datos.tipo
             };
 
