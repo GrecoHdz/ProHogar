@@ -82,7 +82,12 @@ const getAllCotizaciones = async (req, res) => {
                             {
                                 model: require('../models/usuariosModel'),
                                 as: 'cliente',
-                                attributes: ['id_usuario', 'nombre', 'telefono', 'email']
+                                attributes: ['id_usuario', 'nombre', 'telefono']
+                            },
+                            {
+                                model: require('../models/usuariosModel'),
+                                as: 'tecnico',
+                                attributes: ['id_usuario', 'nombre', 'telefono']
                             },
                             {
                                 model: require('../models/serviciosModel'),
@@ -156,12 +161,16 @@ const getAllCotizaciones = async (req, res) => {
                 cliente: solicitud.cliente ? {
                     id_usuario: solicitud.cliente.id_usuario,
                     nombre: solicitud.cliente.nombre,
-                    telefono: solicitud.cliente.telefono,
-                    email: solicitud.cliente.email
+                    telefono: solicitud.cliente.telefono
                 } : null,
                 servicio: solicitud.servicio ? {
                     id_servicio: solicitud.servicio.id_servicio,
                     nombre: solicitud.servicio.nombre
+                } : null,
+                tecnico: solicitud.tecnico ? {
+                    id_usuario: solicitud.tecnico.id_usuario,
+                    nombre: solicitud.tecnico.nombre,
+                    telefono: solicitud.tecnico.telefono
                 } : null,
                 ciudad: solicitud.ciudad ? {
                     id_ciudad: solicitud.ciudad.id_ciudad,
