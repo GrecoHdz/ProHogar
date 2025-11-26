@@ -15,6 +15,7 @@ const CreditoUsuario = require('./creditoUsuariosModel');
 const Referido = require('./referidosModel');
 const Notificacion = require('./notificacionesModel');
 const NotificacionDestinatario = require('./notificacionesDestinatariosModel');
+const Config = require('./configModel');
 
 
 // Función para configurar las asociaciones
@@ -331,6 +332,13 @@ const setupAssociations = () => {
     foreignKey: "id_usuario",
     as: "usuario"
   });
+
+  // Relación Config - Usuario (para referidor predeterminado)
+Config.belongsTo(Usuario, {
+  foreignKey: 'valor',  // This assumes 'valor' in Config stores the user ID
+  as: 'usuario',
+  constraints: false  // This allows the foreign key to reference a non-primary key
+});
   
   console.log('Asociaciones configuradas correctamente');
 };
