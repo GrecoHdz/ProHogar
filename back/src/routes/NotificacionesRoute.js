@@ -8,6 +8,7 @@ const {
   crearNotificacion,
   enviarNotificacion,
   marcarComoLeida,
+  marcarNotificacionIndividual,
   eliminarNotificacion,
   eliminarLeidas,
   obtenerCreadasManualmente
@@ -108,6 +109,20 @@ router.put(
   authMiddleware,
   marcarComoLeida
 );
+
+// Marcar Notificacion indivual como leida 
+router.put(
+  "/marcar/individual",
+  [
+    body("id_destinatario_notificacion")
+      .isInt({ min: 1 })
+      .withMessage("El ID de destinatario de la notificación debe ser un número entero positivo"),
+  ],
+  validarErrores,
+  authMiddleware,
+  marcarNotificacionIndividual
+);
+
 
 // 6️⃣ Eliminar una notificación
 router.delete(

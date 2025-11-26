@@ -76,7 +76,7 @@ const obtenerPorUsuario = async (req, res) => {
       include: [
         {
           model: Notificacion,
-          attributes: ['titulo', 'creado_por'],
+          attributes: ['titulo', 'creado_por', 'tipo'],
           required: true
         }
       ],
@@ -106,7 +106,8 @@ const obtenerPorUsuario = async (req, res) => {
         titulo: notif.Notificacion.titulo,
         fecha: notif.fecha_creacion,
         leido: notif.leido,
-        creadoPor: notif.Notificacion.creado_por
+        creadoPor: notif.Notificacion.creado_por,
+        tipo: notif.Notificacion.tipo
       })),
       pagination: {
         total: count,
@@ -375,6 +376,65 @@ const marcarComoLeida = async (req, res) => {
 };
 
 // ============================================================
+// Marcar una notificación individual como leída
+// ============================================================
+const marcarNotificacionIndividual = async (req, res) => {
+  console.log('=== SOLICITUD RECIBIDA ===');
+  console.log('Método:', req.method);
+  console.log('URL:', req.originalUrl);
+  console.log('Body recibido:', req.body);
+
+  const { id_destinatario_notificacion } = req.body;
+
+  if (!id_destinatario_notificacion) {
+    const errorResponse = {
+      success: false,
+      message: "Se requiere el ID del destinatario de la notificación"
+    };
+    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    return res.status(400).json(errorResponse);
+  }
+
+  try {
+    const [updatedCount] = await NotificacionDestinatario.update(
+      {
+        leido: true,
+        fecha_leido: new Date()
+      },
+      {
+        where: {
+          id_destinatario_notificacion,
+          leido: false
+        }
+      }
+    );
+
+    const successResponse = {
+      success: true,
+      message:
+        updatedCount === 0
+          ? "La notificación ya estaba leída o no existe"
+          : "Notificación marcada como leída",
+      updatedCount
+    };
+
+    console.log('=== RESPUESTA EXITOSA ===', successResponse);
+    return res.json(successResponse);
+
+  } catch (error) {
+    console.error("Error al marcar notificación individual:", error);
+    const errorResponse = {
+      success: false,
+      message: "Error al actualizar la notificación",
+      error: error.message
+    };
+    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    return res.status(500).json(errorResponse);
+  }
+};
+
+
+// ============================================================
 // 7️⃣ Eliminar una notificación y todos sus destinatarios
 // ============================================================
 const eliminarNotificacion = async (req, res) => {
@@ -441,20 +501,8 @@ module.exports = {
   enviarNotificacion,
   obtenerCreadasManualmente,
   marcarComoLeida,
+  marcarNotificacionIndividual,
   eliminarNotificacion,
   eliminarLeidas
 };
-
-// ============================================================
-// Exportar funciones
-// ============================================================
-module.exports = {
-  obtenerTodas,
-  obtenerPorUsuario,
-  obtenerCreadasManualmente,
-  crearNotificacion,
-  enviarNotificacion,
-  marcarComoLeida,
-  eliminarNotificacion,
-  eliminarLeidas
-};
+ 
