@@ -97,10 +97,10 @@ const obtenerPagos = async (req, res) => {
             // Consulta de estadísticas
             PagoVisita.findAll({
                 attributes: [
-                    [Sequelize.literal("COUNT(CASE WHEN estado = 'aceptado' THEN 1 END)"), 'aprobados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'aprobado' THEN 1 END)"), 'aprobados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
-                    [Sequelize.literal("SUM(CASE WHEN estado = 'aceptado' THEN monto ELSE 0 END)"), 'total']
+                    [Sequelize.literal("SUM(CASE WHEN estado = 'aprobado' THEN monto ELSE 0 END)"), 'total']
                 ],
                 where: whereCondition,
                 raw: true
@@ -327,7 +327,7 @@ const confirmarPagoVisita = async (req, res) => {
 
     // 2️⃣ Actualizar estados
     await pagoVisita.update({ 
-      estado: 'pagado'
+      estado: 'aprobado'
     }, { transaction: t });
     
     await SolicitudServicio.update(
@@ -347,12 +347,7 @@ const confirmarPagoVisita = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Pago de visita confirmado correctamente.',
-      detalles: {
-        id_solicitud,
-        nuevo_estado_pago: 'pagado',
-        nuevo_estado_solicitud: 'pendiente_asignacion'
-      }
+      message: 'Pago de visita confirmado correctamente.'
     });
   } catch (error) {
     await t.rollback();
@@ -411,12 +406,7 @@ const denegarPagoVisita = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Pago de visita denegado correctamente.',
-      detalles: {
-        id_solicitud,
-        nuevo_estado_pago: 'rechazado',
-        nuevo_estado_solicitud: 'pendiente_pagovisita'
-      }
+      message: 'Pago de visita denegado correctamente.'
     });
   } catch (error) {
     await t.rollback();
