@@ -16,8 +16,8 @@ const Referido = require('../models/referidosModel');
 const obtenerUsuarios = async (req, res) => {
     try {
         // Obtener parámetros de paginación y búsqueda
-        let limit = parseInt(req.query.limit) || 10;
-        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        let limit = parseInt(req.query.limit) || 100;
+        limit = Math.min(limit, 100); // Máximo 10 por rendimiento
         const offset = parseInt(req.query.offset) || 0;
         const estado = req.query.estado;
         const rol = req.query.rol;
@@ -68,7 +68,7 @@ const obtenerUsuarios = async (req, res) => {
             Usuario.findAll({
                 where: whereCondition,
                 attributes: { 
-                    exclude: ['password_hash', 'id_ciudad', 'id_rol'],
+                    exclude: ['password_hash', 'id_ciudad', 'reset_password_token', 'reset_password_expires'],
                     include: [
                         // Contar servicios solicitados como cliente
                         [
