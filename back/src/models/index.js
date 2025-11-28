@@ -162,19 +162,6 @@ const setupAssociations = () => {
     onDelete: 'SET NULL'
   });
 
-  // Relación Usuario - Cuenta
-  Usuario.hasOne(Cuenta, { 
-    foreignKey: 'id_usuario',
-    as: 'cuenta'
-  });
-  
-  Cuenta.belongsTo(Usuario, { 
-    foreignKey: 'id_usuario',
-    as: 'usuario',
-    onUpdate: 'CASCADE',
-    onDelete: 'CASCADE'
-  });
-
   // Relación Usuario - Movimiento
   Usuario.hasMany(Movimiento, { 
     foreignKey: 'id_usuario',

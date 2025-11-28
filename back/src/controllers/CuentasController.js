@@ -1,15 +1,29 @@
 const Cuenta = require("../models/cuentasModel");
  
 //Obtener todas las cuentas
-const obtenerCuentas = async (req, res) => {
+const obtenertodaslasCuentas = async (req, res) => {
     try {
         const cuentas = await Cuenta.findAll({
-            attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo', 'activo']
+            attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo','activo']
         });
         res.json(cuentas);
     } catch (error) {
-        console.error("Error al obtener cuentas:", error);
-        res.status(500).json({ error: "Error al obtener cuentas" });
+        console.error("Error al obtener cuentas activas:", error);
+        res.status(500).json({ error: "Error al obtener cuentas activas" });
+    }
+};
+
+//Obtener todas las cuentas activas
+const obtenerCuentas = async (req, res) => {
+    try {
+        const cuentas = await Cuenta.findAll({
+            attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo'],
+            where: {activo: 1},
+        });
+        res.json(cuentas);
+    } catch (error) {
+        console.error("Error al obtener cuentas activas:", error);
+        res.status(500).json({ error: "Error al obtener cuentas activas" });
     }
 };
 
@@ -58,6 +72,7 @@ const eliminarCuenta = async (req, res) => {
 };
 
 module.exports = {
+    obtenertodaslasCuentas,
     obtenerCuentas,
     obtenerCuentaPorId,
     crearCuenta,

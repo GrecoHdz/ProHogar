@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, param, validationResult } = require("express-validator");   
 const { authMiddleware } = require("../middleware/authMiddleware");  
 const { 
+    obtenertodaslasCuentas,
     obtenerCuentas, 
     obtenerCuentaPorId, 
     crearCuenta, 
@@ -23,6 +24,11 @@ const validarErrores = (req, res, next) => {
   
 
 //Obtener todas las cuentas
+router.get("/todas", [ 
+], validarErrores, obtenertodaslasCuentas);
+
+
+//Obtener todas las cuentas activas
 router.get("/", [ 
 ], validarErrores, obtenerCuentas);
 
@@ -34,18 +40,20 @@ router.get("/:id", [
 //Crear cuenta
 router.post("/", [
     body("banco").isString().withMessage("El banco debe ser una cadena de caracteres"),
-    body("beneficiario").optional().isInt().withMessage("El beneficiario debe ser un numero entero"),
+    body("beneficiario").optional().isString().withMessage("El beneficiario debe ser una cadena de caracteres"),
     body("num_cuenta").isString().withMessage("El num_cuenta debe ser una cadena de caracteres"),
-    body("tipo").isString().withMessage("El tipo debe ser una cadena de caracteres")
+    body("tipo").isString().withMessage("El tipo debe ser una cadena de caracteres"),
+    body("activo").isBoolean().withMessage("El tipo debe ser una cadena de caracteres")
 ], validarErrores, crearCuenta);
 
 //Actualizar cuenta
 router.put("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero"),
     body("banco").optional().isString().withMessage("El banco debe ser una cadena de caracteres"),
-    body("beneficiario").optional().isInt().withMessage("El beneficiario debe ser un numero entero"),
+    body("beneficiario").optional().isString().withMessage("El beneficiario debe ser una cadena de caracteres"),
     body("num_cuenta").optional().isString().withMessage("El num_cuenta debe ser una cadena de caracteres"),
-    body("tipo").optional().isString().withMessage("El tipo debe ser una cadena de caracteres")
+    body("tipo").optional().isString().withMessage("El tipo debe ser una cadena de caracteres"),
+    body("activo").optional().isBoolean().withMessage("El tipo debe ser una cadena de caracteres")
 ], validarErrores, actualizarCuenta);
 
 //Eliminar cuenta
