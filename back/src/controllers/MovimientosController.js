@@ -422,11 +422,11 @@ const getAllMovimientos = async (req, res) => {
             let monto;
             if (esIngreso && datosMovimiento.cotizacion) {
                 const cotizacion = datosMovimiento.cotizacion;
-                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
+                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado)
                 const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
                                 parseFloat(cotizacion.descuento_membresia || 0) - 
                                 parseFloat(cotizacion.credito_usado || 0));
-                monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
+                monto = montoBase.toFixed(2);
             } else {
                 monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
             }
@@ -502,11 +502,11 @@ const getAllMovimientos = async (req, res) => {
             let monto;
             if (esIngreso && datosMovimiento.cotizacion) {
                 const cotizacion = datosMovimiento.cotizacion;
-                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
+                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado)
                 const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
                                 parseFloat(cotizacion.descuento_membresia || 0) - 
                                 parseFloat(cotizacion.credito_usado || 0));
-                monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
+                monto = montoBase.toFixed(2);
             } else {
                 monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
             }
@@ -664,7 +664,7 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             // Ingresos por pagos de visita (usa 'fecha' como campo de fecha)
             PagoVisita.sum('monto', {
                 where: {
-                    estado: 'pagado',
+                    estado: 'aprobado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
                             ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
@@ -1572,8 +1572,8 @@ const getTopUsuariosCredito = async (req, res) => {
 const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
     if (!fecha) return null;
     
-    // Si es una cadena de fecha, convertir a objeto Date
-    const date = typeof fecha === 'string' ? new Date(fecha) : fecha;
+    // Si es una cadena de fecha, crear objeto Date en zona horaria local
+    const date = typeof fecha === 'string' ? new Date(fecha + 'T00:00:00') : fecha;
     
     // Crear una nueva fecha ajustada a la zona horaria local
     const fechaLocal = new Date(
@@ -1586,6 +1586,7 @@ const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
         inicioDelDia ? 0 : 999
     );
     
+    // Convertir a ISO string manteniendo la zona horaria local
     return fechaLocal;
 };
 
@@ -1627,7 +1628,7 @@ const obtenerReporteIngresos = async (req, res) => {
             // Ingresos por pagos de visita
             PagoVisita.sum('monto', {
                 where: {
-                    estado: 'pagado',
+                    estado: 'aprobado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
                             ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
@@ -1732,7 +1733,7 @@ const obtenerReporteIngresos = async (req, res) => {
             // Obtener ingresos por visitas
             const ingresosVisitasMes = await PagoVisita.sum('monto', {
                 where: {
-                    estado: 'pagado',
+                    estado: 'aprobado',
                     fecha: { 
                         [Op.between]: [
                             fechaInicio,
@@ -1763,10 +1764,27 @@ const obtenerReporteIngresos = async (req, res) => {
                 return total + (cotizacion.monto_manodeobra - descuento - credito);
             }, 0);
 
+            // Obtener retiros del mes
+            const retirosMes = await Movimiento.sum('monto', {
+                where: {
+                    tipo: 'retiro',
+                    estado: 'completado',
+                    fecha: { 
+                        [Op.between]: [
+                            fechaInicio,
+                            fechaFin
+                        ] 
+                    }
+                }
+            }) || 0;
+
+            const ingresosTotalesMes = (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0);
+            const gananciaNetaMes = ingresosTotalesMes - (retirosMes || 0);
+
             return {
                 mes: mes,
                 anio: anio,
-                total: (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0)
+                total: gananciaNetaMes
             };
         }));
 

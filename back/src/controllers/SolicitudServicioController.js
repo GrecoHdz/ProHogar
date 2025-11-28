@@ -141,6 +141,11 @@ const obtenerSolicitudesServicios = async (req, res) => {
       if (req.query.id_tecnico) {
         whereCondition.id_tecnico = req.query.id_tecnico;
       }
+
+      // Filtrar por id_usuario si se proporciona el ID
+      if (req.query.id_usuario) {
+        whereCondition.id_usuario = req.query.id_usuario;
+      }
   
       // Filtro por mes (año y mes)
       if (month) {
