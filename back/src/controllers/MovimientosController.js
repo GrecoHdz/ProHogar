@@ -411,7 +411,87 @@ const getAllMovimientos = async (req, res) => {
         // Obtener movimientos con paginación
         const { count, rows: movimientos } = await Movimiento.findAndCountAll(queryOptions);
 
-        // Formatear la respuesta
+        // Obtener membresías y visitas como ingresos adicionales si no se filtra por tipo específico
+        let membresiasIngresos = [];
+        let visitasIngresos = [];
+        
+        if (!tipo || tipo === 'ingresos') {
+            // Configurar filtros de fecha para membresías y visitas
+            const fechaFilter = {};
+            if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
+                const [year, month] = fecha.split('-').map(Number);
+                const startDate = new Date(year, month - 1, 1);
+                const endDate = new Date(year, month, 0, 23, 59, 59);
+                fechaFilter.fecha = { [Op.between]: [startDate, endDate] };
+            }
+
+            // Obtener membresías aprobadas
+            const membresiasQuery = {
+                where: {
+                    estado: { [Op.in]: ['activa', 'vencida'] },
+                    ...fechaFilter
+                },
+                include: [
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        required: false,
+                        attributes: ['nombre']
+                    }
+                ],
+                attributes: ['id_membresia', 'monto', 'fecha', 'estado', 'id_usuario'],
+                order: [['fecha', 'DESC']],
+                raw: true,
+                nest: true
+            };
+
+            // Aplicar paginación a membresías
+            const membresiasLimit = Math.max(0, limitNum - movimientos.length);
+            if (membresiasLimit > 0) {
+                membresiasQuery.limit = membresiasLimit;
+                membresiasIngresos = await Membresia.findAll(membresiasQuery);
+            }
+
+            // Obtener visitas aprobadas
+            const visitasQuery = {
+                where: {
+                    estado: 'aprobado',
+                    ...fechaFilter
+                },
+                include: [
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        required: false,
+                        attributes: ['nombre']
+                    },
+                    {
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        required: false,
+                        include: [{
+                            model: Usuario,
+                            as: 'cliente',
+                            required: false,
+                            attributes: ['nombre']
+                        }]
+                    }
+                ],
+                attributes: ['id_pagovisita', 'monto', 'fecha', 'estado', 'id_usuario', 'id_solicitud'],
+                order: [['fecha', 'DESC']],
+                raw: true,
+                nest: true
+            };
+
+            // Aplicar paginación a visitas
+            const visitasLimit = Math.max(0, limitNum - movimientos.length - membresiasIngresos.length);
+            if (visitasLimit > 0) {
+                visitasQuery.limit = visitasLimit;
+                visitasIngresos = await PagoVisita.findAll(visitasQuery);
+            }
+        }
+
+        // Formatear movimientos de la tabla Movimiento
         const movimientosFormateados = await Promise.all(movimientos.map(async movimiento => {
             const datosMovimiento = movimiento.get({ plain: true });
             const esIngreso = datosMovimiento.tipo === 'ingreso';
@@ -457,7 +537,45 @@ const getAllMovimientos = async (req, res) => {
             return base;
         }));
 
-        // Obtener todos los registros coincidentes para calcular totales
+        // Formatear membresías como ingresos
+        const membresiasFormateadas = membresiasIngresos.map(membresia => ({
+            id_movimiento: `membresia_${membresia.id_membresia}`,
+            id_solicitud: null,
+            monto: parseFloat(membresia.monto || 0).toFixed(2),
+            fecha: new Date(membresia.fecha).toISOString().split('T')[0],
+            estado: 'Completado',
+            tipo: 'ingreso',
+            nombre_usuario: membresia.usuario?.nombre || 'Usuario no encontrado',
+            servicio: 'Membresía'
+        }));
+
+        // Formatear visitas como ingresos
+        const visitasFormateadas = visitasIngresos.map(visita => ({
+            id_movimiento: `visita_${visita.id_pagovisita}`,
+            id_solicitud: visita.id_solicitud || visita.solicitud?.id_solicitud || null,
+            monto: parseFloat(visita.monto || 0).toFixed(2),
+            fecha: new Date(visita.fecha).toISOString().split('T')[0],
+            estado: 'Completado',
+            tipo: 'ingreso',
+            nombre_usuario: visita.solicitud?.cliente?.nombre || visita.usuario?.nombre || 'Usuario no encontrado',
+            servicio: 'Visita Técnica'
+        }));
+
+        // Combinar todos los movimientos
+        let todosMovimientos = [...movimientosFormateados, ...membresiasFormateadas, ...visitasFormateadas];
+        
+        // Ordenar por fecha descendente
+        todosMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        
+        // Aplicar paginación final al conjunto combinado
+        const startIndex = offset;
+        const endIndex = startIndex + limitNum;
+        const movimientosPaginados = todosMovimientos.slice(startIndex, endIndex);
+
+        // Obtener todos los registros coincidentes para calcular totales (incluyendo membresías y visitas)
+        let allMovimientosFormateados = [];
+        
+        // Movimientos de la tabla Movimiento
         const allMovimientos = await Movimiento.findAll({
             where,
             include: [
@@ -491,8 +609,8 @@ const getAllMovimientos = async (req, res) => {
             nest: true
         });
 
-        // Formatear todos los movimientos para calcular totales
-        const allMovimientosFormateados = await Promise.all(allMovimientos.map(async movimiento => {
+        // Formatear movimientos de la tabla Movimiento
+        const movimientosTablaFormateados = await Promise.all(allMovimientos.map(async movimiento => {
             const datosMovimiento = movimiento;
             const esIngreso = datosMovimiento.tipo === 'ingreso';
             const esRetiro = datosMovimiento.tipo === 'retiro';
@@ -537,6 +655,58 @@ const getAllMovimientos = async (req, res) => {
             return base;
         }));
 
+        allMovimientosFormateados = [...movimientosTablaFormateados];
+
+        // Agregar todas las membresías y visitas para los totales (sin límite de paginación)
+        if (!tipo || tipo === 'ingresos') {
+            // Configurar filtros de fecha para totales
+            const fechaFilter = {};
+            if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
+                const [year, month] = fecha.split('-').map(Number);
+                const startDate = new Date(year, month - 1, 1);
+                const endDate = new Date(year, month, 0, 23, 59, 59);
+                fechaFilter.fecha = { [Op.between]: [startDate, endDate] };
+            }
+
+            // Obtener todas las membresías para totales
+            const allMembresias = await Membresia.findAll({
+                where: {
+                    estado: { [Op.in]: ['activa', 'vencida'] },
+                    ...fechaFilter
+                },
+                attributes: ['monto', 'fecha', 'estado'],
+                raw: true
+            });
+
+            // Obtener todas las visitas para totales
+            const allVisitas = await PagoVisita.findAll({
+                where: {
+                    estado: 'aprobado',
+                    ...fechaFilter
+                },
+                attributes: ['monto', 'fecha', 'estado'],
+                raw: true
+            });
+
+            // Formatear todas las membresías
+            const allMembresiasFormateadas = allMembresias.map(membresia => ({
+                id_movimiento: `membresia_${membresia.id_membresia || 'total'}`,
+                monto: parseFloat(membresia.monto || 0).toFixed(2),
+                estado: 'Completado',
+                tipo: 'ingreso'
+            }));
+
+            // Formatear todas las visitas
+            const allVisitasFormateadas = allVisitas.map(visita => ({
+                id_movimiento: `visita_${visita.id_pagovisita || 'total'}`,
+                monto: parseFloat(visita.monto || 0).toFixed(2),
+                estado: 'Completado',
+                tipo: 'ingreso'
+            }));
+
+            allMovimientosFormateados = [...allMovimientosFormateados, ...allMembresiasFormateadas, ...allVisitasFormateadas];
+        }
+
         // Calcular totales de TODOS los registros coincidentes
         const totales = allMovimientosFormateados.reduce((acc, mov) => {
             const monto = parseFloat(mov.monto) || 0;
@@ -552,19 +722,27 @@ const getAllMovimientos = async (req, res) => {
             return acc;
         }, { ingresos: 0, retiros: 0 });
 
+        // Calcular el total real de registros para paginación
+        const totalRegistros = tipo === 'retiros' ? 
+            total : 
+            total + (membresiasIngresos.length + visitasIngresos.length);
+
         // Respuesta final
         res.json({
             success: true,
-            data: movimientosFormateados,
+            data: {
+                movimientos: movimientosPaginados
+            },
             summary: {
                 totalIngresos: totales.ingresos.toFixed(2),
                 totalRetiros: totales.retiros.toFixed(2)
             },
             pagination: {
-                total: total,
+                total: totalRegistros,
                 page: pageNum,
                 limit: limitNum,
-                totalPages: totalPages
+                totalPages: Math.ceil(totalRegistros / limitNum),
+                hasMore: pageNum < Math.ceil(totalRegistros / limitNum)
             }
         });
 
