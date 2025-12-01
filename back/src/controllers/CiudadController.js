@@ -41,14 +41,14 @@ const obtenerCiudadPorNombre = async (req, res) => {
 
 //Crear una Ciudad
 const crearCiudad = async (req, res) => {
-    const { nombre } = req.body;
+    const { nombre_ciudad } = req.body;
     
-    if (!nombre) {
+    if (!nombre_ciudad) {
         return res.status(400).json({ error: "Se requiere el nombre de la ciudad" });
     }
     
     try {
-        const ciudad = await Ciudad.create({ nombre });
+        const ciudad = await Ciudad.create({ nombre_ciudad });
         res.status(201).json(ciudad);
     } catch (error) {
         console.error("Error al crear ciudad:", error);
@@ -59,7 +59,7 @@ const crearCiudad = async (req, res) => {
 //Actualizar una Ciudad
 const actualizarCiudad = async (req, res) => {
     const { id } = req.params;
-    const { nombre } = req.body;
+    const { nombre_ciudad } = req.body;
     
     if (!id) {
         return res.status(400).json({ error: "Se requiere el ID de la ciudad" });
@@ -74,7 +74,7 @@ const actualizarCiudad = async (req, res) => {
             });
         }
         
-        ciudad.nombre = nombre;
+        ciudad.nombre_ciudad = nombre_ciudad;
         await ciudad.save();
         
         res.json(ciudad);

@@ -20,18 +20,34 @@ const validarErrores = (req, res, next) => {
 }; 
 
 // Obtener todas las Ciudades (sin autenticación)
-router.get("/", validarErrores, obtenerCiudades);
+router.get("/", obtenerCiudades);
 
 // Obtener una Ciudad por nombre (requiere autenticación)
-router.get("/:nombre", authMiddleware, validarErrores, obtenerCiudadPorNombre);
+router.get("/:nombre", authMiddleware, obtenerCiudadPorNombre);
 
 // Crear una Ciudad (requiere autenticación)
-router.post("/", authMiddleware, validarErrores, crearCiudad);
+router.post("/", 
+  authMiddleware,
+  body("nombre_ciudad").notEmpty().withMessage("El nombre de la ciudad es requerido"),
+  validarErrores, 
+  crearCiudad
+);
 
 // Actualizar una Ciudad (requiere autenticación)
-router.put("/:id", authMiddleware, validarErrores, actualizarCiudad);
+router.put("/:id", 
+  authMiddleware,
+  param("id").isInt().withMessage("El ID debe ser un número entero"),
+  body("nombre_ciudad").notEmpty().withMessage("El nombre de la ciudad es requerido"),
+  validarErrores, 
+  actualizarCiudad
+);
 
 // Eliminar una Ciudad (requiere autenticación)
-router.delete("/:id", authMiddleware, validarErrores, eliminarCiudad);
+router.delete("/:id", 
+  authMiddleware,
+  param("id").isInt().withMessage("El ID debe ser un número entero"),
+  validarErrores, 
+  eliminarCiudad
+);
 
 module.exports = router;
