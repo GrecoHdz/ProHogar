@@ -241,152 +241,200 @@ const obtenerEstadisticasUsuarios = async (req, res) => {
     }
 };
  
-// Obtener todos los técnicos de una ciudad (con filtros)
+// Obtener todos los técnicos de una ciudad (con filtros y paginación mejorada)
 const obtenerTecnicosPorCiudad = async (req, res) => {
-    const { id_ciudad, nombre, estado, limit = 10, offset = 0 } = req.query;
-  
     try {
-      // Obtener el ID del rol de técnico
-      const rolTecnico = await Rol.findOne({
-        where: { nombre_rol: 'Tecnico' },
-        attributes: ['id_rol'],
-        raw: true
-      });
-  
-      if (!rolTecnico) {
-        return res.status(404).json({
-          success: false,
-          error: 'No se encontró el rol de Técnico'
+        // Obtener parámetros de paginación y búsqueda
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 100); // Máximo 100 por rendimiento
+        const offset = parseInt(req.query.offset) || 0;
+        const { id_ciudad, nombre, estado } = req.query;
+
+        // Obtener el ID del rol de técnico
+        const rolTecnico = await Rol.findOne({
+            where: { nombre_rol: 'Tecnico' },
+            attributes: ['id_rol'],
+            raw: true
         });
-      }
-  
-      // 🧩 Condición base con filtros opcionales
-      const whereCondition = { id_rol: rolTecnico.id_rol };
-  
-      if (id_ciudad) whereCondition.id_ciudad = id_ciudad;
-      if (estado) whereCondition.estado = estado;
-      if (nombre) {
-        whereCondition.nombre = { [Op.like]: `%${nombre}%` };
-      }
-  
-      // 🔎 Consultar técnicos filtrados
-      const tecnicos = await Usuario.findAll({
-        attributes: [
-          "id_usuario",
-          "nombre",
-          "identidad",
-          "email",
-          "telefono",
-          "estado",
-          "id_ciudad"
-        ],
-        where: whereCondition,
-        include: [
-          { model: Ciudad, as: "ciudad", attributes: ["nombre_ciudad"] },
-          { model: Rol, as: "rol", attributes: ["nombre_rol"] }
-        ],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [["nombre", "ASC"]]
-      });
-  
-      if (!tecnicos.length) {
-        return res.status(200).json({
-          success: true,
-          total: 0,
-          tecnicos: []
+
+        if (!rolTecnico) {
+            return res.status(404).json({
+                success: false,
+                error: 'No se encontró el rol de Técnico'
+            });
+        }
+
+        // Construir condiciones de búsqueda
+        const whereCondition = { id_rol: rolTecnico.id_rol };
+        const andConditions = [];
+
+        // Aplicar filtros
+        if (id_ciudad) whereCondition.id_ciudad = id_ciudad;
+        if (estado) whereCondition.estado = estado;
+        if (nombre) {
+            whereCondition.nombre = { [Op.like]: `%${nombre}%` };
+        }
+
+        // Obtener total de registros
+        const total = await Usuario.count({ 
+            where: whereCondition,
+            include: [
+                {
+                    model: Rol,
+                    as: 'rol',
+                    attributes: []
+                }
+            ]
         });
-      }
-  
-      // Obtener IDs de los técnicos
-      const tecnicosIds = tecnicos.map(t => t.id_usuario);
-  
-      // 📊 Obtener promedios de calificaciones y créditos
-      const [calificaciones, creditos] = await Promise.all([
-        Calificaciones.findAll({
-          attributes: [
-            "id_usuario_calificado",
-            [fn("AVG", col("calificacion")), "promedio"]
-          ],
-          where: {
-            id_usuario_calificado: { [Op.in]: tecnicosIds }
-          },
-          group: ["id_usuario_calificado"]
-        }),
-        CreditoUsuario.findAll({
-          where: {
-            id_usuario: { [Op.in]: tecnicosIds }
-          },
-          attributes: ['id_usuario', 'monto_credito']
-        })
-      ]);
-  
-      // Crear mapas de datos
-      const mapaPromedios = {};
-      calificaciones.forEach(c => {
-        mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio"));
-      });
-  
-      const mapaCreditos = {};
-      creditos.forEach(c => {
-        mapaCreditos[c.id_usuario] = parseFloat(c.monto_credito) || 0;
-      });
-  
-      // 💰 Calcular saldo total real por técnico (ingresos - retiros + crédito)
-      const saldosTotales = {};
-      await Promise.all(
-        tecnicosIds.map(async (id_usuario) => {
-          const [ingresos, retiros] = await Promise.all([
-            Movimiento.sum('monto', {
-              where: {
-                id_usuario,
-                estado: 'completado',
-                tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
-              }
+
+        // 🔎 Consultar técnicos filtrados con paginación
+        const tecnicos = await Usuario.findAll({
+            attributes: [
+                "id_usuario",
+                "nombre",
+                "identidad",
+                "email",
+                "telefono",
+                "estado",
+                "fecha_registro",
+                [
+                    sequelize.literal(`(
+                        SELECT COUNT(*) 
+                        FROM solicitudservicio 
+                        WHERE solicitudservicio.id_tecnico = Usuario.id_usuario
+                    )`),
+                    'total_servicios_atendidos'
+                ]
+            ],
+            where: whereCondition,
+            include: [
+                { 
+                    model: Ciudad, 
+                    as: "ciudad", 
+                    attributes: ["id_ciudad", "nombre_ciudad"] 
+                },
+                { 
+                    model: Rol, 
+                    as: "rol", 
+                    attributes: ["nombre_rol"] 
+                }
+            ],
+            limit: limit,
+            offset: offset,
+            order: [["nombre", "ASC"]],
+            subQuery: false
+        });
+
+        if (!tecnicos.length) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0,
+                hasMore: false,
+                limit,
+                offset: 0
+            });
+        }
+
+        // Obtener IDs de los técnicos
+        const tecnicosIds = tecnicos.map(t => t.id_usuario);
+
+        // 📊 Obtener datos adicionales en paralelo
+        const [calificaciones, creditos] = await Promise.all([
+            Calificaciones.findAll({
+                attributes: [
+                    "id_usuario_calificado",
+                    [fn("AVG", col("calificacion")), "promedio"]
+                ],
+                where: {
+                    id_usuario_calificado: { [Op.in]: tecnicosIds }
+                },
+                group: ["id_usuario_calificado"]
             }),
-            Movimiento.sum('monto', {
-              where: {
-                id_usuario,
-                estado: 'completado',
-                tipo: 'retiro'
-              }
+            CreditoUsuario.findAll({
+                where: {
+                    id_usuario: { [Op.in]: tecnicosIds }
+                },
+                attributes: ['id_usuario', 'monto_credito']
             })
-          ]);
-  
-          const saldoMovimientos = (ingresos || 0) - (retiros || 0);
-          const saldoCredito = mapaCreditos[id_usuario] || 0;
-          saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
-        })
-      );
-  
-      // 🧮 Armar respuesta final
-      const tecnicosConDatos = tecnicos.map(t => {
-        const data = t.toJSON();
-        const { id_ciudad, ...rest } = data;
-        return {
-          ...rest,
-          ciudad: { id_ciudad, ...data.ciudad },
-          promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0,
-          saldo_total: saldosTotales[data.id_usuario] ?? 0
-        };
-      });
-  
-      // 📦 Total general
-      const total = await Usuario.count({ where: whereCondition });
-  
-      return res.json({
-        success: true,
-        total,
-        tecnicos: tecnicosConDatos
-      });
-  
+        ]);
+
+        // Crear mapas de datos
+        const mapaPromedios = {};
+        calificaciones.forEach(c => {
+            mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio")) || 0;
+        });
+
+        const mapaCreditos = {};
+        creditos.forEach(c => {
+            mapaCreditos[c.id_usuario] = parseFloat(c.monto_credito) || 0;
+        });
+
+        // 💰 Calcular saldo total real por técnico (ingresos - retiros + crédito)
+        const saldosTotales = {};
+        await Promise.all(
+            tecnicosIds.map(async (id_usuario) => {
+                const [ingresos, retiros] = await Promise.all([
+                    Movimiento.sum('monto', {
+                        where: {
+                            id_usuario,
+                            estado: 'completado',
+                            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+                        }
+                    }),
+                    Movimiento.sum('monto', {
+                        where: {
+                            id_usuario,
+                            estado: 'completado',
+                            tipo: 'retiro'
+                        }
+                    })
+                ]);
+
+                const saldoMovimientos = (ingresos || 0) - (retiros || 0);
+                const saldoCredito = mapaCreditos[id_usuario] || 0;
+                saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
+            })
+        );
+
+        // 🧮 Armar respuesta final
+        const tecnicosConDatos = tecnicos.map(t => {
+            const data = t.toJSON();
+            const { id_ciudad, ...rest } = data;
+            return {
+                ...rest,
+                ciudad: { id_ciudad, ...data.ciudad },
+                promedio_calificacion: mapaPromedios[data.id_usuario] ?? 0,
+                saldo_total: saldosTotales[data.id_usuario] ?? 0,
+                total_servicios_atendidos: parseInt(data.total_servicios_atendidos) || 0
+            };
+        });
+
+        // Calcular información de paginación
+        const page = Math.floor(offset / limit) + 1;
+        const totalPages = Math.ceil(total / limit);
+        const hasMore = offset + limit < total;
+
+        return res.status(200).json({
+            success: true,
+            data: tecnicosConDatos,
+            total,
+            page,
+            totalPages,
+            hasMore,
+            limit,
+            offset
+        });
+
     } catch (error) {
-      console.error("Error al obtener técnicos:", error);
-      return res.status(500).json({
-        success: false,
-        error: "Error al obtener técnicos",
-        detalle: error.message
-      });
+        console.error("Error al obtener técnicos:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al obtener técnicos",
+            detalle: error.message
+        });
     }
 }; 
  
