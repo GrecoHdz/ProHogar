@@ -13,7 +13,8 @@ const {
     crearSolicitudServicio, 
     actualizarSolicitudServicio, 
     eliminarSolicitudServicio,
-    obtenerSolicitudesPorTecnico
+    obtenerSolicitudesPorTecnico,
+    verificarPagosPendientes
 } = require("../controllers/SolicitudServicioController");
 
 // Middleware de autenticación
@@ -29,6 +30,11 @@ const validarErrores = (req, res, next) => {
 
 // Obtener estadísticas de pagos con filtros
 router.get("/solicitudes", validarErrores, obtenerEstadisticasPagos);
+
+// Verificar si el usuario tiene servicios con pagos pendientes
+router.get("/pagos-pendientes/:id_usuario", [
+    param("id_usuario").isInt({ min: 1 }).withMessage("El ID del usuario debe ser un número entero positivo")
+], validarErrores, verificarPagosPendientes);
 
   //Obtener todas las solicitudes de servicios
 router.get("/", validarErrores, obtenerSolicitudesServicios);
@@ -86,6 +92,7 @@ router.put("/:id", [
 router.delete("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo")
 ], validarErrores, eliminarSolicitudServicio);
+
 
 module.exports = router;
 
