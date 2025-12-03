@@ -9,8 +9,12 @@ const Rol = require("../models/rolesModel");
 // 1️⃣ Obtener todas las notificaciones del sistema
 // ============================================================
 const obtenerTodas = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
   try {
-    const notificaciones = await NotificacionDestinatario.findAll({
+    const { count, rows: notificaciones } = await NotificacionDestinatario.findAndCountAll({
       include: [
         {
           model: Notificacion,
@@ -37,7 +41,9 @@ const obtenerTodas = async (req, res) => {
       attributes: ['id_destinatario_notificacion', 'id_notificacion', 'fecha_creacion', 'leido', 'fecha_leido'],
       order: [['fecha_creacion', 'DESC']],
       raw: true,
-      nest: true
+      nest: true,
+      limit,
+      offset
     });
 
     const notificacionesFormateadas = notificaciones.map(notif => ({
@@ -51,7 +57,13 @@ const obtenerTodas = async (req, res) => {
 
     res.json({
       success: true,
-      data: notificacionesFormateadas
+      data: notificacionesFormateadas,
+      pagination: {
+        total: count,
+        page,
+        pages: Math.ceil(count / limit),
+        limit
+      }
     });
   } catch (error) {
     console.error("Error al obtener notificaciones:", error);
@@ -432,7 +444,6 @@ const marcarNotificacionIndividual = async (req, res) => {
     return res.status(500).json(errorResponse);
   }
 };
-
 
 // ============================================================
 // 7️⃣ Eliminar una notificación y todos sus destinatarios
