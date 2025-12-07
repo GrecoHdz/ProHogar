@@ -32,7 +32,7 @@ const obtenerTodas = async (req, res) => {
             as: 'rol',
             attributes: [],
             where: {
-              nombre_rol: { [Op.ne]: 'Administrador' }
+              nombre_rol: { [Op.ne]: 'Admin' }
             },
             required: true
           }]
