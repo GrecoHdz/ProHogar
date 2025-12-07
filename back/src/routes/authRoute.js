@@ -23,7 +23,7 @@ router.post('/refresh-token',
 
 // Ruta para cerrar sesión
 router.post('/logout', 
-    authMiddleware, // Requiere autenticación
+    authMiddleware, 
     [
         body('refreshToken', 'El refresh token es requerido').exists()
     ],
@@ -31,7 +31,7 @@ router.post('/logout',
 
 // Ruta para obtener información del usuario actual
 router.get('/me',
-    authMiddleware, // Requiere autenticación
+    authMiddleware,
     getCurrentUser
 );
 
@@ -40,18 +40,19 @@ router.post('/forgot-password',
     [
         body('email', 'Por favor incluye un correo electrónico válido').isEmail()
     ],
+    authLimiter,
     forgotPassword
 );
 
 // Ruta para verificar token de restablecimiento
-router.get('/verify-reset-token/:token', verifyResetToken);
+router.get('/verify-reset-token/:token', authLimiter, verifyResetToken);
 
 // Ruta para restablecer la contraseña con token
 router.post('/reset-password/:token',
     [
         body('password', 'La contraseña debe tener al menos 6 caracteres').isLength({ min: 6 })
     ],
-    resetPassword
+    authLimiter,resetPassword
 );
 
 module.exports = router;

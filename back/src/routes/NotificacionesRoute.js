@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
-const { apiLimiter } = require('../middleware/rateLimiters');
+const { apiLimiter } = require('../middleware/rateLimiters'); 
 const { 
   obtenerTodas,
   obtenerPorUsuario,
@@ -25,7 +25,6 @@ const validarErrores = (req, res, next) => {
   }
   next();
 };
- 
 
 // ============================================================
 // 📋 RUTAS DE NOTIFICACIONES

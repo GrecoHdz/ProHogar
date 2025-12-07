@@ -2,13 +2,17 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
+const { apiLimiter } = require('../middleware/rateLimiters');
 const { 
     obtenerCiudades, 
     obtenerCiudadPorNombre,  
     crearCiudad, 
     actualizarCiudad, 
     eliminarCiudad 
-} = require("../controllers/CiudadController");
+} = require("../controllers/CiudadController"); 
+
+// Middleware de Limitador
+router.use(apiLimiter);
 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {

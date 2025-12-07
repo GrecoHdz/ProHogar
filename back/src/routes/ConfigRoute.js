@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");   
 const { authMiddleware } = require("../middleware/authMiddleware");  
+const { apiLimiter } = require('../middleware/rateLimiters'); 
 const { 
     obtenerConfig, 
     obtenerConfigPorId, 
@@ -10,6 +11,9 @@ const {
     actualizarConfig, 
     eliminarConfig 
 } = require("../controllers/ConfigController");
+
+// Middleware de Limitador
+router.use(apiLimiter);
 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
@@ -22,12 +26,12 @@ const validarErrores = (req, res, next) => {
 
 //Obtener todas las configuraciones
 router.get("/", [ 
-],authMiddleware, validarErrores, obtenerConfig);
+],validarErrores, authMiddleware, obtenerConfig);
 
 //Obtener configuracion por id
 router.get("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero")
-],authMiddleware, validarErrores, obtenerConfigPorId);
+], validarErrores, authMiddleware, obtenerConfigPorId);
 
 //Obtener valor de configuracion
 router.get("/valor/:tipo_config", [
@@ -38,18 +42,18 @@ router.get("/valor/:tipo_config", [
 router.post("/", [
     body("tipo_config").isString().withMessage("El tipo_config debe ser una cadena de caracteres"),
     body("valor").isInt().withMessage("El valor debe ser un numero entero")
-],authMiddleware, validarErrores, crearConfig);
+],validarErrores, authMiddleware, crearConfig);
 
 //Actualizar configuracion
 router.put("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero"),
     body("tipo_config").optional().isString().withMessage("El tipo_config debe ser una cadena de caracteres"),
     body("valor").optional().isInt().withMessage("El valor debe ser un numero entero")
-],authMiddleware, validarErrores, actualizarConfig);
+],validarErrores, authMiddleware, actualizarConfig);
 
 //Eliminar configuracion
 router.delete("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero")
-],authMiddleware, validarErrores, eliminarConfig);
+],validarErrores, authMiddleware, eliminarConfig);
 
 module.exports = router;

@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
+const { apiLimiter } = require('../middleware/rateLimiters');
+
 const { 
     obtenerServicios, 
     obtenerServicioPorId, 
@@ -10,7 +12,10 @@ const {
     actualizarServicio, 
     eliminarServicio 
 } = require("../controllers/ServiciosController");
- 
+
+// Middleware de Limitador
+router.use(apiLimiter);
+
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
