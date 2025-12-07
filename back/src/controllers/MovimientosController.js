@@ -1526,7 +1526,9 @@ const getMovimientosPorUsuario = async (req, res) => {
             const base = {
                 id_movimiento: datos.id_movimiento,
                 monto: parseFloat(datos.monto).toFixed(2),
-                fecha: new Date(datos.fecha).toISOString().split('T')[0],
+                fecha: datos.fecha instanceof Date ? 
+                    `${datos.fecha.getFullYear()}-${String(datos.fecha.getMonth() + 1).padStart(2, '0')}-${String(datos.fecha.getDate()).padStart(2, '0')}` :
+                    new Date(datos.fecha).toISOString().split('T')[0],
                 estado: estadoNormalizado === 'completado' ? 'Completado' : estadoNormalizado === 'rechazado' ? 'Rechazado' : 'Pendiente',
                 tipo: datos.tipo
             };
@@ -1708,7 +1710,9 @@ const getServiciosPorTipo = async (req, res) => {
             }],
             where: {
                 id_tecnico: id_tecnico,
-                estado: 'finalizado' // Solo contar servicios finalizados
+                estado: {
+                    [Op.in]: ['finalizado', 'calificado']
+                }
             },
             group: ['servicio.nombre'],
             order: [[Sequelize.literal('cantidad'), 'DESC']],
