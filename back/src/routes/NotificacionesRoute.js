@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
+const { apiLimiter } = require('../middleware/rateLimiters');
 const { 
   obtenerTodas,
   obtenerPorUsuario,
@@ -24,13 +25,14 @@ const validarErrores = (req, res, next) => {
   }
   next();
 };
+ 
 
 // ============================================================
 // 📋 RUTAS DE NOTIFICACIONES
 // ============================================================
 
 // 1️⃣ Obtener todas las notificaciones
-router.get("/", obtenerTodas);
+router.get("/", apiLimiter, obtenerTodas);
 
 // 2️⃣ Obtener notificaciones por usuario
 router.get(
@@ -42,6 +44,7 @@ router.get(
   ],
   validarErrores,
   authMiddleware,
+  apiLimiter,  
   obtenerPorUsuario
 );
 
@@ -64,6 +67,7 @@ router.post(
   ],
   validarErrores,
   authMiddleware,
+  apiLimiter, 
   crearNotificacion
 );
  
@@ -105,8 +109,9 @@ router.put(
       .isInt({ min: 1 })
       .withMessage("El ID de usuario debe ser un número entero positivo"),
   ],
-  validarErrores,
+  validarErrores, 
   authMiddleware,
+  apiLimiter, 
   marcarComoLeida
 );
 
@@ -118,8 +123,9 @@ router.put(
       .isInt({ min: 1 })
       .withMessage("El ID de destinatario de la notificación debe ser un número entero positivo"),
   ],
-  validarErrores,
+  validarErrores, 
   authMiddleware,
+  apiLimiter, 
   marcarNotificacionIndividual
 );
 
@@ -132,16 +138,17 @@ router.delete(
       .isInt({ min: 1 })
       .withMessage("El ID debe ser un número entero positivo"),
   ],
-  validarErrores,
+  validarErrores, 
   authMiddleware,
+  apiLimiter, 
   eliminarNotificacion
 );
 
 // 7️⃣ Eliminar todas las notificaciones leídas
-router.delete("/eliminar/leidas", authMiddleware, eliminarLeidas);
+router.delete("/eliminar/leidas", authMiddleware, apiLimiter, eliminarLeidas);
 
 // 8️⃣ Obtener notificaciones creadas manualmente
-router.get("/manuales", authMiddleware, obtenerCreadasManualmente); 
+router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente); 
 
 
 module.exports = router;

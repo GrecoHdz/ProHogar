@@ -1,8 +1,8 @@
 const express = require('express');
 const { login, refreshToken, logout, getCurrentUser, forgotPassword, resetPassword, verifyResetToken } = require('../controllers/authController');
-const { body, param, validationResult } = require("express-validator");
+const { body } = require("express-validator");
 const { authMiddleware } = require('../middleware/authMiddleware');
-
+const { authLimiter } = require('../middleware/rateLimiters');
 const router = express.Router();
 
 // Ruta para iniciar sesión
@@ -11,6 +11,7 @@ router.post('/login',
         body('identidad', 'Por favor incluye un identidad válido').isString(),
         body('password', 'La contraseña es requerida').exists()
     ],
+    authLimiter,
     login);
 
 // Ruta para refrescar el token de acceso
