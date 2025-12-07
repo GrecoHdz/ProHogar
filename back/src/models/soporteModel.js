@@ -26,7 +26,8 @@ const Soporte = sequelize.define("Soporte", {
     },
     estado: {
         type: DataTypes.BOOLEAN,
-        allowNull: true
+        allowNull: true,
+        defaultValue: true
     }
 }, {
     timestamps: true,
