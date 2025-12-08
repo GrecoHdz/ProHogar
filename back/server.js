@@ -27,6 +27,7 @@ const creditoRoutes = require("./src/routes/CreditoRoute");
 const referidoRoutes = require("./src/routes/ReferidoRoute");
 const pagoServicioRoutes = require("./src/routes/PagoServicioRoute"); 
 const notificacionesRoutes = require("./src/routes/NotificacionesRoute");
+const tecnicoServicioRoutes = require("./src/routes/TecnicoServicioRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -77,11 +78,7 @@ app.use("/credito", creditoRoutes);
 app.use("/referidos", referidoRoutes);
 app.use("/pagoservicio", pagoServicioRoutes);
 app.use("/notificaciones", notificacionesRoutes);
-// Aplicar limitador estricto a rutas de autenticación
-//app.use("/login", authLimiter, authRoutes);
-
-// Aplicar middleware de verificación de token y limitador de API a todas las demás rutas
-//app.use("/productos", apiLimiter, verifyToken, productRoutes); 
+app.use("/tecnicoServicio", tecnicoServicioRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;

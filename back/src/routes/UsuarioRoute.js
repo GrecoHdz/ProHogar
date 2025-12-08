@@ -41,7 +41,8 @@ router.get("/id/:id",
 
 //Obtener todos los Tecnicos por ciudad
 router.get("/tecnicos", [
-    query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero")
+    query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero"),
+    query("id_servicio").optional().isInt().withMessage("El ID del servicio debe ser un número entero")
   ],
   validarErrores, authMiddleware, apiLimiter, obtenerTecnicosPorCiudad);
   

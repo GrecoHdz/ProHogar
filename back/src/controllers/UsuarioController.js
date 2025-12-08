@@ -6,6 +6,7 @@ const Rol = require("../models/rolesModel");
 const CreditoUsuario = require('../models/creditoUsuariosModel');
 const Movimiento = require('../models/movimientosModel');
 const Calificaciones = require("../models/calificacionesModels");
+const TecnicoServicio = require("../models/tecnicosServiciosModel");
 const { Op, fn, col, literal, Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
@@ -248,7 +249,7 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         let limit = parseInt(req.query.limit) || 10;
         limit = Math.min(limit, 100); // Máximo 100 por rendimiento
         const offset = parseInt(req.query.offset) || 0;
-        const { id_ciudad, nombre, estado } = req.query;
+        const { id_ciudad, id_servicio, nombre, estado } = req.query;
 
         // Obtener el ID del rol de técnico
         const rolTecnico = await Rol.findOne({
@@ -275,16 +276,29 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
             whereCondition.nombre = { [Op.like]: `%${nombre}%` };
         }
 
+        // Construir el include dinámicamente
+        const includeConditions = [
+            {
+                model: Rol,
+                as: 'rol',
+                attributes: []
+            }
+        ];
+
+        // Agregar filtro por servicio solo si se proporciona id_servicio
+        if (id_servicio) {
+            includeConditions.push({
+                model: TecnicoServicio,
+                as: 'serviciosAsignados',
+                where: { id_servicio: id_servicio },
+                attributes: []
+            });
+        }
+
         // Obtener total de registros
         const total = await Usuario.count({ 
             where: whereCondition,
-            include: [
-                {
-                    model: Rol,
-                    as: 'rol',
-                    attributes: []
-                }
-            ]
+            include: includeConditions
         });
 
         // 🔎 Consultar técnicos filtrados con paginación
@@ -317,7 +331,13 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
                     model: Rol, 
                     as: "rol", 
                     attributes: ["nombre_rol"] 
-                }
+                },
+                ...(id_servicio ? [{
+                    model: TecnicoServicio,
+                    as: 'serviciosAsignados',
+                    where: { id_servicio: id_servicio },
+                    attributes: []
+                }] : [])
             ],
             limit: limit,
             offset: offset,

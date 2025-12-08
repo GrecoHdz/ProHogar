@@ -16,6 +16,7 @@ const Referido = require('./referidosModel');
 const Notificacion = require('./notificacionesModel');
 const NotificacionDestinatario = require('./notificacionesDestinatariosModel');
 const Config = require('./configModel');
+const TecnicoServicio = require('./tecnicosServiciosModel');
 
 
 // Función para configurar las asociaciones
@@ -326,6 +327,37 @@ Config.belongsTo(Usuario, {
   as: 'usuario',
   constraints: false  // This allows the foreign key to reference a non-primary key
 });
+
+  // Relaciones de TecnicoServicio
+  // Relación Técnico (Usuario) - TecnicoServicio
+  Usuario.hasMany(TecnicoServicio, {
+    foreignKey: 'id_tecnico',
+    as: 'serviciosAsignados',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+  
+  TecnicoServicio.belongsTo(Usuario, {
+    foreignKey: 'id_tecnico',
+    as: 'tecnico',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  // Relación Servicio - TecnicoServicio
+  Servicio.hasMany(TecnicoServicio, {
+    foreignKey: 'id_servicio',
+    as: 'tecnicosAsignados',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+  
+  TecnicoServicio.belongsTo(Servicio, {
+    foreignKey: 'id_servicio',
+    as: 'servicio',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
   
   console.log('Asociaciones configuradas correctamente');
 };
