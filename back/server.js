@@ -53,8 +53,11 @@ app.use(cookieParser());
 console.log("CORS origin:", process.env.FRONTEND_URL); 
 app.use(
   cors({
-    origin: true, //process.env.FRONTEND_URL,// || 'http://localhost:3000',// true, process.env.FRONTEND_URL ||
-  credentials: true,
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+    optionsSuccessStatus: 200,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   })
 ); 
 
