@@ -741,6 +741,7 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                 id_usuario: idUsuario,
                 [Op.and]: [
                     { estado: { [Op.ne]: 'finalizado' } },
+                    { estado: { [Op.ne]: 'calificado' } },
                     { estado: { [Op.ne]: 'cancelado' } }
                 ]
             }
