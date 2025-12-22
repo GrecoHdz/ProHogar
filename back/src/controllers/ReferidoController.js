@@ -16,7 +16,8 @@ const getAllReferidos = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al obtener los referidos" 
+            error: "Error al obtener los referidos",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -95,7 +96,8 @@ const getReferidorByUser = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al obtener el referidor" 
+            error: "Error al obtener el referidor",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }; 
@@ -129,7 +131,8 @@ const createReferido = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al crear el referido" 
+            error: "Error al crear el referido",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -175,7 +178,7 @@ const getTopUsuariosConMasReferidos = async (req, res) => {
         res.status(500).json({
             success: false,
             error: "Error al obtener el top de usuarios con más referidos",
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

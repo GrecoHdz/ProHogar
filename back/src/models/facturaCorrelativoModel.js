@@ -38,7 +38,22 @@ const FacturaCorrelativo = sequelize.define("FacturaCorrelativo", {
     }
 }, {
     timestamps: false,
-    tableName: "factura_correlativos"
+    tableName: "factura_correlativos",
+    indexes: [
+        {
+            name: 'idx_factura_correlativo_cai',
+            fields: ['cai'],
+            unique: true
+        },
+        {
+            name: 'idx_factura_correlativo_estado',
+            fields: ['estado']
+        },
+        {
+            name: 'idx_factura_correlativo_vencimiento',
+            fields: ['fecha_vencimiento']
+        }
+    ]
 });
 
 module.exports = FacturaCorrelativo;

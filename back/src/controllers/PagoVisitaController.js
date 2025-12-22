@@ -177,7 +177,7 @@ const obtenerPagos = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: "Error al obtener pagos de visita",
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -228,7 +228,8 @@ const obtenerUltimoPagoPorSolicitud = async (req, res) => {
         console.error(error);
         return res.status(500).json({
             status: "error",
-            message: "Error al obtener el estado del último pago"
+            message: "Error al obtener el estado del último pago",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }; 
@@ -275,7 +276,7 @@ const crearPago = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error al procesar el pago',
-            error: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }
@@ -356,7 +357,7 @@ const confirmarPagoVisita = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error al confirmar el pago de visita. Se revertieron los cambios.',
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -415,7 +416,7 @@ const denegarPagoVisita = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error al denegar el pago de visita. Se revertieron los cambios.',
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

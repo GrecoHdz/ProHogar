@@ -7,7 +7,10 @@ const obtenerServicios = async (req, res) => {
         res.json(servicios);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al obtener los servicios" });
+        res.status(500).json({ 
+            error: "Error al obtener los servicios",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -18,7 +21,10 @@ const obtenerServiciosActivos = async (req, res) => {
         res.json(servicios);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al obtener los servicios activos" });
+        res.status(500).json({ 
+            error: "Error al obtener los servicios activos",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -32,7 +38,10 @@ const obtenerServicioPorId = async (req, res) => {
         res.json(servicio);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al obtener el servicio" });
+        res.status(500).json({ 
+            error: "Error al obtener el servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -49,7 +58,8 @@ const crearServicio = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al crear el servicio" 
+            error: "Error al crear el servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -74,7 +84,8 @@ const actualizarServicio = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al actualizar el servicio" 
+            error: "Error al actualizar el servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -98,7 +109,8 @@ const eliminarServicio = async (req, res) => {
         console.error(error);
         res.status(500).json({ 
             success: false,
-            error: "Error al eliminar el servicio" 
+            error: "Error al eliminar el servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

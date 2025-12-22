@@ -45,7 +45,7 @@ const cookieConfig = {
   path: '/',
 };
 //Middleware para configurar la configuración de cookies en todas las rutas
-app.use((req, res, next) => {
+app.use((req, next) => {
   req.cookieConfig = cookieConfig;
   next();
 });
@@ -60,7 +60,7 @@ app.use(
     origin: process.env.FRONTEND_URL,
     credentials: true,
     optionsSuccessStatus: 200,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'cache-control', 'pragma'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   })
 ); 

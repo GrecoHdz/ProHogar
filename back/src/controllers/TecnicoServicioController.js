@@ -33,7 +33,8 @@ const obtenerServiciosPorTecnico = async (req, res) => {
         console.error("Error al obtener servicios del técnico:", error);
         res.status(500).json({ 
             success: false,
-            error: "Error al obtener los servicios del técnico" 
+            error: "Error al obtener los servicios del técnico",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -107,7 +108,8 @@ const asignarServicioATecnico = async (req, res) => {
         console.error("Error al asignar servicio al técnico:", error);
         res.status(500).json({ 
             success: false,
-            error: "Error al asignar el servicio al técnico" 
+            error: "Error al asignar el servicio al técnico",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -136,7 +138,8 @@ const eliminarAsignacionServicio = async (req, res) => {
         console.error("Error al eliminar asignación de servicio:", error);
         res.status(500).json({ 
             success: false,
-            error: "Error al eliminar la asignación del servicio" 
+            error: "Error al eliminar la asignación del servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

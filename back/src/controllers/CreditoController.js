@@ -18,7 +18,7 @@ const getAllCreditos = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: 'Error al obtener los créditos',
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -56,7 +56,7 @@ const getCreditoPorUsuario = async (req, res) => {
       return res.status(500).json({
         success: false,
         error: 'Error al obtener el crédito',
-        details: error.message
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   };
@@ -105,7 +105,7 @@ const createCredito = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: 'Error al procesar el crédito',
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }; 
@@ -134,7 +134,7 @@ const resetCredito = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: 'Error al resetear el crédito',
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -163,7 +163,7 @@ const deleteCredito = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: 'Error al eliminar el crédito',
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -228,7 +228,7 @@ const getTopTecnicosConMasCredito = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Error al obtener los técnicos con más crédito',
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

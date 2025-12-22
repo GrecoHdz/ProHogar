@@ -7,7 +7,10 @@ const obtenerCiudades = async (req, res) => {
         res.json(ciudades);
     } catch (error) {
         console.error("Error al obtener ciudades:", error);
-        res.status(500).json({ error: "Error al obtener ciudades" });
+        res.status(500).json({ 
+            error: "Error al obtener ciudades",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -34,7 +37,7 @@ const obtenerCiudadPorNombre = async (req, res) => {
         console.error("Error al obtener ciudad por nombre:", error);
         res.status(500).json({ 
             error: "Error al obtener ciudad por nombre",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -52,7 +55,10 @@ const crearCiudad = async (req, res) => {
         res.status(201).json(ciudad);
     } catch (error) {
         console.error("Error al crear ciudad:", error);
-        res.status(500).json({ error: "Error al crear ciudad" });
+        res.status(500).json({ 
+            error: "Error al crear ciudad",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -80,7 +86,10 @@ const actualizarCiudad = async (req, res) => {
         res.json(ciudad);
     } catch (error) {
         console.error("Error al actualizar ciudad:", error);
-        res.status(500).json({ error: "Error al actualizar ciudad" });
+        res.status(500).json({ 
+            error: "Error al actualizar ciudad",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -106,7 +115,10 @@ const eliminarCiudad = async (req, res) => {
         res.json({ mensaje: "Ciudad eliminada exitosamente" });
     } catch (error) {
         console.error("Error al eliminar ciudad:", error);
-        res.status(500).json({ error: "Error al eliminar ciudad" });
+        res.status(500).json({ 
+            error: "Error al eliminar ciudad",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

@@ -69,7 +69,8 @@ const obtenerTodas = async (req, res) => {
     console.error("Error al obtener notificaciones:", error);
     res.status(500).json({
       success: false,
-      message: "Error al obtener notificaciones"
+      message: "Error al obtener notificaciones",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -135,7 +136,8 @@ const obtenerPorUsuario = async (req, res) => {
     console.error("Error al obtener notificaciones por usuario:", error);
     res.status(500).json({
       success: false,
-      message: "Error al obtener notificaciones del usuario"
+      message: "Error al obtener notificaciones del usuario",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -162,7 +164,8 @@ const crearNotificacion = async (req, res) => {
     console.error("Error al crear notificación:", error);
     res.status(500).json({
       success: false,
-      message: "Error al crear notificación"
+      message: "Error al crear notificación",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -303,7 +306,7 @@ const enviarNotificacion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error al enviar notificación",
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -329,7 +332,8 @@ const obtenerCreadasManualmente = async (req, res) => {
     console.error("Error al obtener notificaciones creadas manualmente:", error);
     res.status(500).json({
       success: false,
-      message: "Error al obtener notificaciones creadas manualmente"
+      message: "Error al obtener notificaciones creadas manualmente",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -337,11 +341,7 @@ const obtenerCreadasManualmente = async (req, res) => {
 // ============================================================
 // 6️⃣ Marcar todas las notificaciones de un usuario como leídas
 // ============================================================
-const marcarComoLeida = async (req, res) => {
-  console.log('=== SOLICITUD RECIBIDA ===');
-  console.log('Método:', req.method);
-  console.log('URL:', req.originalUrl);
-  console.log('Body recibido:', req.body);
+const marcarComoLeida = async (req, res) => { 
 
   const { id_usuario } = req.body;
 
@@ -349,8 +349,7 @@ const marcarComoLeida = async (req, res) => {
     const errorResponse = {
       success: false,
       message: "Se requiere el ID de usuario"
-    };
-    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    }; 
     return res.status(400).json(errorResponse);
   }
 
@@ -372,17 +371,15 @@ const marcarComoLeida = async (req, res) => {
       success: true,
       message: `Se marcaron ${updatedCount} notificaciones como leídas`,
       updatedCount
-    };
-    console.log('=== RESPUESTA EXITOSA ===', successResponse);
+    }; 
     return res.json(successResponse);
   } catch (error) {
     console.error("Error al marcar notificaciones como leídas:", error);
     const errorResponse = {
       success: false,
       message: "Error al actualizar notificaciones",
-      error: error.message
-    };
-    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }; 
     res.status(500).json(errorResponse);
   }
 };
@@ -390,11 +387,7 @@ const marcarComoLeida = async (req, res) => {
 // ============================================================
 // Marcar una notificación individual como leída
 // ============================================================
-const marcarNotificacionIndividual = async (req, res) => {
-  console.log('=== SOLICITUD RECIBIDA ===');
-  console.log('Método:', req.method);
-  console.log('URL:', req.originalUrl);
-  console.log('Body recibido:', req.body);
+const marcarNotificacionIndividual = async (req, res) => { 
 
   const { id_destinatario_notificacion } = req.body;
 
@@ -402,8 +395,7 @@ const marcarNotificacionIndividual = async (req, res) => {
     const errorResponse = {
       success: false,
       message: "Se requiere el ID del destinatario de la notificación"
-    };
-    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+    }; 
     return res.status(400).json(errorResponse);
   }
 
@@ -429,8 +421,7 @@ const marcarNotificacionIndividual = async (req, res) => {
           : "Notificación marcada como leída",
       updatedCount
     };
-
-    console.log('=== RESPUESTA EXITOSA ===', successResponse);
+ 
     return res.json(successResponse);
 
   } catch (error) {
@@ -438,9 +429,8 @@ const marcarNotificacionIndividual = async (req, res) => {
     const errorResponse = {
       success: false,
       message: "Error al actualizar la notificación",
-      error: error.message
-    };
-    console.log('=== RESPUESTA DE ERROR ===', errorResponse);
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }; 
     return res.status(500).json(errorResponse);
   }
 };
@@ -475,7 +465,8 @@ const eliminarNotificacion = async (req, res) => {
     console.error("Error al eliminar notificación:", error);
     res.status(500).json({
       success: false,
-      message: "Error al eliminar notificación"
+      message: "Error al eliminar notificación",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -491,13 +482,15 @@ const eliminarLeidas = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Se eliminaron ${eliminadas} notificaciones leídas.`
+      message: `Se eliminaron ${eliminadas} notificaciones leídas.`,
+      details: eliminadas
     });
   } catch (error) {
     console.error("Error al eliminar notificaciones leídas:", error);
     res.status(500).json({
       success: false,
-      message: "Error al eliminar notificaciones leídas"
+      message: "Error al eliminar notificaciones leídas",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -516,4 +509,3 @@ module.exports = {
   eliminarNotificacion,
   eliminarLeidas
 };
- 

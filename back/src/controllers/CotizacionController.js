@@ -213,7 +213,10 @@ const getCotizacionesPorUsuario = async (req, res) => {
         res.json(cotizaciones);
     } catch (error) {
         console.error('Error al obtener las cotizaciones:', error);
-        res.status(500).json({ error: 'Error al obtener las cotizaciones' });
+        res.status(500).json({ 
+            error: 'Error al obtener las cotizaciones',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -224,7 +227,10 @@ const getCotizacionPorSolicitud = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al obtener la cotizacion:', error);
-        res.status(500).json({ error: 'Error al obtener la cotizacion' });
+        res.status(500).json({ 
+            error: 'Error al obtener la cotizacion',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -273,7 +279,10 @@ const createCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al crear la cotizacion:', error);
-        res.status(500).json({ error: 'Error al crear la cotizacion' });
+        res.status(500).json({ 
+            error: 'Error al crear la cotizacion',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -284,7 +293,10 @@ const updateCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al actualizar la cotizacion:', error);
-        res.status(500).json({ error: 'Error al actualizar la cotizacion' });
+        res.status(500).json({ 
+            error: 'Error al actualizar la cotizacion',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -295,7 +307,10 @@ const deleteCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al eliminar la cotizacion:', error);
-        res.status(500).json({ error: 'Error al eliminar la cotizacion' });
+        res.status(500).json({ 
+            error: 'Error al eliminar la cotizacion',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

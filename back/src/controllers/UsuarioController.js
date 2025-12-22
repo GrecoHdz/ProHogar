@@ -207,7 +207,7 @@ const obtenerUsuarios = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: "Error al obtener usuarios",
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };  
@@ -237,7 +237,7 @@ const obtenerEstadisticasUsuarios = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Error al obtener estadísticas de usuarios',
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -453,7 +453,7 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         return res.status(500).json({
             success: false,
             error: "Error al obtener técnicos",
-            detalle: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }; 
@@ -564,7 +564,7 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
       console.error("Error al obtener usuarios:", error);
       return res.status(500).json({
         error: "Error al obtener usuarios",
-        detalle: error.message
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
 };
@@ -647,7 +647,7 @@ const obtenerAdministradores = async (req, res) => {
         return res.status(500).json({
             success: false,
             error: "Error al obtener administradores",
-            detalle: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -689,7 +689,7 @@ const obtenerUsuarioPorId = async (req, res) => {
         console.error("Error al obtener usuario por ID:", error);
         res.status(500).json({ 
             error: "Error al obtener usuario por ID",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -725,7 +725,7 @@ const obtenerUsuarioPorNombre = async (req, res) => {
         console.error("Error al buscar usuarios por nombre:", error);
         res.status(500).json({ 
             error: "Error al buscar usuarios",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -753,7 +753,7 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
         console.error("Error al obtener usuario por identidad:", error);
         res.status(500).json({ 
             error: "Error al obtener usuario por identidad",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -1097,14 +1097,7 @@ const actualizarUsuario = async (req, res) => {
     }
 };
 // Actualizar contraseña con verificación de contraseña actual
-const actualizarPassword = async (req, res) => {
-    console.log('Solicitud de cambio de contraseña recibida:', {
-        params: req.params,
-        body: {
-            ...req.body, 
-            newPassword: req.body.newPassword ? '***' : 'undefined'
-        }
-    });
+const actualizarPassword = async (req, res) => { 
 
     const { id } = req.params;
     const { newPassword } = req.body;
@@ -1128,8 +1121,7 @@ const actualizarPassword = async (req, res) => {
     }
     
     try {
-        // Buscar el usuario por id_usuario (que es la clave primaria)
-        console.log('Buscando usuario con ID:', id);
+        // Buscar el usuario por id_usuario (que es la clave primaria) 
         const usuario = await Usuario.findOne({
             where: { id_usuario: id },
             attributes: ['id_usuario', 'email', 'password_hash'] // Solo los campos necesarios
@@ -1151,19 +1143,9 @@ const actualizarPassword = async (req, res) => {
                 status: 400,
                 error: 'No se puede verificar la contraseña actual'
             });
-        }
-
-        console.log('Usuario encontrado:', {
-            id_usuario: usuario.id_usuario, // Usar id_usuario en lugar de id
-            email: usuario.email,
-            hasPassword: !!usuario.password_hash,
-            passwordHashStartsWith: usuario.password_hash ? 
-                (usuario.password_hash.substring(0, 10) + '...') : 
-                'No tiene contraseña'
-        });
+        } 
         
         // No se requiere validar la contraseña actual para el administrador
-        console.log('Actualizando contraseña sin validar la actual (solicitud de administrador)');
         
         // Verificar que la nueva contraseña sea diferente a la actual
         const isSameAsCurrent = await bcrypt.compare(newPassword, usuario.password_hash);
@@ -1177,8 +1159,6 @@ const actualizarPassword = async (req, res) => {
             });
         }
         
-        console.log('Contraseña verificada correctamente. Actualizando...');
-        
         // Hashear y guardar la nueva contraseña
         const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
         usuario.password_hash = hashedPassword;
@@ -1188,7 +1168,6 @@ const actualizarPassword = async (req, res) => {
         const usuarioActualizado = usuario.toJSON();
         delete usuarioActualizado.password_hash;
         
-        console.log('Contraseña actualizada exitosamente para el usuario:', usuarioActualizado.id);
         
         res.json({
             status: 200,
@@ -1250,7 +1229,7 @@ const eliminarUsuario = async (req, res) => {
         console.error("Error al eliminar usuario:", error);
         res.status(500).json({ 
             error: "Error al eliminar usuario",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -1270,4 +1249,3 @@ module.exports = {
     actualizarPassword,
     eliminarUsuario
 };
-

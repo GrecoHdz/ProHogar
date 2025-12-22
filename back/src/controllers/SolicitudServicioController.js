@@ -119,7 +119,7 @@ const obtenerEstadisticasPagos = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: "Error al obtener estadísticas de solicitudes",
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -463,7 +463,10 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
         res.json(solicitudes);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al obtener las solicitudes de servicios por servicio" });
+        res.status(500).json({ 
+            error: "Error al obtener las solicitudes de servicios por servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -755,7 +758,10 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al obtener las solicitudes de servicios por usuario" });
+        res.status(500).json({ 
+            error: "Error al obtener las solicitudes de servicios por usuario",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -860,7 +866,10 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener las solicitudes del técnico:', error);
-        res.status(500).json({ error: 'Error al obtener las solicitudes del técnico' });
+        res.status(500).json({ 
+            error: 'Error al obtener las solicitudes del técnico',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -871,7 +880,10 @@ const crearSolicitudServicio = async (req, res) => {
         res.json(solicitud);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al crear la solicitud de servicio" });
+        res.status(500).json({ 
+            error: "Error al crear la solicitud de servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -898,7 +910,10 @@ const actualizarSolicitudServicio = async (req, res) => {
         res.json(solicitud);
     } catch (error) {
         console.error('Error al actualizar la solicitud de servicio:', error);
-        res.status(500).json({ error: "Error al actualizar la solicitud de servicio" });
+        res.status(500).json({ 
+            error: "Error al actualizar la solicitud de servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -913,7 +928,10 @@ const eliminarSolicitudServicio = async (req, res) => {
         res.json({ message: "Solicitud de servicio eliminada correctamente" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error al eliminar la solicitud de servicio" });
+        res.status(500).json({ 
+            error: "Error al eliminar la solicitud de servicio",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

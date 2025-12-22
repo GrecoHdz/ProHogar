@@ -57,7 +57,10 @@ const obtenerBeneficios = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener los beneficios:', error);
-        res.status(500).json({ error: 'Error al obtener los beneficios' });
+        res.status(500).json({ 
+            error: 'Error al obtener los beneficios',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }
 
@@ -68,7 +71,10 @@ const obtenerBeneficioPorId = async (req, res) => {
         res.json(benefit);
     } catch (error) {
         console.error(error);
-        return null;
+        res.status(500).json({ 
+            error: 'Error al obtener el beneficio',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 } 
 
@@ -79,7 +85,10 @@ const crearBeneficio = async (req, res) => {
         res.json(newBenefit);
     } catch (error) {
         console.error(error);
-        return null;
+        res.status(500).json({ 
+            error: 'Error al crear el beneficio',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }
 
@@ -90,7 +99,10 @@ const actualizarBeneficio = async (req, res) => {
         res.json(updatedBenefit);
     } catch (error) {
         console.error(error);
-        return null;
+        res.status(500).json({ 
+            error: 'Error al actualizar el beneficio',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }
 
@@ -101,7 +113,10 @@ const eliminarBeneficio = async (req, res) => {
         res.json(deletedBenefit);
     } catch (error) {
         console.error(error);
-        return null;
+        res.status(500).json({ 
+            error: 'Error al eliminar el beneficio',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }
 

@@ -15,7 +15,10 @@ const obtenerRoles = async (req, res) => {
         res.json(roles);
     } catch (error) {
         console.error("Error al obtener roles:", error);
-        res.status(500).json({ error: "Error al obtener roles" });
+        res.status(500).json({ 
+            error: "Error al obtener roles",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -44,7 +47,10 @@ const obtenerRolPorNombre = async (req, res) => {
         res.json(roles);
     } catch (error) {
         console.error("Error al buscar roles:", error);
-        res.status(500).json({ error: "Error al buscar roles" });
+        res.status(500).json({ 
+            error: "Error al buscar roles",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -62,7 +68,10 @@ const obtenerRolPorId = async (req, res) => {
         res.json(rol);
     } catch (error) {
         console.error("Error al obtener el rol:", error);
-        res.status(500).json({ error: "Error al obtener el rol" });
+        res.status(500).json({ 
+            error: "Error al obtener el rol",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -85,7 +94,10 @@ const crearRol = async (req, res) => {
         res.status(201).json(nuevoRol);
     } catch (error) {
         console.error("Error al crear el rol:", error);
-        res.status(500).json({ error: "Error al crear el rol" });
+        res.status(500).json({ 
+            error: "Error al crear el rol",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -123,7 +135,10 @@ const actualizarRol = async (req, res) => {
         res.json(rol);
     } catch (error) {
         console.error("Error al actualizar el rol:", error);
-        res.status(500).json({ error: "Error al actualizar el rol" });
+        res.status(500).json({ 
+            error: "Error al actualizar el rol",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -147,11 +162,15 @@ const eliminarRol = async (req, res) => {
         // Verificar si el error es por restricción de clave foránea
         if (error.name === 'SequelizeForeignKeyConstraintError') {
             return res.status(400).json({ 
-                error: "No se puede eliminar el rol porque está siendo utilizado por otros registros" 
+                error: "No se puede eliminar el rol porque está siendo utilizado por otros registros",
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }
         
-        res.status(500).json({ error: "Error al eliminar el rol" });
+        res.status(500).json({ 
+            error: "Error al eliminar el rol",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

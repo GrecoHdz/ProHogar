@@ -30,7 +30,8 @@ const obtenerRelacionesFactura = async (req, res) => {
         console.error("Error al obtener relaciones de factura:", error);
         res.status(500).json({
             success: false,
-            message: "Error al obtener relaciones de factura"
+            message: "Error al obtener relaciones de factura",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -60,7 +61,8 @@ const obtenerRelacionPorFactura = async (req, res) => {
         console.error("Error al obtener relación de factura:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al obtener relación de factura'
+            message: 'Error al obtener relación de factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -106,7 +108,8 @@ const crearRelacionFactura = async (req, res) => {
         console.error("Error al crear relación de factura:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al crear relación de factura'
+            message: 'Error al crear relación de factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -133,7 +136,8 @@ const eliminarRelacionFactura = async (req, res) => {
         console.error("Error al eliminar relación de factura:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al eliminar relación de factura'
+            message: 'Error al eliminar relación de factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

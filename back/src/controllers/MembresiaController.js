@@ -121,7 +121,7 @@ const obtenerMembresias = async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: "Error al obtener membresías",
-            details: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -185,7 +185,8 @@ const obtenerMembresiaActual = async (req, res) => {
       console.error("❌ [ERROR] Al obtener la membresía actual:", error);
       return res.status(500).json({
         status: 'error',
-        message: 'Error al obtener la membresía actual'
+        message: 'Error al obtener la membresía actual',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   };
@@ -286,8 +287,11 @@ const crearMembresia = async (req, res) => {
         const membresia = await Membresia.create(datosMembresia);
         res.json(membresia);
     } catch (error) {
-        console.error("Error al crear membresia:", error);
-        res.status(500).json({ error: "Error al crear membresia" });
+        console.error("Error al crear membresía:", error);
+        res.status(500).json({ 
+            error: "Error al crear membresía",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -325,8 +329,11 @@ const eliminarMembresia = async (req, res) => {
         const membresia = await Membresia.destroy({ where: { id: req.params.id } });
         res.json(membresia);
     } catch (error) {
-        console.error("Error al eliminar membresia:", error);
-        res.status(500).json({ error: "Error al eliminar membresia" });
+        console.error("Error al eliminar membresía:", error);
+        res.status(500).json({ 
+            error: "Error al eliminar membresía",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

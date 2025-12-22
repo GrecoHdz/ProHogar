@@ -12,7 +12,10 @@ const getAllCalificaciones = async (req, res) => {
         res.json(calificaciones);
     } catch (error) {
         console.error("Error al obtener calificaciones:", error);
-        res.status(500).json({ error: "Error al obtener calificaciones" });
+        res.status(500).json({ 
+            error: "Error al obtener calificaciones",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -76,7 +79,10 @@ const getCalificacionesPorUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener calificaciones por usuario:", error);
-        res.status(500).json({ error: "Error al obtener calificaciones por usuario" });
+        res.status(500).json({ 
+            error: "Error al obtener calificaciones por usuario",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -90,7 +96,10 @@ const getPromedioCalificacionesPorUsuario = async (req, res) => {
         res.json(promedio);
     } catch (error) {
         console.error("Error al obtener promedio de calificaciones por usuario:", error);
-        res.status(500).json({ error: "Error al obtener promedio de calificaciones por usuario" });
+        res.status(500).json({ 
+            error: "Error al obtener promedio de calificaciones por usuario",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -102,7 +111,10 @@ const getCalificacionesPorSolicitud = async (req, res) => {
         res.json(calificaciones);
     } catch (error) {
         console.error("Error al obtener calificaciones por solicitud:", error);
-        res.status(500).json({ error: "Error al obtener calificaciones por solicitud" });
+        res.status(500).json({ 
+            error: "Error al obtener calificaciones por solicitud",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
  
@@ -176,7 +188,7 @@ const getTopTecnicosMejorCalificados = async (req, res) => {
         console.error('Error al obtener los técnicos mejor calificados:', error);
         res.status(500).json({ 
             error: 'Error al obtener los técnicos mejor calificados',
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -189,7 +201,10 @@ const crearCalificacion = async (req, res) => {
         res.json(nuevaCalificacion);
     } catch (error) {
         console.error("Error al crear calificacion:", error);
-        res.status(500).json({ error: "Error al crear calificacion" });
+        res.status(500).json({ 
+            error: "Error al crear calificacion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -201,7 +216,10 @@ const eliminarCalificacion = async (req, res) => {
         res.json({ message: "Calificacion eliminada exitosamente" });
     } catch (error) {
         console.error("Error al eliminar calificacion:", error);
-        res.status(500).json({ error: "Error al eliminar calificacion" });
+        res.status(500).json({ 
+            error: "Error al eliminar calificacion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

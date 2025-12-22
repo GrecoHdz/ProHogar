@@ -159,14 +159,16 @@ const login = async (req, res) => {
       console.error('Error en el login:', error);
       res.status(500).json({ 
         success: false,
-        message: 'Error en el servidor durante el inicio de sesión' 
+        message: 'Error en el servidor durante el inicio de sesión',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   } catch (error) {
     console.error('Error en el login:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error en el servidor' 
+      message: 'Error en el servidor',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -252,6 +254,7 @@ const refreshToken = async (req, res) => {
         return res.status(401).json({
           success: false,
           message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
       }
     }
@@ -366,6 +369,7 @@ const refreshToken = async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -417,7 +421,8 @@ const getCurrentUser = async (req, res) => {
     await t.rollback();
     console.error('Error al obtener usuario actual:', error);
     res.status(500).json({ 
-      message: 'Error del servidor al obtener información del usuario' 
+      message: 'Error del servidor al obtener información del usuario',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -597,7 +602,8 @@ const resetPassword = async (req, res) => {
     console.error('Error en resetPassword:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al restablecer la contraseña'
+      message: 'Error al restablecer la contraseña',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

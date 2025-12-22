@@ -33,7 +33,8 @@ const obtenerSoportes = async (req, res) => {
         console.error("Error al obtener soportes:", error);
         res.status(500).json({ 
             success: false,
-            error: "Error al obtener soportes" 
+            error: "Error al obtener soportes",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -61,7 +62,7 @@ const obtenerSoportePorCliente = async (req, res) => {
         console.error("Error al obtener soporte por cliente:", error);
         res.status(500).json({ 
             error: "Error al obtener soporte por cliente",
-            detalle: error.message 
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -79,7 +80,10 @@ const crearSoporte = async (req, res) => {
         res.json(soporte);
     } catch (error) {
         console.error("Error al crear soporte:", error);
-        res.status(500).json({ error: "Error al crear soporte" });
+        res.status(500).json({ 
+            error: "Error al crear soporte",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -106,7 +110,10 @@ const actualizarSoporte = async (req, res) => {
         res.json(soporte);
     } catch (error) {
         console.error("Error al actualizar soporte:", error);
-        res.status(500).json({ error: "Error al actualizar soporte" });
+        res.status(500).json({ 
+            error: "Error al actualizar soporte",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -132,7 +139,10 @@ const eliminarSoporte = async (req, res) => {
         res.json({ mensaje: "Soporte eliminado exitosamente" });
     } catch (error) {
         console.error("Error al eliminar soporte:", error);
-        res.status(500).json({ error: "Error al eliminar soporte" });
+        res.status(500).json({ 
+            error: "Error al eliminar soporte",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

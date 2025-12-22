@@ -119,7 +119,8 @@ const obtenerCorrelativoActivo = async (req, res) => {
         console.error("Error al obtener correlativo activo:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al obtener correlativo activo'
+            message: 'Error al obtener correlativo activo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -184,7 +185,8 @@ const crearCorrelativo = async (req, res) => {
         
         res.status(500).json({
             status: 'error',
-            message: 'Error al crear correlativo'
+            message: 'Error al crear correlativo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -256,7 +258,8 @@ const actualizarCorrelativo = async (req, res) => {
         console.error("Error al actualizar correlativo:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al actualizar correlativo'
+            message: 'Error al actualizar correlativo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -287,7 +290,8 @@ const eliminarCorrelativo = async (req, res) => {
         
         res.status(500).json({
             status: 'error',
-            message: 'Error al eliminar correlativo'
+            message: 'Error al eliminar correlativo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

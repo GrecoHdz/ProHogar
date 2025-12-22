@@ -22,7 +22,8 @@ const obtenerEstadoCorrelativo = async (req, res) => {
         console.error("Error al obtener correlativo:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al obtener correlativo'
+            message: 'Error al obtener correlativo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -53,7 +54,8 @@ const obtenerFacturaDetalle = async (req, res) => {
         console.error("Error al obtener detalle de factura:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al obtener detalle de factura'
+            message: 'Error al obtener detalle de factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -145,7 +147,7 @@ const obtenerFacturas = async (req, res) => {
         res.status(500).json({
             success: false,
             error: "Error al obtener facturas",
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -200,7 +202,8 @@ const crearFactura = async (req, res) => {
         console.error("Error al crear factura:", error);
         res.status(500).json({
             status: 'error',
-            message: error.message
+            message: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
@@ -226,7 +229,8 @@ const anularFactura = async (req, res) => {
         console.error("Error al anular factura:", error);
         res.status(500).json({
             status: 'error',
-            message: 'Error al anular factura'
+            message: 'Error al anular factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

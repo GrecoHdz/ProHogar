@@ -9,7 +9,10 @@ const obtenertodaslasCuentas = async (req, res) => {
         res.json(cuentas);
     } catch (error) {
         console.error("Error al obtener cuentas activas:", error);
-        res.status(500).json({ error: "Error al obtener cuentas activas" });
+        res.status(500).json({ 
+            error: "Error al obtener cuentas activas",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -23,7 +26,10 @@ const obtenerCuentas = async (req, res) => {
         res.json(cuentas);
     } catch (error) {
         console.error("Error al obtener cuentas activas:", error);
-        res.status(500).json({ error: "Error al obtener cuentas activas" });
+        res.status(500).json({ 
+            error: "Error al obtener cuentas activas",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -34,7 +40,10 @@ const obtenerCuentaPorId = async (req, res) => {
         res.json(cuenta);
     } catch (error) {
         console.error("Error al obtener cuenta por id:", error);
-        res.status(500).json({ error: "Error al obtener cuenta por id" });
+        res.status(500).json({ 
+            error: "Error al obtener cuenta por id",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -45,7 +54,10 @@ const crearCuenta = async (req, res) => {
         res.json(cuenta);
     } catch (error) {
         console.error("Error al crear cuenta:", error);
-        res.status(500).json({ error: "Error al crear cuenta" });
+        res.status(500).json({ 
+            error: "Error al crear cuenta",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -56,7 +68,10 @@ const actualizarCuenta = async (req, res) => {
         res.json(cuenta);
     } catch (error) {
         console.error("Error al actualizar cuenta:", error);
-        res.status(500).json({ error: "Error al actualizar cuenta" });
+        res.status(500).json({ 
+            error: "Error al actualizar cuenta",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -67,7 +82,10 @@ const eliminarCuenta = async (req, res) => {
         res.json(cuenta);
     } catch (error) {
         console.error("Error al eliminar cuenta:", error);
-        res.status(500).json({ error: "Error al eliminar cuenta" });
+        res.status(500).json({ 
+            error: "Error al eliminar cuenta",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

@@ -221,7 +221,7 @@ const getTransacciones = async (req, res) => {
       res.status(500).json({
         success: false,
         error: 'Error al obtener las transacciones',
-        details: error.message
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
 };
@@ -279,7 +279,7 @@ const getTopUsuariosCredito = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Error al obtener el top de técnicos por crédito',
-            details: error.message
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -595,8 +595,12 @@ const obtenerRetiros = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ mensaje: 'Error al obtener retiros' });
+        console.error('Error al obtener retiros:', error);
+        res.status(500).json({ 
+            success: false,
+            mensaje: 'Error al obtener retiros',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -1644,7 +1648,11 @@ const getIngresosMensuales = async (req, res) => {
       res.json(resultado);
     } catch (error) {
       console.error('Error en getIngresosMensuales:', error);
-      res.status(500).json({ error: 'Error al obtener ingresos mensuales' });
+      res.status(500).json({ 
+        success: false,
+        error: 'Error al obtener ingresos mensuales',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
 };
 
@@ -1687,7 +1695,11 @@ const getServiciosPorMes = async (req, res) => {
       res.json(resultado);
     } catch (error) {
       console.error('Error en getServiciosPorMes:', error);
-      res.status(500).json({ error: 'Error al obtener servicios por mes' });
+      res.status(500).json({ 
+        success: false,
+        error: 'Error al obtener servicios por mes',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
 };
 
@@ -1728,7 +1740,11 @@ const getServiciosPorTipo = async (req, res) => {
         res.json(resultado);
     } catch (error) {
         console.error('Error en getServiciosPorTipo:', error);
-        res.status(500).json({ error: 'Error al obtener servicios por tipo' });
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al obtener servicios por tipo',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -1808,7 +1824,11 @@ const getEstadisticasGenerales = async (req, res) => {
 
     } catch (error) {
         console.error('Error en getEstadisticasGenerales:', error);
-        res.status(500).json({ error: 'Error al obtener estadísticas generales' });
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al obtener estadísticas generales',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }; 
 
@@ -1845,7 +1865,8 @@ const getIngresosTotalesReferidos = async (req, res) => {
         console.error('Error en getIngresosTotalesReferidos:', error);
         res.status(500).json({ 
             success: false,
-            error: 'Error al obtener información de ingresos y retiros' 
+            error: 'Error al obtener información de ingresos y retiros',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };   
@@ -2014,7 +2035,8 @@ const actualizarMovimiento = async (req, res) => {
         console.error('Error al actualizar movimiento:', error);
         res.status(500).json({
             success: false,
-            error: 'Error al actualizar el movimiento'
+            error: 'Error al actualizar el movimiento',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

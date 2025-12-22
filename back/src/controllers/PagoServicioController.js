@@ -4,7 +4,6 @@ const Movimiento = require("../models/movimientosModel");
 const CreditoUsuario = require("../models/creditoUsuariosModel");
 const Referido = require("../models/referidosModel");
 const Config = require("../models/configModel");
-const { Op } = require('sequelize');
  
 
 const processPayment = async (req, res) => {
@@ -24,8 +23,6 @@ const processPayment = async (req, res) => {
       nombre,
       comision_referido // opcional, calculada desde Config
     } = req.body;
-
-    console.log('🛰️ [DEBUG] Datos recibidos en /pagos/procesar:', req.body);
 
     // Validaciones básicas
     if (!id_cotizacion || !id_solicitud || !id_usuario) {
@@ -71,8 +68,6 @@ const processPayment = async (req, res) => {
       transaction: t
     });
 
-    console.log('🛰️ [DEBUG] Referido encontrado:', referido ? referido.id_referidor : 'ninguno');
-
     // 4️⃣ Procesar comisión por referido si existe (AHORA INCLUYE id_cotizacion)
     let movimientoReferidoCreado = null;
     if (referido && referido.id_referidor) {
@@ -84,8 +79,6 @@ const processPayment = async (req, res) => {
 
         const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
         const comision_referido_calc = Math.round(((porcentaje_comision * (montoManoDeObra) / 100) * 100) / 100); // 2 decimales
-
-        console.log(`💸 [DEBUG] Procesando comisión de $${comision_referido_calc} para referidor ${referido.id_referidor}`);
 
         if (comision_referido_calc > 0) {
           // Evitar duplicados: comprobar si ya existe un movimiento pendiente para la misma cotización
@@ -134,18 +127,17 @@ const processPayment = async (req, res) => {
               { transaction: t }
             );
 
-            console.log(`💰 [DEBUG] Crédito referidor ${referido.id_referidor}: ${creditoAnterior} -> ${nuevoCreditoReferidor}`);
           } else {
-            console.log('ℹ️ [INFO] Movimiento de referido ya existente para esta cotización, se evita duplicado.');
+            // No se muestra mensaje de log para mantener silencioso
           }
         } else {
-          console.log('ℹ️ [INFO] Comisión calculada es 0, no se crea movimiento.');
+          // No se muestra mensaje de log para mantener silencioso
         }
       } catch (errComision) {
-        console.warn('⚠️ Error al procesar comisión, se omite:', errComision.message);
+        // No se muestra mensaje de log para mantener silencioso
       }
     } else {
-      console.log('ℹ️ [INFO] Usuario no tiene referidor, se omite proceso de comisión.');
+      // No se muestra mensaje de log para mantener silencioso
     }
 
     // 5️⃣ Restar crédito del usuario si tiene
@@ -168,14 +160,12 @@ const processPayment = async (req, res) => {
         { transaction: t }
       );
 
-      console.log(`💰 [DEBUG] Crédito del usuario ${id_usuario} actualizado de ${montoCredito} a ${nuevoMonto}`);
     } else {
-      console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito para descontar o monto a descontar = 0.`);
+      // No se muestra mensaje de log para mantener silencioso
     }
 
     // ✅ Confirmar transacción
     await t.commit();
-    console.log('✅ [DEBUG] Transacción completada correctamente');
 
     return res.status(200).json({
       success: true,
@@ -190,22 +180,17 @@ const processPayment = async (req, res) => {
     });
   } catch (error) {
     await t.rollback();
-    console.error('[ERROR] Error durante la transacción de pago:', error);
+    // No se muestra mensaje de log para mantener silencioso
 
     return res.status(500).json({
       success: false,
       message: 'Error al procesar el pago. Se revertieron los cambios.',
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }; 
  
-const denyPayment = async (req, res) => {
-  console.log('📥 [DENEGAR PAGO] Datos recibidos:', {
-    body: req.body,
-    params: req.params,
-    query: req.query
-  });
+const denyPayment = async (req, res) => { 
 
   const t = await Cotizacion.sequelize.transaction();
 
@@ -215,7 +200,7 @@ const denyPayment = async (req, res) => {
     // Validación
     if (!id_cotizacion || !id_solicitud || !id_usuario) {
       const errorMsg = 'Faltan campos requeridos.';
-      console.error('❌ [DENEGAR PAGO] Error:', errorMsg);
+      // No se muestra mensaje de log para mantener silencioso
       await t.rollback();
       return res.status(400).json({ success: false, message: errorMsg });
     }
@@ -258,9 +243,7 @@ const denyPayment = async (req, res) => {
           fecha: new Date()
         },
         { transaction: t }
-      );
-
-      console.log(`💰 [DEBUG] Crédito devuelto: +${monto_credito_usado} al usuario ${id_usuario}`);
+      ); 
     }
 
     // 5️⃣ Revertir comisión de referido (si existía)
@@ -301,8 +284,7 @@ const denyPayment = async (req, res) => {
             },
             { transaction: t }
           );
-
-          console.log(`💸 [DEBUG] Comisión revertida (-${comision}) del referidor ${referido.id_referidor}`);
+ 
         }
 
         // Borrar movimiento de comisión
@@ -311,7 +293,7 @@ const denyPayment = async (req, res) => {
           transaction: t
         });
       } else {
-        console.log('ℹ️ [INFO] No se encontró un movimiento de comisión para esta cotización.');
+        // No se muestra mensaje de log para mantener silencioso
       }
     }
 
@@ -329,8 +311,6 @@ const denyPayment = async (req, res) => {
       }
     };
 
-    console.log('✅ [DENEGAR PAGO] Proceso completado:', successResponse);
-
     return res.status(200).json(successResponse);
 
   } catch (error) {
@@ -344,7 +324,7 @@ const denyPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error al denegar el pago. Se revertieron los cambios.',
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -354,8 +334,6 @@ const acceptPayment = async (req, res) => {
 
   try {
     const { id_cotizacion, id_solicitud } = req.body;
-
-    console.log('🛰️ [DEBUG] Datos recibidos en /pagos/aceptar:', req.body);
 
     if (!id_cotizacion || !id_solicitud) {
       await t.rollback();
@@ -379,8 +357,6 @@ const acceptPayment = async (req, res) => {
     await cotizacion.update({ estado: 'confirmado' }, { transaction: t });
     await solicitud.update({ estado: 'finalizado' }, { transaction: t });
 
-    console.log(`✅ [DEBUG] Cotización ${id_cotizacion} confirmada y solicitud ${id_solicitud} finalizada.`);
-
     // 5️⃣ Actualizar movimiento del técnico (si existe) buscando por id_cotizacion
     const movimientoTecnico = await Movimiento.findOne({
       where: {
@@ -393,9 +369,8 @@ const acceptPayment = async (req, res) => {
 
     if (movimientoTecnico) {
       await movimientoTecnico.update({ estado: 'completado' }, { transaction: t });
-      console.log(`💼 [DEBUG] Movimiento del técnico (${movimientoTecnico.id_movimiento}) marcado como completado.`);
     } else {
-      console.log('ℹ️ [INFO] No se encontró movimiento de técnico para esta cotización.');
+      // No se muestra mensaje de log para mantener silencioso
     }
 
     // 6️⃣ Actualizar movimiento del referido (si existe) buscando por id_cotizacion
@@ -411,14 +386,12 @@ const acceptPayment = async (req, res) => {
 
     if (movimientoReferido) {
       await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
-      console.log(`🤝 [DEBUG] Movimiento de referido (${movimientoReferido.id_movimiento}) marcado como completado.`);
     } else {
-      console.log('ℹ️ [INFO] No se encontró movimiento de referido pendiente para esta cotización.');
+      // No se muestra mensaje de log para mantener silencioso
     }
 
     // ✅ Confirmar transacción
     await t.commit();
-    console.log('✅ [DEBUG] Pago aceptado y todo actualizado correctamente.');
 
     return res.status(200).json({
       success: true,
@@ -433,12 +406,11 @@ const acceptPayment = async (req, res) => {
     });
   } catch (error) {
     await t.rollback();
-    console.error('[ERROR] Error al aceptar pago:', error);
 
     return res.status(500).json({
       success: false,
       message: 'Error al aceptar el pago. Se revertieron los cambios.',
-      error: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

@@ -8,7 +8,10 @@ const obtenerConfig = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al obtener configuraciones:", error);
-        res.status(500).json({ error: "Error al obtener configuraciones" });
+        res.status(500).json({ 
+            error: "Error al obtener configuraciones",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -19,7 +22,10 @@ const obtenerConfigPorId = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al obtener configuracion por id:", error);
-        res.status(500).json({ error: "Error al obtener configuracion por id" });
+        res.status(500).json({ 
+            error: "Error al obtener configuracion por id",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -54,7 +60,10 @@ const obtenerValorConfig = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al obtener valor de configuracion:", error);
-        res.status(500).json({ error: "Error al obtener valor de configuracion" });
+        res.status(500).json({ 
+            error: "Error al obtener valor de configuracion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -65,7 +74,10 @@ const crearConfig = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al crear configuracion:", error);
-        res.status(500).json({ error: "Error al crear configuracion" });
+        res.status(500).json({ 
+            error: "Error al crear configuracion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -76,7 +88,10 @@ const actualizarConfig = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al actualizar configuracion:", error);
-        res.status(500).json({ error: "Error al actualizar configuracion" });
+        res.status(500).json({ 
+            error: "Error al actualizar configuracion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -87,7 +102,10 @@ const eliminarConfig = async (req, res) => {
         res.json(config);
     } catch (error) {
         console.error("Error al eliminar configuracion:", error);
-        res.status(500).json({ error: "Error al eliminar configuracion" });
+        res.status(500).json({ 
+            error: "Error al eliminar configuracion",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
