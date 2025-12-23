@@ -15,11 +15,11 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    id_pagoservicio: {
+    id_cotizacion: {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    id_pagomembresia: {
+    id_membresia: {
         type: DataTypes.INTEGER,
         allowNull: true
     }
@@ -38,11 +38,11 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         },
         {
             name: 'idx_factura_relacion_pagoservicio',
-            fields: ['id_pagoservicio']
+            fields: ['id_cotizacion']
         },
         {
             name: 'idx_factura_relacion_pagomembresia',
-            fields: ['id_pagomembresia']
+            fields: ['id_membresia']
         }
     ]
 });

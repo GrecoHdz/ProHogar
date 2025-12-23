@@ -17,6 +17,9 @@ const Notificacion = require('./notificacionesModel');
 const NotificacionDestinatario = require('./notificacionesDestinatariosModel');
 const Config = require('./configModel');
 const TecnicoServicio = require('./tecnicosServiciosModel');
+const Factura = require('./facturaModel');
+const FacturaRelacion = require('./facturaRelacionModel');
+const FacturaCorrelativo = require('./facturaCorrelativoModel');
 
 
 // Función para configurar las asociaciones
@@ -357,6 +360,46 @@ Config.belongsTo(Usuario, {
     as: 'servicio',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
+  });
+
+  // Relaciones de Factura
+  // Relación Factura - FacturaRelacion (1:1)
+  Factura.hasOne(FacturaRelacion, {
+    foreignKey: 'id_factura',
+    as: 'relacion',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  FacturaRelacion.belongsTo(Factura, {
+    foreignKey: 'id_factura',
+    as: 'factura',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  // Relación FacturaRelacion - PagoVisita
+  FacturaRelacion.belongsTo(PagoVisita, {
+    foreignKey: 'id_pagovisita',
+    as: 'pagoVisita',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  });
+
+  // Relación FacturaRelacion - Cotización
+  FacturaRelacion.belongsTo(Cotizacion, {
+    foreignKey: 'id_cotizacion',
+    as: 'cotizacion',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  });
+
+  // Relación FacturaRelacion - Membresia
+  FacturaRelacion.belongsTo(Membresia, {
+    foreignKey: 'id_membresia',
+    as: 'membresia',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
   });
   
   console.log('Asociaciones configuradas correctamente');

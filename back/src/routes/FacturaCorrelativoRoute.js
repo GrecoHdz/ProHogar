@@ -22,24 +22,13 @@ const validarErrores = (req, res, next) => {
 };
 
 // Obtener todos los correlativos con paginación
-router.get("/", (req, res, next) => { 
-    next();
-}, [
+router.get("/", 
+    [
     query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
     query('offset').optional().isInt({ min: 0 }).toInt(),
     query('estado').optional().isIn(['ACTIVO', 'AGOTADO', 'VENCIDO'])
-],
-(req, res, next) => { 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) { 
-        return res.status(400).json({
-            success: false,
-            message: 'Parámetros inválidos',
-            errores: errors.array()
-        });
-    }
-    next();
-}, 
+    ],
+validarErrores,
 authMiddleware,  
 apiLimiter, 
 obtenerCorrelativos

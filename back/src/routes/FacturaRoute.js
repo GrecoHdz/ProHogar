@@ -37,6 +37,13 @@ router.get("/",
     obtenerFacturas
 );
 
+// Obtener estado del correlativo actual
+router.get("/estado-correlativo",
+    authMiddleware,
+    apiLimiter,
+    obtenerEstadoCorrelativo
+);
+
 // Obtener detalle de una factura específica
 router.get("/:id",
     [
@@ -76,13 +83,6 @@ router.put("/:id/anular",
     authMiddleware,
     apiLimiter,
     anularFactura
-);
-
-// Obtener estado del correlativo actual
-router.get("/estado-correlativo",
-    authMiddleware,
-    apiLimiter,
-    obtenerEstadoCorrelativo
-);
+); 
 
 module.exports = router;

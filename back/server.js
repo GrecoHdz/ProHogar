@@ -45,7 +45,7 @@ const cookieConfig = {
   path: '/',
 };
 //Middleware para configurar la configuración de cookies en todas las rutas
-app.use((req, next) => {
+app.use((req, res, next) => {
   req.cookieConfig = cookieConfig;
   next();
 });

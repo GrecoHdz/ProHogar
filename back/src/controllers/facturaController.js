@@ -4,6 +4,7 @@ const FacturaRelacion = require("../models/facturaRelacionModel");
 const FacturaCorrelativo = require("../models/facturaCorrelativoModel");
 const Usuario = require("../models/usuariosModel");
 const Config = require("../models/configModel");
+const { sequelize } = require("../config/database");
 
 
 const obtenerEstadoCorrelativo = async (req, res) => {
@@ -153,7 +154,7 @@ const obtenerFacturas = async (req, res) => {
 };
 
 const crearFactura = async (req, res) => {
-    const transaction = await Sequelize.transaction();
+    const transaction = await sequelize.transaction();
     try {
         const correlativo = await FacturaCorrelativo.findOne({
             where: { estado: 'ACTIVO' },
@@ -171,12 +172,21 @@ const crearFactura = async (req, res) => {
 
         const nuevoCorrelativo = correlativo.correlativo_actual + 1;
 
-        const factura = await Factura.create({
+        // Preparar datos de factura con valores por defecto para CONSUMIDOR_FINAL
+        const facturaData = {
             ...req.body,
             numero_factura_correlativo: nuevoCorrelativo,
             cai: correlativo.cai,
             fecha_emision: new Date()
-        }, { transaction });
+        };
+
+        // Si es CONSUMIDOR_FINAL, establecer valores por defecto
+        if (req.body.tipo_factura === 'CONSUMIDOR_FINAL') {
+            facturaData.rtn_cliente = 'CF';
+            facturaData.nombre_cliente = 'CONSUMIDOR FINAL';
+        }
+
+        const factura = await Factura.create(facturaData, { transaction });
 
         await FacturaRelacion.create({
             id_factura: factura.id_factura,
