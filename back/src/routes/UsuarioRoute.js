@@ -16,6 +16,7 @@ const {
     crearUsuario, 
     actualizarUsuario, 
     actualizarPassword,
+    verificarRTN,
     eliminarUsuario,
     obtenerEstadisticasUsuarios,
     obtenerGraficaCrecimientoUsuarios
@@ -112,6 +113,13 @@ router.put("/cambio-clave/:id",
         body("newPassword").isString().withMessage("La nueva contraseña debe ser una cadena de caracteres")
     ], 
     validarErrores, authLimiter, actualizarPassword);
+
+//Verificar RTN por ID de usuario
+router.get("/verificar-rtn/:id_usuario", 
+    [
+        param("id_usuario").isString().withMessage("El ID del usuario debe ser una cadena de caracteres")
+    ], 
+    validarErrores, authMiddleware, apiLimiter, verificarRTN);
 
 //Eliminar Usuario
 router.delete("/:id", 

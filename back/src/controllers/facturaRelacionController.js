@@ -1,6 +1,7 @@
 const { Sequelize, Op } = require("sequelize");
 const FacturaRelacion = require("../models/facturaRelacionModel");
 const Factura = require("../models/facturaModel");
+const { obtenerCorrelativoPorCAI } = require("./facturaCorrelativoController");
 
 const obtenerRelacionesFactura = async (req, res) => {
     try {
@@ -62,6 +63,69 @@ const obtenerRelacionPorFactura = async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Error al obtener relación de factura',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const buscarFacturaPorPago = async (req, res) => {
+    try {
+        const { id_pagovisita, id_cotizacion, id_membresia } = req.query;
+        
+        // Validar que solo se proporcione un tipo de ID
+        const ids = [id_pagovisita, id_cotizacion, id_membresia].filter(Boolean);
+        if (ids.length !== 1) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Debe proporcionar exactamente un tipo de ID (id_pagovisita, id_cotizacion o id_membresia)'
+            });
+        }
+
+        // Construir cláusula WHERE
+        const whereClause = {};
+        if (id_pagovisita) whereClause.id_pagovisita = id_pagovisita;
+        if (id_cotizacion) whereClause.id_cotizacion = id_cotizacion;
+        if (id_membresia) whereClause.id_membresia = id_membresia;
+
+        // Buscar la relación con include de factura (la más reciente)
+        const relacion = await FacturaRelacion.findOne({ 
+            where: whereClause,
+            include: [{
+                model: Factura,
+                as: 'factura',
+                required: true
+            }],
+            order: [['id', 'DESC']], // Ordenar por ID descendente para obtener la más reciente
+            limit: 1
+        });
+
+        if (!relacion) {
+            return res.status(404).json({
+                status: 'not_found',
+                message: 'No se encontró ninguna factura asociada a este pago'
+            });
+        }
+
+        // Obtener información del correlativo usando el CAI de la factura
+        let correlativoInfo = null;
+        try {
+            correlativoInfo = await obtenerCorrelativoPorCAI(relacion.factura.cai);
+        } catch (error) {
+            console.warn('No se encontró correlativo para el CAI:', relacion.factura.cai);
+            // No es un error fatal, continuamos sin la información del correlativo
+        }
+
+        res.json({
+            status: 'success',
+            factura: relacion.factura,
+            correlativo: correlativoInfo
+        });
+
+    } catch (error) {
+        console.error('Error al buscar factura por pago:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Error al buscar factura',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -140,11 +204,12 @@ const eliminarRelacionFactura = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-};
+}; 
 
 module.exports = {
     obtenerRelacionesFactura,
     obtenerRelacionPorFactura,
     crearRelacionFactura,
-    eliminarRelacionFactura
+    eliminarRelacionFactura,
+    buscarFacturaPorPago
 };

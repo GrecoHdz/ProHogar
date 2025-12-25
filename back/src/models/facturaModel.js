@@ -9,8 +9,7 @@ const Factura = sequelize.define("Factura", {
     },
     numero_factura_correlativo: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true
+        allowNull: false
     },
     cai: {
         type: DataTypes.STRING,
@@ -66,15 +65,13 @@ const Factura = sequelize.define("Factura", {
         },
         {
             name: 'idx_factura_rtn_cliente',
-            fields: ['rtn_cliente']
+            fields: ['rtn_cliente'],
+            unique: true
         },
         {
             name: 'idx_factura_fecha_emision',
-            fields: ['fecha_emision']
-        },
-        {
-            name: 'idx_factura_estado',
-            fields: ['estado']
+            fields: ['fecha_emision'],
+            unique: true
         }
     ]
 });

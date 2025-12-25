@@ -125,26 +125,59 @@ const obtenerCorrelativoActivo = async (req, res) => {
     }
 };
 
+const obtenerCorrelativoPorCAI = async (cai) => {
+    const correlativo = await FacturaCorrelativo.findOne({
+        where: { cai }
+    });
+
+    if (!correlativo) {
+        throw new Error("No existe correlativo con ese CAI");
+    }
+
+    const rangoInicioFormateado = `${correlativo.prefijo}${correlativo.rango_inicio.toString().padStart(8, '0')}`;
+    const rangoFinFormateado = `${correlativo.prefijo}${correlativo.rango_fin.toString().padStart(8, '0')}`;
+
+    // Formatear fecha límite de emisión a DD/MM/YYYY
+    const fechaVencimiento = new Date(correlativo.fecha_vencimiento);
+    const dia = fechaVencimiento.getDate().toString().padStart(2, '0');
+    const mes = (fechaVencimiento.getMonth() + 1).toString().padStart(2, '0');
+    const anio = fechaVencimiento.getFullYear().toString();
+    const fechaFormateada = `${dia}/${mes}/${anio}`;
+
+    return {
+        rango_autorizado: `${rangoInicioFormateado} - ${rangoFinFormateado}`,
+        fecha_limite_emision: fechaFormateada,
+        prefijo: correlativo.prefijo,
+        estado: correlativo.estado,
+        rango_inicio: correlativo.rango_inicio,
+        rango_fin: correlativo.rango_fin
+    };
+};
+
 const crearCorrelativo = async (req, res) => {
     try { 
         
         const {
             cai,
+            prefijo,
             rango_inicio,
             rango_fin,
             fecha_autorizacion,
             fecha_vencimiento
         } = req.body;
 
-        // Verificar si ya existe un correlativo activo
+        // Verificar si ya existe un correlativo activo con el mismo CAI
         const correlativoActivoExistente = await FacturaCorrelativo.findOne({
-            where: { estado: 'ACTIVO' }
+            where: { 
+                estado: 'ACTIVO',
+                cai: cai
+            }
         });
 
         if (correlativoActivoExistente) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Ya existe un correlativo activo. No se puede crear otro mientras haya uno activo.'
+                message: 'Ya existe un correlativo activo con este CAI.'
             });
         }
 
@@ -156,6 +189,7 @@ const crearCorrelativo = async (req, res) => {
         } 
         const correlativo = await FacturaCorrelativo.create({
             cai,
+            prefijo,
             rango_inicio,
             rango_fin,
             correlativo_actual: rango_inicio - 1,
@@ -212,27 +246,35 @@ const obtenerSiguienteCorrelativo = async (transaction = null) => {
     await correlativo.save({ transaction });
 
     return {
-        numero: correlativo.correlativo_actual,
-        cai: correlativo.cai
+        numero: `${correlativo.prefijo}-${correlativo.correlativo_actual.toString().padStart(8, '0')}`,
+        cai: correlativo.cai,
+        prefijo: correlativo.prefijo,
+        correlativo_actual: correlativo.correlativo_actual
     };
 };
 
+
 const actualizarCorrelativo = async (req, res) => {
     try {
-        // Si se está intentando activar este correlativo, verificar si hay otro activo
+        // Si se está intentando activar este correlativo, verificar si hay otro activo con el mismo CAI
         if (req.body.estado === 'ACTIVO') {
-            const correlativoActivoExistente = await FacturaCorrelativo.findOne({
-                where: { 
-                    estado: 'ACTIVO',
-                    id: { [Op.ne]: req.params.id } // Excluir el correlativo que se está actualizando
-                }
-            });
-
-            if (correlativoActivoExistente) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Ya existe un correlativo activo. No se puede activar este mientras haya otro activo.'
+            const correlativoActual = await FacturaCorrelativo.findByPk(req.params.id);
+            
+            if (correlativoActual) {
+                const correlativoActivoExistente = await FacturaCorrelativo.findOne({
+                    where: { 
+                        estado: 'ACTIVO',
+                        cai: correlativoActual.cai,
+                        id: { [Op.ne]: req.params.id } // Excluir el correlativo que se está actualizando
+                    }
                 });
+
+                if (correlativoActivoExistente) {
+                    return res.status(400).json({
+                        status: 'error',
+                        message: 'Ya existe un correlativo activo con este CAI. No se puede duplicar el CAI.'
+                    });
+                }
             }
         }
 
@@ -302,5 +344,6 @@ module.exports = {
     crearCorrelativo,
     actualizarCorrelativo, 
     obtenerSiguienteCorrelativo,
+    obtenerCorrelativoPorCAI,
     eliminarCorrelativo
 };

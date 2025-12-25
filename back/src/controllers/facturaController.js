@@ -171,13 +171,14 @@ const crearFactura = async (req, res) => {
         }
 
         const nuevoCorrelativo = correlativo.correlativo_actual + 1;
+        const correlativoFormateado = `${correlativo.prefijo}${nuevoCorrelativo.toString().padStart(8, '0')}`;
 
         // Preparar datos de factura con valores por defecto para CONSUMIDOR_FINAL
         const facturaData = {
             ...req.body,
-            numero_factura_correlativo: nuevoCorrelativo,
+            numero_factura_correlativo: correlativoFormateado,
             cai: correlativo.cai,
-            fecha_emision: new Date()
+            fecha_emision: obtenerFechaActualServidor()
         };
 
         // Si es CONSUMIDOR_FINAL, establecer valores por defecto
@@ -245,10 +246,29 @@ const anularFactura = async (req, res) => {
     }
 };
 
+// Función para obtener la fecha actual del servidor
+const obtenerFechaActualServidor = () => {
+    const ahora = new Date();
+    // Obtener la fecha y hora local del servidor
+    const offset = ahora.getTimezoneOffset();
+    const fechaLocal = new Date(ahora.getTime() - (offset * 60000));
+    
+    return new Date(
+        fechaLocal.getFullYear(),
+        fechaLocal.getMonth(),
+        fechaLocal.getDate(),
+        fechaLocal.getHours(),
+        fechaLocal.getMinutes(),
+        fechaLocal.getSeconds(),
+        fechaLocal.getMilliseconds()
+    );
+};
+
 module.exports = {
     obtenerFacturas,
     obtenerFacturaDetalle,
     crearFactura,
     anularFactura,
-    obtenerEstadoCorrelativo
+    obtenerEstadoCorrelativo,
+    obtenerFechaActualServidor
 };

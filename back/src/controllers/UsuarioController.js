@@ -1096,6 +1096,7 @@ const actualizarUsuario = async (req, res) => {
         });
     }
 };
+
 // Actualizar contraseña con verificación de contraseña actual
 const actualizarPassword = async (req, res) => { 
 
@@ -1201,6 +1202,70 @@ const actualizarPassword = async (req, res) => {
     }
 };
 
+//Función para verificar RTN por número de identidad
+const verificarRTN = async (req, res) => {
+    const { id_usuario } = req.params;
+    
+    if (!id_usuario) {
+        return res.status(400).json({ 
+            success: false,
+            error: "Se requiere el ID del usuario" 
+        });
+    }
+    
+    try {
+        // Buscar el usuario por id_usuario
+        const usuario = await Usuario.findOne({ 
+            where: { id_usuario },
+            attributes: ['id_usuario', 'nombre', 'identidad']
+        });
+        
+        if (!usuario) {
+            return res.status(404).json({ 
+                success: false,
+                error: "No se encontró ningún usuario con el ID proporcionado",
+                idBuscado: id_usuario
+            });
+        }
+        
+        // Verificar si la identidad tiene más de 13 dígitos
+        const identidadSinGuiones = usuario.identidad.replace(/-/g, '');
+        const cantidadDigitos = identidadSinGuiones.length;
+        
+        if (cantidadDigitos > 13) {
+            // Es un RTN
+            return res.json({
+                success: true,
+                message: "El número de identidad corresponde a un RTN",
+                data: {
+                    nombre: usuario.nombre,
+                    rtn: usuario.identidad,
+                    cantidad_digitos: cantidadDigitos
+                }
+            });
+        } else {
+            // No es un RTN
+            return res.json({
+                success: false,
+                message: "El número de identidad no corresponde a un RTN",
+                data: {
+                    nombre: usuario.nombre,
+                    identidad: usuario.identidad,
+                    cantidad_digitos: cantidadDigitos
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error("Error al verificar RTN:", error);
+        res.status(500).json({ 
+            success: false,
+            error: "Error al verificar RTN",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
     const { id } = req.params; // Cambiado de id_usuario a id para que coincida con la ruta
@@ -1247,5 +1312,6 @@ module.exports = {
     crearUsuario,
     actualizarUsuario,
     actualizarPassword,
+    verificarRTN,
     eliminarUsuario
 };

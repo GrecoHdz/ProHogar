@@ -11,6 +11,10 @@ const FacturaCorrelativo = sequelize.define("FacturaCorrelativo", {
         type: DataTypes.STRING,
         allowNull: false
     },
+    prefijo: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
     rango_inicio: {
         type: DataTypes.INTEGER,
         allowNull: false

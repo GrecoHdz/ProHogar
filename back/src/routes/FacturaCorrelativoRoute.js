@@ -44,6 +44,9 @@ router.get("/activo",
 // Crear un nuevo correlativo (solo administradores)
 router.post("/",
     [
+        body('prefijo')
+            .notEmpty().withMessage('El prefijo es requerido')
+            .matches(/^[a-zA-Z0-9]{3}-[a-zA-Z0-9]{3}-[a-zA-Z0-9]{2}-$/).withMessage('El prefijo debe tener el formato xxx-xxx-xx-'),
         body('cai')
             .notEmpty().withMessage('El CAI es requerido')
             .isLength({ min: 14, max: 37 }).withMessage('El CAI debe tener máximo 37 caracteres'),
@@ -64,8 +67,13 @@ router.post("/",
             .isISO8601().withMessage('Fecha de vencimiento inválida')
             .toDate()
             .custom((value, { req }) => {
-                if (new Date(value) <= new Date()) {
-                    throw new Error('La fecha de vencimiento debe ser futura');
+                const fechaAutorizacion = new Date(req.body.fecha_autorizacion);
+                const fechaVencimiento = new Date(value);
+                console.log('Fecha autorización:', fechaAutorizacion);
+                console.log('Fecha vencimiento:', fechaVencimiento);
+                console.log('Comparación:', fechaVencimiento <= fechaAutorizacion);
+                if (fechaVencimiento <= fechaAutorizacion) {
+                    throw new Error('La fecha de vencimiento debe ser posterior a la fecha de autorización');
                 }
                 return true;
             })
@@ -80,7 +88,8 @@ router.post("/",
 router.put("/:id",
     [
         param('id').isInt().withMessage('ID de correlativo inválido'),
-        body('estado').optional().isIn(['ACTIVO', 'INACTIVO', 'AGOTADO', 'VENCIDO'])
+        body('estado').optional().isIn(['ACTIVO', 'INACTIVO', 'AGOTADO', 'VENCIDO']),
+        body('prefijo').optional().matches(/^[a-zA-Z0-9]{3}-[a-zA-Z0-9]{3}-[a-zA-Z0-9]{2}-$/).withMessage('El prefijo debe tener el formato xxx-xxx-xx-')
     ],
     validarErrores,
     authMiddleware, 

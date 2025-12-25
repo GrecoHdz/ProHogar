@@ -8,7 +8,8 @@ const {
     obtenerRelacionesFactura,
     obtenerRelacionPorFactura,
     crearRelacionFactura,
-    eliminarRelacionFactura
+    eliminarRelacionFactura,
+    buscarFacturaPorPago
 } = require("../controllers/facturaRelacionController");
 
 // Middleware para validar errores
@@ -73,6 +74,19 @@ router.delete("/:id",
     authMiddleware,
     apiLimiter,
     eliminarRelacionFactura
+);
+
+// Buscar factura por ID de pago (servicio, membresía o visita)
+router.get("/idpago",
+    [
+        query('id_pagovisita').optional().isInt().toInt(),
+        query('id_cotizacion').optional().isInt().toInt(),
+        query('id_membresia').optional().isInt().toInt()
+    ],
+    validarErrores,
+    authMiddleware,
+    apiLimiter,
+    buscarFacturaPorPago
 );
 
 module.exports = router;
