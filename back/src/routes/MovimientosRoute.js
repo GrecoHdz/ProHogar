@@ -2,8 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { body, param, query, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
-const { apiLimiter } = require('../middleware/rateLimiters'); 
-const { 
+const { apiLimiter } = require('../middleware/rateLimiters');
+const {
     getAllMovimientos,
     obtenerEstadisticasDashboard,
     obtenerReporteIngresos,
@@ -19,7 +19,8 @@ const {
     crearMovimiento,
     actualizarMovimiento,
     eliminarMovimiento,
-    getTransacciones
+    getTransacciones,
+    getMovimientosIngresoMes
 } = require("../controllers/MovimientosController");
 
 // Middleware de autenticación
@@ -32,10 +33,10 @@ router.use(apiLimiter);
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errores: errors.array() });
+        return res.status(400).json({ errores: errors.array() });
     }
     next();
-  };
+};
 
 //Obtener todos los movimientos
 router.get("/", validarErrores, getAllMovimientos);
@@ -48,6 +49,9 @@ router.get("/estadisticas/admin", validarErrores, obtenerEstadisticasDashboard);
 
 //Obtener reporte de ingresos y gráfico mensual
 router.get("/reporte/ingresos", validarErrores, obtenerReporteIngresos);
+
+// Obtener solo movimientos de tipo ingreso por mes (para reporte financiero app)
+router.get("/ingresos/tecnicos", validarErrores, getMovimientosIngresoMes);
 
 //Obtener movimientos por usuario
 router.get("/:id_usuario", [
@@ -98,18 +102,18 @@ router.get("/historial/referidos/:id_usuario", [
 
 //Crear movimiento
 router.post("/", [
-    body("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero"), 
+    body("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero"),
     body("id_cotizacion").optional().isInt().withMessage("El id_cotizacion debe ser un numero entero"),
     body("id_referido").optional().isInt().withMessage("El id_referido debe ser un numero entero"),
-    body("tipo").isIn(["ingreso", "retiro","ingreso_referido"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
+    body("tipo").isIn(["ingreso", "retiro", "ingreso_referido"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
     body("monto").isFloat({ min: 0 }).withMessage("El monto debe ser un número válido (entero o decimal) y mayor o igual a 0"),
     body("descripcion").optional().isString().withMessage("La descripción debe ser un texto"),
 ], validarErrores, crearMovimiento);
 
 //Actualizar movimiento
 router.put("/:id", [
-    param("id").isInt().withMessage("El id debe ser un numero entero"), 
-    body("estado").optional().isIn(["pendiente", "completado","rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
+    param("id").isInt().withMessage("El id debe ser un numero entero"),
+    body("estado").optional().isIn(["pendiente", "completado", "rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
 ], validarErrores, actualizarMovimiento);
 
 //Eliminar movimiento

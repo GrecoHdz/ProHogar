@@ -1,5 +1,5 @@
 const Movimiento = require("../models/movimientosModel");
-const Cotizacion = require("../models/cotizacionModel"); 
+const Cotizacion = require("../models/cotizacionModel");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
 const { Op, Sequelize } = require('sequelize');
@@ -12,220 +12,194 @@ const Rol = require('../models/rolesModel');
 //Obtener transacciones con datos de cotización y suma total de montos
 const getTransacciones = async (req, res) => {
     try {
-      const { id_usuario } = req.params;
-      const { 
-        page = 1, 
-        limit = 5, 
-        startDate, 
-        endDate
-      } = req.query;
-  
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
-      const offset = (pageNum - 1) * limitNum;
-  
-      // 📅 Condiciones base
-      const where = { id_usuario };
-  
-      if (startDate && endDate) {
-        where.fecha = {
-          [Op.between]: [
-            ajustarFechaLocal(startDate, true), // Inicio del día
-            ajustarFechaLocal(endDate)         // Fin del día
-          ]
-        };
-      }
-  
-      // 📊 Contar total de registros
-      const totalMovimientos = await Movimiento.count({ where });
-      
-      // 📋 Contar membresías activas y vencidas
-      const whereMembresiasCount = { id_usuario };
-      if (startDate && endDate) {
-        whereMembresiasCount.fecha = {
-          [Op.between]: [
-            ajustarFechaLocal(startDate, true),
-            ajustarFechaLocal(endDate)
-          ]
-        };
-      }
-      
-      const totalMembresiasCount = await Membresia.count({
-        where: {
-          ...whereMembresiasCount,
-          estado: { [Op.in]: ['activa', 'vencida'] }
+        const { id_usuario } = req.params;
+        const {
+            page = 1,
+            limit = 5,
+            startDate,
+            endDate
+        } = req.query;
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const offset = (pageNum - 1) * limitNum;
+
+        // 📅 Condiciones base
+        const where = { id_usuario };
+
+        if (startDate && endDate) {
+            where.fecha = {
+                [Op.between]: [
+                    ajustarFechaLocal(startDate, true), // Inicio del día
+                    ajustarFechaLocal(endDate)         // Fin del día
+                ]
+            };
         }
-      });
-      
-      const total = totalMovimientos + totalMembresiasCount;
-  
-      // 📦 Obtener movimientos con relación a cotización
-      const movimientos = await Movimiento.findAll({
-        where,
-        order: [['fecha', 'DESC']],
-        limit: limitNum,
-        offset: offset,
-        attributes: [
-          'id_movimiento',
-          'descripcion',
-          'monto',
-          'tipo',
-          'fecha',
-          'estado',
-          'id_cotizacion'
-        ],
-        include: [
-          {
-            model: Cotizacion,
-            as: 'cotizacion',
-            required: false,
+
+        // 📊 Contar total de registros
+        const totalMovimientos = await Movimiento.count({ where });
+
+        // 📋 Contar membresías activas y vencidas
+        const whereMembresiasCount = { id_usuario };
+        if (startDate && endDate) {
+            whereMembresiasCount.fecha = {
+                [Op.between]: [
+                    ajustarFechaLocal(startDate, true),
+                    ajustarFechaLocal(endDate)
+                ]
+            };
+        }
+
+        const totalMembresiasCount = await Membresia.count({
+            where: {
+                ...whereMembresiasCount,
+                estado: { [Op.in]: ['activa', 'vencida'] }
+            }
+        });
+
+        const total = totalMovimientos + totalMembresiasCount;
+
+        // 📦 Obtener movimientos con relación a cotización
+        const movimientos = await Movimiento.findAll({
+            where,
+            order: [['fecha', 'DESC']],
+            limit: limitNum,
+            offset: offset,
             attributes: [
-              'id_cotizacion',
-              'id_solicitud',
-              'monto_manodeobra',
-              'descuento_membresia',
-              'credito_usado'
+                'id_movimiento',
+                'descripcion',
+                'monto',
+                'tipo',
+                'fecha',
+                'estado',
+                'id_cotizacion'
+            ],
+            include: [
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    required: false,
+                    attributes: [
+                        'id_cotizacion',
+                        'id_solicitud',
+                        'monto_manodeobra',
+                        'descuento_membresia',
+                        'credito_usado'
+                    ]
+                }
             ]
-          }
-        ]
-      });
-  
-      // 💰 Calcular saldo disponible total
-      const totalIngresos = await Movimiento.sum('monto', {
-        where: {
-          id_usuario,
-          estado: 'completado',
-          tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+        });
+
+        // 💰 Calcular saldo disponible total
+        const totalIngresos = await Movimiento.sum('monto', {
+            where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+            }
+        });
+
+        const totalRetiros = await Movimiento.sum('monto', {
+            where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: 'retiro'
+            }
+        });
+
+        // 📋 Obtener membresías activas y vencidas del usuario
+        const whereMembresias = { id_usuario };
+        if (startDate && endDate) {
+            whereMembresias.fecha = {
+                [Op.between]: [
+                    ajustarFechaLocal(startDate, true),
+                    ajustarFechaLocal(endDate)
+                ]
+            };
         }
-      });
 
-      const totalRetiros = await Movimiento.sum('monto', {
-        where: {
-          id_usuario,
-          estado: 'completado',
-          tipo: 'retiro'
-        }
-      });
+        const membresias = await Membresia.findAll({
+            where: {
+                ...whereMembresias,
+                estado: { [Op.in]: ['activa', 'vencida'] }
+            },
+            attributes: ['id_membresia', 'monto', 'fecha', 'estado'],
+            order: [['fecha', 'DESC']],
+            raw: true
+        });
 
-      // 📋 Obtener membresías activas y vencidas del usuario
-      const whereMembresias = { id_usuario };
-      if (startDate && endDate) {
-        whereMembresias.fecha = {
-          [Op.between]: [
-            ajustarFechaLocal(startDate, true),
-            ajustarFechaLocal(endDate)
-          ]
-        };
-      }
+        // 💰 Sumar montos de todas las membresías al saldo disponible (global, sin filtro de fecha)
+        const totalMembresias = await Membresia.sum('monto', {
+            where: {
+                id_usuario,
+                estado: { [Op.in]: ['activa', 'vencida'] }
+            }
+        }) || 0;
 
-      const membresias = await Membresia.findAll({
-        where: {
-          ...whereMembresias,
-          estado: { [Op.in]: ['activa', 'vencida'] }
-        },
-        attributes: ['id_membresia', 'monto', 'fecha', 'estado'],
-        order: [['fecha', 'DESC']],
-        raw: true
-      });
+        const saldoDisponible = parseFloat((totalIngresos || 0) - (totalRetiros || 0) + totalMembresias);
 
-      // 💰 Sumar montos de membresías al saldo
-      const totalMembresias = membresias.reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
+        // 🧩 Formatear respuesta
+        const transaccionesMovimientos = movimientos.map(mov => {
+            const data = mov.get({ plain: true });
 
-      // Calcular saldo disponible para el rango de fechas si se especificó
-      let saldoRangoFechas = null;
-      if (startDate && endDate) {
-        const ingresosRango = await Movimiento.sum('monto', {
-          where: {
-            ...where,
+            return {
+                id_movimiento: data.id_movimiento,
+                descripcion: data.descripcion || 'Transacción',
+                monto: parseFloat(data.monto),
+                tipo: data.tipo,
+                fecha: data.fecha,
+                estado: data.estado,
+                cotizacion: data.cotizacion
+                    ? {
+                        id_solicitud: data.cotizacion.id_solicitud,
+                        monto_manodeobra: parseFloat(data.cotizacion.monto_manodeobra || 0),
+                        descuento_membresia: parseFloat(data.cotizacion.descuento_membresia || 0),
+                        credito_usado: parseFloat(data.cotizacion.credito_usado || 0)
+                    }
+                    : null
+            };
+        });
+
+        // 📋 Formatear membresías como movimientos de ingreso
+        const transaccionesMembresias = membresias.map(membresia => ({
+            id_movimiento: `membresia_${membresia.id_membresia}`,
+            descripcion: `Pago Membresía`,
+            monto: parseFloat(membresia.monto),
+            tipo: 'ingreso',
+            fecha: membresia.fecha,
             estado: 'completado',
-            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
-          }
+            cotizacion: null
+        }));
+
+        // 🔄 Combinar todas las transacciones
+        const transacciones = [...transaccionesMovimientos, ...transaccionesMembresias];
+
+        // 📅 Ordenar por fecha descendente
+        transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        // 📤 Respuesta final
+        res.json({
+            success: true,
+            data: transacciones,
+            saldoDisponible,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
         });
 
-        const retirosRango = await Movimiento.sum('monto', {
-          where: {
-            ...where,
-            estado: 'completado',
-            tipo: 'retiro'
-          }
-        });
-
-        // Sumar membresías del rango al saldo de fechas
-        const membresiasRango = await Membresia.sum('monto', {
-          where: {
-            ...whereMembresias,
-            estado: { [Op.in]: ['activa', 'vencida'] }
-          }
-        });
-
-        saldoRangoFechas = parseFloat((ingresosRango || 0) - (retirosRango || 0) + (membresiasRango || 0));
-      }
-
-      const saldoDisponible = parseFloat((totalIngresos || 0) - (totalRetiros || 0) + totalMembresias);
-  
-      // 🧩 Formatear respuesta
-      const transaccionesMovimientos = movimientos.map(mov => {
-        const data = mov.get({ plain: true });
-  
-        return {
-          id_movimiento: data.id_movimiento,
-          descripcion: data.descripcion || 'Transacción',
-          monto: parseFloat(data.monto),
-          tipo: data.tipo,
-          fecha: data.fecha,
-          estado: data.estado,
-          cotizacion: data.cotizacion
-            ? { 
-                id_solicitud: data.cotizacion.id_solicitud,
-                monto_manodeobra: parseFloat(data.cotizacion.monto_manodeobra || 0),
-                descuento_membresia: parseFloat(data.cotizacion.descuento_membresia || 0),
-                credito_usado: parseFloat(data.cotizacion.credito_usado || 0)
-              }
-            : null
-        };
-      });
-
-      // 📋 Formatear membresías como movimientos de ingreso
-      const transaccionesMembresias = membresias.map(membresia => ({
-        id_movimiento: `membresia_${membresia.id_membresia}`,
-        descripcion: `Pago Membresía`,
-        monto: parseFloat(membresia.monto),
-        tipo: 'ingreso',
-        fecha: membresia.fecha,
-        estado: 'completado',
-        cotizacion: null
-      }));
-
-      // 🔄 Combinar todas las transacciones
-      const transacciones = [...transaccionesMovimientos, ...transaccionesMembresias];
-      
-      // 📅 Ordenar por fecha descendente
-      transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  
-      // 📤 Respuesta final
-      res.json({
-        success: true,
-        data: transacciones,
-        saldoDisponible,
-        saldoRangoFechas: saldoRangoFechas !== null ? saldoRangoFechas : saldoDisponible,
-        pagination: {
-          total,
-          page: pageNum,
-          limit: limitNum,
-          totalPages: Math.ceil(total / limitNum)
-        }
-      });
-  
     } catch (error) {
-      console.error('Error al obtener transacciones:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error al obtener las transacciones',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error('Error al obtener transacciones:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las transacciones',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
-  
+
 const getTopUsuariosCredito = async (req, res) => {
     try {
         // Obtener el top 5 de técnicos con más crédito
@@ -248,12 +222,12 @@ const getTopUsuariosCredito = async (req, res) => {
                 as: 'usuario',
                 attributes: ['nombre'],
                 include: [{
-                    model: Rol,   
-                    as: 'rol', 
+                    model: Rol,
+                    as: 'rol',
                     where: {
-                        nombre_rol: 'tecnico'  
+                        nombre_rol: 'tecnico'
                     },
-                    attributes: [] 
+                    attributes: []
                 }],
                 required: true
             }],
@@ -262,10 +236,10 @@ const getTopUsuariosCredito = async (req, res) => {
         });
 
         // Formatear la respuesta
-        const resultado = topUsuarios.map(item => ({ 
-            nombre: item.usuario?.nombre ? 
-                   `${item.usuario.nombre}`.trim() : 
-                   'Técnico sin nombre',
+        const resultado = topUsuarios.map(item => ({
+            nombre: item.usuario?.nombre ?
+                `${item.usuario.nombre}`.trim() :
+                'Técnico sin nombre',
             saldo_total: parseFloat(item.saldo_total) || 0
         }));
 
@@ -283,6 +257,44 @@ const getTopUsuariosCredito = async (req, res) => {
         });
     }
 };
+
+// Obtener movimientos de tipo ingreso de un mes especifico
+const getMovimientosIngresoMes = async (req, res) => {
+    try {
+        const { mes } = req.query; // Formato esperado: 'YYYY-MM'
+
+        const where = { tipo: 'ingreso' };
+
+        if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+            const [year, month] = mes.split('-').map(Number);
+            where[Op.and] = [
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha')), month)
+            ];
+        } else {
+            // Si no hay mes, podemos optar por el mes actual o todos (el usuario pidió un mes específico)
+            // Por consistencia, si no hay mes, no filtramos por fecha pero el usuario usualmente lo enviará.
+        }
+
+        const movimientos = await Movimiento.findAll({
+            where,
+            attributes: ['id_movimiento', 'id_cotizacion', 'monto', 'tipo', 'fecha', 'estado'],
+            raw: true
+        });
+
+        res.json({
+            success: true,
+            movimientos
+        });
+    } catch (error) {
+        console.error('Error al obtener movimientos de ingreso por mes:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener los movimientos de ingreso'
+        });
+    }
+};
+
 // Obtener todos los retiros con información detallada y filtros
 const obtenerRetiros = async (req, res) => {
     try {
@@ -366,12 +378,12 @@ const obtenerRetiros = async (req, res) => {
                 }
             ],
             attributes: [
-                'id_movimiento', 
-                'monto', 
-                'fecha', 
-                'estado', 
-                'tipo', 
-                'id_cotizacion', 
+                'id_movimiento',
+                'monto',
+                'fecha',
+                'estado',
+                'tipo',
+                'id_cotizacion',
                 'id_usuario',
                 'descripcion'
             ],
@@ -402,7 +414,7 @@ const obtenerRetiros = async (req, res) => {
         stats.forEach(stat => {
             const estado = stat.estado ? stat.estado.toLowerCase() : 'pendiente';
             const total = parseInt(stat.total) || 0;
-            
+
             if (estado.includes('pendiente')) {
                 statsData.pendientes += total;
             } else if (estado.includes('completado') || estado.includes('aprobado')) {
@@ -410,7 +422,7 @@ const obtenerRetiros = async (req, res) => {
             } else if (estado.includes('rechazado') || estado.includes('cancelado')) {
                 statsData.rechazados += total;
             }
-            
+
             statsData.total += total;
         });
 
@@ -431,20 +443,20 @@ const obtenerRetiros = async (req, res) => {
             const esIngreso = datosMovimiento.tipo === 'ingreso';
             const esRetiro = datosMovimiento.tipo === 'retiro';
             const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
-            
+
             // Calcular el monto según el tipo de movimiento
             let monto;
             if (esIngreso && datosMovimiento.cotizacion) {
                 const cotizacion = datosMovimiento.cotizacion;
                 // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
-                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
-                                parseFloat(cotizacion.descuento_membresia || 0) - 
-                                parseFloat(cotizacion.credito_usado || 0));
+                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) -
+                    parseFloat(cotizacion.descuento_membresia || 0) -
+                    parseFloat(cotizacion.credito_usado || 0));
                 monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
             } else {
                 monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
             }
-            
+
             const base = {
                 id_usuario: datosMovimiento.id_usuario || null,
                 id_movimiento: datosMovimiento.id_movimiento,
@@ -453,8 +465,8 @@ const obtenerRetiros = async (req, res) => {
                 fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
                 estado: estadoNormalizado,
                 tipo: datosMovimiento.tipo,
-                nombre_usuario: datosMovimiento.usuario ? 
-                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
+                nombre_usuario: datosMovimiento.usuario ?
+                    `${datosMovimiento.usuario.nombre || ''}`.trim() :
                     'Usuario no encontrado'
             };
 
@@ -463,7 +475,7 @@ const obtenerRetiros = async (req, res) => {
                 const solicitud = datosMovimiento.cotizacion.solicitud;
                 base.colonia = solicitud?.colonia || 'Sin colonia especificada';
                 base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
-            } 
+            }
             // Agregar campos específicos para retiros
             else if (esRetiro) {
                 base.descripcion = datosMovimiento.descripcion;
@@ -512,21 +524,21 @@ const obtenerRetiros = async (req, res) => {
             const esIngreso = datosMovimiento.tipo === 'ingreso';
             const esRetiro = datosMovimiento.tipo === 'retiro';
             const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
-            
+
             // Calcular el monto según el tipo de movimiento
             let monto;
             if (esIngreso && datosMovimiento.cotizacion) {
                 const cotizacion = datosMovimiento.cotizacion;
                 // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado) - monto_movimiento
-                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
-                                parseFloat(cotizacion.descuento_membresia || 0) - 
-                                parseFloat(cotizacion.credito_usado || 0));
+                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) -
+                    parseFloat(cotizacion.descuento_membresia || 0) -
+                    parseFloat(cotizacion.credito_usado || 0));
                 monto = (montoBase - parseFloat(datosMovimiento.monto || 0)).toFixed(2);
             } else {
                 monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
             }
-            
-            const base = { 
+
+            const base = {
                 id_movimiento: datosMovimiento.id_movimiento,
                 id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
                 monto: monto,
@@ -534,8 +546,8 @@ const obtenerRetiros = async (req, res) => {
                 estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
                 tipo: datosMovimiento.tipo,
                 descripcion: datosMovimiento.descripcion,
-                nombre_usuario: datosMovimiento.usuario ? 
-                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
+                nombre_usuario: datosMovimiento.usuario ?
+                    `${datosMovimiento.usuario.nombre || ''}`.trim() :
                     'Usuario no encontrado'
             };
 
@@ -544,7 +556,7 @@ const obtenerRetiros = async (req, res) => {
                 const solicitud = datosMovimiento.cotizacion.solicitud;
                 base.colonia = solicitud?.colonia || 'Sin colonia especificada';
                 base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
-            } 
+            }
             // Agregar campos específicos para retiros
             else if (esRetiro) {
                 base.descripcion = datosMovimiento.descripcion;
@@ -557,7 +569,7 @@ const obtenerRetiros = async (req, res) => {
         const totales = allMovimientosFormateados.reduce((acc, mov) => {
             const monto = parseFloat(mov.monto) || 0;
             const estado = mov.estado?.toLowerCase() || '';
-            
+
             // Solo contabilizar retiros con estado 'completado'
             if (mov.tipo === 'retiro' && estado === 'completado') {
                 acc.retiros += monto;
@@ -575,7 +587,7 @@ const obtenerRetiros = async (req, res) => {
             }
             return sum;
         }, 0);
-        
+
         // Crear objeto de estadísticas mensuales
         const monthlyStats = {
             pendientes: parseInt(statsData.pendientes) || 0,
@@ -596,7 +608,7 @@ const obtenerRetiros = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener retiros:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             mensaje: 'Error al obtener retiros',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -608,7 +620,7 @@ const obtenerRetiros = async (req, res) => {
 const obtenerReporteIngresos = async (req, res) => {
     try {
         const { fechaInicio, fechaFin, mesActual } = req.query;
-        
+
         // Validar que mesActual tenga el formato correcto (YYYY-MM)
         let fechaReferencia = new Date();
         if (mesActual && /^\d{4}-(0[1-9]|1[0-2])$/.test(mesActual)) {
@@ -616,7 +628,7 @@ const obtenerReporteIngresos = async (req, res) => {
             // Crear fecha en la zona horaria local
             fechaReferencia = new Date(anio, mes - 1, 1);
         }
-        
+
         // 1. Obtener ingresos por diferentes fuentes con filtros de fecha
         const [
             ingresosMembresias,
@@ -701,22 +713,22 @@ const obtenerReporteIngresos = async (req, res) => {
         }, 0);
 
         // Calcular ingresos totales (solo sumamos ingresos, no restamos retiros ni comisiones aquí)
-        const ingresosTotales = (ingresosServicios || 0) + 
-                              (ingresosMembresias || 0) + 
-                              (ingresosVisitas || 0);
-                              
+        const ingresosTotales = (ingresosServicios || 0) +
+            (ingresosMembresias || 0) +
+            (ingresosVisitas || 0);
+
         // Calcular ganancia neta (ingresos - retiros - comisiones)
         const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const meses = [];
-        
+
         // Generar arreglo de los 12 meses anteriores al mes de referencia
         for (let i = 11; i >= 0; i--) {
             const fecha = new Date(fechaReferencia);
             fecha.setMonth(fecha.getMonth() - i);
-            
+
             meses.push({
                 mes: fecha.getMonth() + 1,
                 anio: fecha.getFullYear(),
@@ -735,11 +747,11 @@ const obtenerReporteIngresos = async (req, res) => {
             const ingresosMembresiasMes = await Membresia.sum('monto', {
                 where: {
                     estado: { [Op.in]: ['activa', 'vencida'] },
-                    fecha: { 
+                    fecha: {
                         [Op.between]: [
                             fechaInicio,
                             fechaFin
-                        ] 
+                        ]
                     }
                 }
             }) || 0;
@@ -748,11 +760,11 @@ const obtenerReporteIngresos = async (req, res) => {
             const ingresosVisitasMes = await PagoVisita.sum('monto', {
                 where: {
                     estado: 'aprobado',
-                    fecha: { 
+                    fecha: {
                         [Op.between]: [
                             fechaInicio,
                             fechaFin
-                        ] 
+                        ]
                     }
                 }
             }) || 0;
@@ -761,11 +773,11 @@ const obtenerReporteIngresos = async (req, res) => {
             const cotizacionesMes = await Cotizacion.findAll({
                 where: {
                     estado: 'confirmado',
-                    fecha: { 
+                    fecha: {
                         [Op.between]: [
                             fechaInicio,
                             fechaFin
-                        ] 
+                        ]
                     }
                 },
                 attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
@@ -783,11 +795,11 @@ const obtenerReporteIngresos = async (req, res) => {
                 where: {
                     tipo: 'retiro',
                     estado: 'completado',
-                    fecha: { 
+                    fecha: {
                         [Op.between]: [
                             fechaInicio,
                             fechaFin
-                        ] 
+                        ]
                     }
                 }
             }) || 0;
@@ -844,248 +856,27 @@ const getAllMovimientos = async (req, res) => {
 
         // Configurar condiciones de búsqueda
         const where = {};
-        
+
         // Filtrar por tipo de movimiento
         if (tipo === 'retiros') where.tipo = 'retiro';
         if (tipo === 'ingresos') where.tipo = 'ingreso';
-        
+
         // Filtrar por mes y año si se proporciona fecha en formato YYYY-MM
         if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
             const [year, month] = fecha.split('-').map(Number);
-            const startDate = new Date(year, month - 1, 1); // mes es 0-indexed
-            const endDate = new Date(year, month, 0, 23, 59, 59); // último día del mes
-            
+            const startDate = ajustarFechaLocal(new Date(year, month - 1, 1), true);
+            const endDate = ajustarFechaLocal(new Date(year, month, 0), false);
+
             where.fecha = {
                 [Op.between]: [startDate, endDate]
             };
         }
 
-        // Configuración base de la consulta
-        const queryOptions = {
+        // 1. Obtener TODOS los movimientos de la tabla Movimiento (con sus relaciones)
+        // Usamos findAll sin limit/offset para combinar y ordenar correctamente con otros tipos de ingresos
+        const allMovimientosRaw = await Movimiento.findAll({
             where,
             order: [['fecha', 'DESC']],
-            include: [
-                {
-                    model: Usuario,
-                    as: 'usuario',
-                    required: false,
-                    attributes: ['nombre']
-                },
-                {
-                    model: Cotizacion,
-                as: 'cotizacion',
-                required: false,
-                attributes: ['id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
-                include: [{
-                    model: SolicitudServicio,
-                    as: 'solicitud',
-                    required: false,
-                    attributes: ['colonia', 'id_servicio', 'id_solicitud'],
-                    include: [{
-                        model: Servicio,
-                        as: 'servicio',
-                        required: false,
-                        attributes: ['nombre']
-                    }]
-                }]
-            }],
-            attributes: [
-                'id_movimiento', 
-                'monto', 
-                'fecha', 
-                'estado', 
-                'tipo', 
-                'id_cotizacion', 
-                'id_usuario',
-                'descripcion'
-            ],
-            raw: false,
-            distinct: true
-        };
-
-        // Obtener total de registros
-        const total = await Movimiento.count({ 
-            where: queryOptions.where,
-            distinct: true,
-            col: 'id_movimiento'
-        });
-        
-        const totalPages = Math.ceil(total / limitNum);
-
-        // Aplicar paginación
-        queryOptions.limit = limitNum;
-        queryOptions.offset = offset;
-
-        // Obtener movimientos con paginación
-        const { count, rows: movimientos } = await Movimiento.findAndCountAll(queryOptions);
-
-        // Obtener membresías y visitas como ingresos adicionales si no se filtra por tipo específico
-        let membresiasIngresos = [];
-        let visitasIngresos = [];
-        
-        if (!tipo || tipo === 'ingresos') {
-            // Configurar filtros de fecha para membresías y visitas
-            const fechaFilter = {};
-            if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
-                const [year, month] = fecha.split('-').map(Number);
-                const startDate = new Date(year, month - 1, 1);
-                const endDate = new Date(year, month, 0, 23, 59, 59);
-                fechaFilter.fecha = { [Op.between]: [startDate, endDate] };
-            }
-
-            // Obtener membresías aprobadas
-            const membresiasQuery = {
-                where: {
-                    estado: { [Op.in]: ['activa', 'vencida'] },
-                    ...fechaFilter
-                },
-                include: [
-                    {
-                        model: Usuario,
-                        as: 'usuario',
-                        required: false,
-                        attributes: ['nombre']
-                    }
-                ],
-                attributes: ['id_membresia', 'monto', 'fecha', 'estado', 'id_usuario'],
-                order: [['fecha', 'DESC']],
-                raw: true,
-                nest: true
-            };
-
-            // Aplicar paginación a membresías
-            const membresiasLimit = Math.max(0, limitNum - movimientos.length);
-            if (membresiasLimit > 0) {
-                membresiasQuery.limit = membresiasLimit;
-                membresiasIngresos = await Membresia.findAll(membresiasQuery);
-            }
-
-            // Obtener visitas aprobadas
-            const visitasQuery = {
-                where: {
-                    estado: 'aprobado',
-                    ...fechaFilter
-                },
-                include: [
-                    {
-                        model: Usuario,
-                        as: 'usuario',
-                        required: false,
-                        attributes: ['nombre']
-                    },
-                    {
-                        model: SolicitudServicio,
-                        as: 'solicitud',
-                        required: false,
-                        include: [{
-                            model: Usuario,
-                            as: 'cliente',
-                            required: false,
-                            attributes: ['nombre']
-                        }]
-                    }
-                ],
-                attributes: ['id_pagovisita', 'monto', 'fecha', 'estado', 'id_usuario', 'id_solicitud'],
-                order: [['fecha', 'DESC']],
-                raw: true,
-                nest: true
-            };
-
-            // Aplicar paginación a visitas
-            const visitasLimit = Math.max(0, limitNum - movimientos.length - membresiasIngresos.length);
-            if (visitasLimit > 0) {
-                visitasQuery.limit = visitasLimit;
-                visitasIngresos = await PagoVisita.findAll(visitasQuery);
-            }
-        }
-
-        // Formatear movimientos de la tabla Movimiento
-        const movimientosFormateados = await Promise.all(movimientos.map(async movimiento => {
-            const datosMovimiento = movimiento.get({ plain: true });
-            const esIngreso = datosMovimiento.tipo === 'ingreso';
-            const esRetiro = datosMovimiento.tipo === 'retiro';
-            const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
-            
-            // Calcular el monto según el tipo de movimiento
-            let monto;
-            if (esIngreso && datosMovimiento.cotizacion) {
-                const cotizacion = datosMovimiento.cotizacion;
-                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado)
-                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
-                                parseFloat(cotizacion.descuento_membresia || 0) - 
-                                parseFloat(cotizacion.credito_usado || 0));
-                monto = montoBase.toFixed(2);
-            } else {
-                monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
-            }
-            
-            const base = {
-                id_movimiento: datosMovimiento.id_movimiento,
-                id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
-                monto: monto,
-                fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
-                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
-                tipo: datosMovimiento.tipo,
-                nombre_usuario: datosMovimiento.usuario ? 
-                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
-                    'Usuario no encontrado'
-            };
-
-            // Agregar campos específicos para ingresos
-            if (esIngreso && datosMovimiento.cotizacion) {
-                const solicitud = datosMovimiento.cotizacion.solicitud;
-                base.colonia = solicitud?.colonia || 'Sin colonia especificada';
-                base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
-            } 
-            // Agregar campos específicos para retiros
-            else if (esRetiro) {
-                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
-            }
-
-            return base;
-        }));
-
-        // Formatear membresías como ingresos
-        const membresiasFormateadas = membresiasIngresos.map(membresia => ({
-            id_movimiento: `membresia_${membresia.id_membresia}`,
-            id_solicitud: null,
-            monto: parseFloat(membresia.monto || 0).toFixed(2),
-            fecha: new Date(membresia.fecha).toISOString().split('T')[0],
-            estado: 'Completado',
-            tipo: 'ingreso',
-            nombre_usuario: membresia.usuario?.nombre || 'Usuario no encontrado',
-            servicio: 'Membresía'
-        }));
-
-        // Formatear visitas como ingresos
-        const visitasFormateadas = visitasIngresos.map(visita => ({
-            id_movimiento: `visita_${visita.id_pagovisita}`,
-            id_solicitud: visita.id_solicitud || visita.solicitud?.id_solicitud || null,
-            monto: parseFloat(visita.monto || 0).toFixed(2),
-            fecha: new Date(visita.fecha).toISOString().split('T')[0],
-            estado: 'Completado',
-            tipo: 'ingreso',
-            nombre_usuario: visita.solicitud?.cliente?.nombre || visita.usuario?.nombre || 'Usuario no encontrado',
-            servicio: 'Visita Técnica'
-        }));
-
-        // Combinar todos los movimientos
-        let todosMovimientos = [...movimientosFormateados, ...membresiasFormateadas, ...visitasFormateadas];
-        
-        // Ordenar por fecha descendente
-        todosMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-        
-        // Aplicar paginación final al conjunto combinado
-        const startIndex = offset;
-        const endIndex = startIndex + limitNum;
-        const movimientosPaginados = todosMovimientos.slice(startIndex, endIndex);
-
-        // Obtener todos los registros coincidentes para calcular totales (incluyendo membresías y visitas)
-        let allMovimientosFormateados = [];
-        
-        // Movimientos de la tabla Movimiento
-        const allMovimientos = await Movimiento.findAll({
-            where,
             include: [
                 {
                     model: Usuario,
@@ -1111,152 +902,196 @@ const getAllMovimientos = async (req, res) => {
                         }]
                     }]
                 }
-            ],
-            order: [['fecha', 'DESC']],
-            raw: true,
-            nest: true
+            ]
         });
 
         // Formatear movimientos de la tabla Movimiento
-        const movimientosTablaFormateados = await Promise.all(allMovimientos.map(async movimiento => {
-            const datosMovimiento = movimiento;
-            const esIngreso = datosMovimiento.tipo === 'ingreso';
-            const esRetiro = datosMovimiento.tipo === 'retiro';
-            const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
-            
+        const movimientosTablaFormateados = allMovimientosRaw.map(movimiento => {
+            const data = movimiento.get({ plain: true });
+            const esIngreso = data.tipo === 'ingreso';
+            const esRetiro = data.tipo === 'retiro';
+            const estadoNormalizado = (data.estado || '').toLowerCase();
+
             // Calcular el monto según el tipo de movimiento
             let monto;
-            if (esIngreso && datosMovimiento.cotizacion) {
-                const cotizacion = datosMovimiento.cotizacion;
+            if (esIngreso && data.cotizacion) {
+                const cotizacion = data.cotizacion;
                 // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado)
-                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) - 
-                                parseFloat(cotizacion.descuento_membresia || 0) - 
-                                parseFloat(cotizacion.credito_usado || 0));
+                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) -
+                    parseFloat(cotizacion.descuento_membresia || 0) -
+                    parseFloat(cotizacion.credito_usado || 0));
                 monto = montoBase.toFixed(2);
             } else {
-                monto = parseFloat(datosMovimiento.monto || 0).toFixed(2);
+                monto = parseFloat(data.monto || 0).toFixed(2);
             }
-            
+
             const base = {
-                id_movimiento: datosMovimiento.id_movimiento,
-                id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
+                id_movimiento: data.id_movimiento,
+                id_solicitud: data.cotizacion?.id_solicitud || null,
                 monto: monto,
-                fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
+                fecha: data.fecha, // Mantener Date para ordenar, lo formatearemos al final
                 estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
-                tipo: datosMovimiento.tipo,
-                nombre_usuario: datosMovimiento.usuario ? 
-                    `${datosMovimiento.usuario.nombre || ''}`.trim() : 
+                tipo: data.tipo,
+                nombre_usuario: data.usuario ?
+                    `${data.usuario.nombre || ''}`.trim() :
                     'Usuario no encontrado'
             };
 
-            // Agregar campos específicos para ingresos
-            if (esIngreso && datosMovimiento.cotizacion) {
-                const solicitud = datosMovimiento.cotizacion.solicitud;
+            // Agregar campos específicos según tipo
+            if (esIngreso && data.cotizacion) {
+                const solicitud = data.cotizacion.solicitud;
                 base.colonia = solicitud?.colonia || 'Sin colonia especificada';
                 base.servicio = solicitud?.servicio?.nombre || 'Servicio no especificado';
-            } 
-            // Agregar campos específicos para retiros
-            else if (esRetiro) {
-                base.descripcion = datosMovimiento.descripcion || 'Retiro de fondos';
+            } else if (esRetiro) {
+                base.descripcion = data.descripcion || 'Retiro de fondos';
+            } else if (data.tipo === 'ingreso_referido') {
+                base.descripcion = data.descripcion || 'Ingreso por referido';
             }
 
             return base;
-        }));
+        });
 
-        allMovimientosFormateados = [...movimientosTablaFormateados];
-
-        // Agregar todas las membresías y visitas para los totales (sin límite de paginación)
+        // 2. Obtener Membresías y Visitas si el tipo es ingresos o general
+        let adicionales = [];
         if (!tipo || tipo === 'ingresos') {
-            // Configurar filtros de fecha para totales
             const fechaFilter = {};
             if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
                 const [year, month] = fecha.split('-').map(Number);
-                const startDate = new Date(year, month - 1, 1);
-                const endDate = new Date(year, month, 0, 23, 59, 59);
+                const startDate = ajustarFechaLocal(new Date(year, month - 1, 1), true);
+                const endDate = ajustarFechaLocal(new Date(year, month, 0), false);
                 fechaFilter.fecha = { [Op.between]: [startDate, endDate] };
             }
 
-            // Obtener todas las membresías para totales
-            const allMembresias = await Membresia.findAll({
-                where: {
-                    estado: { [Op.in]: ['activa', 'vencida'] },
-                    ...fechaFilter
-                },
-                attributes: ['monto', 'fecha', 'estado'],
-                raw: true
+            const [membresiasRaw, visitasRaw] = await Promise.all([
+                Membresia.findAll({
+                    where: {
+                        estado: { [Op.in]: ['activa', 'vencida'] },
+                        ...fechaFilter
+                    },
+                    include: [{
+                        model: Usuario,
+                        as: 'usuario',
+                        required: false,
+                        attributes: ['nombre']
+                    }],
+                    attributes: ['id_membresia', 'monto', 'fecha', 'estado', 'id_usuario'],
+                    order: [['fecha', 'DESC']]
+                }),
+                PagoVisita.findAll({
+                    where: {
+                        estado: 'aprobado',
+                        ...fechaFilter
+                    },
+                    include: [
+                        {
+                            model: Usuario,
+                            as: 'usuario',
+                            required: false,
+                            attributes: ['nombre']
+                        },
+                        {
+                            model: SolicitudServicio,
+                            as: 'solicitud',
+                            required: false,
+                            include: [{
+                                model: Usuario,
+                                as: 'cliente',
+                                required: false,
+                                attributes: ['nombre']
+                            }]
+                        }
+                    ],
+                    attributes: ['id_pagovisita', 'monto', 'fecha', 'estado', 'id_usuario', 'id_solicitud'],
+                    order: [['fecha', 'DESC']]
+                })
+            ]);
+
+            // Formatear membresías
+            const membresiasFormateadas = membresiasRaw.map(m => {
+                const d = m.get({ plain: true });
+                return {
+                    id_movimiento: `membresia_${d.id_membresia}`,
+                    id_solicitud: null,
+                    monto: parseFloat(d.monto || 0).toFixed(2),
+                    fecha: d.fecha,
+                    estado: 'Completado',
+                    tipo: 'ingreso',
+                    nombre_usuario: d.usuario?.nombre || 'Usuario no encontrado',
+                    servicio: 'Membresía'
+                };
             });
 
-            // Obtener todas las visitas para totales
-            const allVisitas = await PagoVisita.findAll({
-                where: {
-                    estado: 'aprobado',
-                    ...fechaFilter
-                },
-                attributes: ['monto', 'fecha', 'estado'],
-                raw: true
+            // Formatear visitas
+            const visitasFormateadas = visitasRaw.map(v => {
+                const d = v.get({ plain: true });
+                return {
+                    id_movimiento: `visita_${d.id_pagovisita}`,
+                    id_solicitud: d.id_solicitud || d.solicitud?.id_solicitud || null,
+                    monto: parseFloat(d.monto || 0).toFixed(2),
+                    fecha: d.fecha,
+                    estado: 'Completado',
+                    tipo: 'ingreso',
+                    nombre_usuario: d.solicitud?.cliente?.nombre || d.usuario?.nombre || 'Usuario no encontrado',
+                    servicio: 'Visita Técnica'
+                };
             });
 
-            // Formatear todas las membresías
-            const allMembresiasFormateadas = allMembresias.map(membresia => ({
-                id_movimiento: `membresia_${membresia.id_membresia || 'total'}`,
-                monto: parseFloat(membresia.monto || 0).toFixed(2),
-                estado: 'Completado',
-                tipo: 'ingreso'
-            }));
-
-            // Formatear todas las visitas
-            const allVisitasFormateadas = allVisitas.map(visita => ({
-                id_movimiento: `visita_${visita.id_pagovisita || 'total'}`,
-                monto: parseFloat(visita.monto || 0).toFixed(2),
-                estado: 'Completado',
-                tipo: 'ingreso'
-            }));
-
-            allMovimientosFormateados = [...allMovimientosFormateados, ...allMembresiasFormateadas, ...allVisitasFormateadas];
+            adicionales = [...membresiasFormateadas, ...visitasFormateadas];
         }
 
-        // Calcular totales de TODOS los registros coincidentes
-        const totales = allMovimientosFormateados.reduce((acc, mov) => {
+        // 3. Combinar todos los movimientos
+        const todosLosMovimientos = [...movimientosTablaFormateados, ...adicionales];
+
+        // 4. Ordenar por fecha descendente
+        todosLosMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        // 5. Calcular totales de TODOS los registros coincidentes (antes de paginar)
+        const totales = todosLosMovimientos.reduce((acc, mov) => {
             const monto = parseFloat(mov.monto) || 0;
-            
-            if (mov.tipo === 'ingreso' && mov.estado?.toLowerCase() === 'completado') {
-                acc.ingresos += monto;
+            const estado = mov.estado?.toLowerCase();
+
+            if (estado === 'completado') {
+                if (mov.tipo === 'ingreso') {
+                    acc.ingresos += monto;
+                } else if (mov.tipo === 'retiro') {
+                    acc.retiros += monto;
+                }
             }
-            
-            if (mov.tipo === 'retiro' && mov.estado?.toLowerCase() === 'completado') {
-                acc.retiros += monto;
-            }
-            
             return acc;
         }, { ingresos: 0, retiros: 0 });
 
-        // Calcular el total real de registros para paginación
-        const totalRegistros = tipo === 'retiros' ? 
-            total : 
-            total + (membresiasIngresos.length + visitasIngresos.length);
+        // 6. Aplicar paginación al conjunto final ordenado
+        const total = todosLosMovimientos.length;
+        const totalPages = Math.ceil(total / limitNum);
+        const movimientosPaginados = todosLosMovimientos.slice(offset, offset + limitNum);
 
-        // Respuesta final
+        // 7. Formatear fechas para la respuesta final
+        const resultadoFinal = movimientosPaginados.map(m => ({
+            ...m,
+            fecha: (m.fecha instanceof Date ? m.fecha : new Date(m.fecha)).toISOString().split('T')[0]
+        }));
+
         res.json({
             success: true,
             data: {
-                movimientos: movimientosPaginados
+                movimientos: resultadoFinal
             },
             summary: {
                 totalIngresos: totales.ingresos.toFixed(2),
                 totalRetiros: totales.retiros.toFixed(2)
             },
             pagination: {
-                total: totalRegistros,
+                total,
                 page: pageNum,
                 limit: limitNum,
-                totalPages: Math.ceil(totalRegistros / limitNum),
-                hasMore: pageNum < Math.ceil(totalRegistros / limitNum)
+                totalPages,
+                hasMore: pageNum < totalPages
             }
         });
 
     } catch (error) {
         console.error('Error en getAllMovimientos:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener los movimientos',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1268,7 +1103,7 @@ const getAllMovimientos = async (req, res) => {
 const obtenerEstadisticasDashboard = async (req, res) => {
     try {
         const { fechaInicio, fechaFin } = req.query;
-        
+
         // Obtener total de usuarios (usa 'fecha' como campo de fecha)
         const whereUsuario = {};
         if (fechaInicio || fechaFin) {
@@ -1315,20 +1150,20 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                 }
             } : {})
         };
-        
+
         const cotizaciones = await Cotizacion.findAll({
             where: whereCotizacion,
             attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
             raw: true
         });
-        
+
         // Calcular el total usando JavaScript
         const totalCotizaciones = cotizaciones.reduce((total, cotizacion) => {
             const descuento = cotizacion.descuento_membresia || 0;
             const credito = cotizacion.credito_usado || 0;
             return total + (cotizacion.monto_manodeobra - descuento - credito);
         }, 0);
-        
+
         const [
             ingresosMembresias,
             ingresosVisitas
@@ -1362,9 +1197,9 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         ]);
 
         // Calcular el total sumando todas las fuentes de ingreso
-        const ingresosTotales = (totalCotizaciones || 0) + 
-                              (ingresosMembresias || 0) + 
-                              (ingresosVisitas || 0);
+        const ingresosTotales = (totalCotizaciones || 0) +
+            (ingresosMembresias || 0) +
+            (ingresosVisitas || 0);
 
         // Verificar si hay servicios pendientes (sin filtro de fecha)
         const serviciosPendientes = await SolicitudServicio.count({
@@ -1419,7 +1254,7 @@ const getMovimientosPorUsuario = async (req, res) => {
     try {
         const { mes, tipo, page = 1, limit = 10 } = req.query;
         const { id_usuario } = req.params;
-        
+
         // Convertir a números enteros
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
@@ -1429,7 +1264,7 @@ const getMovimientosPorUsuario = async (req, res) => {
         const mesAjustado = parseInt(mes) - 1;
         const startDate = new Date(year, mesAjustado, 1);
         const endDate = new Date(year, mesAjustado + 1, 0, 23, 59, 59);
-        
+
         // Condiciones base
         const where = {
             id_usuario,
@@ -1441,7 +1276,7 @@ const getMovimientosPorUsuario = async (req, res) => {
         // Filtros por tipo
         const esRetiro = tipo === 'retiros';
         const esIngreso = tipo === 'ingresos';
-        
+
         if (esRetiro) where.tipo = 'retiro';
         if (esIngreso) where.tipo = 'ingreso';
 
@@ -1530,7 +1365,7 @@ const getMovimientosPorUsuario = async (req, res) => {
             const base = {
                 id_movimiento: datos.id_movimiento,
                 monto: parseFloat(datos.monto).toFixed(2),
-                fecha: datos.fecha instanceof Date ? 
+                fecha: datos.fecha instanceof Date ?
                     `${datos.fecha.getFullYear()}-${String(datos.fecha.getMonth() + 1).padStart(2, '0')}-${String(datos.fecha.getDate()).padStart(2, '0')}` :
                     new Date(datos.fecha).toISOString().split('T')[0],
                 estado: estadoNormalizado === 'completado' ? 'Completado' : estadoNormalizado === 'rechazado' ? 'Rechazado' : 'Pendiente',
@@ -1608,98 +1443,98 @@ const getMovimientosPorUsuario = async (req, res) => {
         });
     }
 };
- 
+
 //Obtener ingresos mensuales por tecnico
 const getIngresosMensuales = async (req, res) => {
     try {
-      const { id_tecnico } = req.params;
-  
-      const data = await Movimiento.findAll({
-        attributes: [
-          [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
-          [Sequelize.fn('SUM', Sequelize.col('Movimiento.monto')), 'monto']
-        ],
-        include: [{
-          model: Cotizacion,
-          as: 'cotizacion',
-          required: true,
-          attributes: [],
-          include: [{
-            model: SolicitudServicio,
-            as: 'solicitud',
-            required: true,
-            attributes: [],
-            where: { id_tecnico }
-          }]
-        }],
-        where: {
-          tipo: 'ingreso',
-          estado: 'completado'
-        },
-        group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
-        order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']]
-      });
-  
-      const resultado = data.map(item => ({
-        fecha: item.getDataValue('fecha'),
-        monto: parseFloat(item.getDataValue('monto'))
-      }));
-  
-      res.json(resultado);
+        const { id_tecnico } = req.params;
+
+        const data = await Movimiento.findAll({
+            attributes: [
+                [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
+                [Sequelize.fn('SUM', Sequelize.col('Movimiento.monto')), 'monto']
+            ],
+            include: [{
+                model: Cotizacion,
+                as: 'cotizacion',
+                required: true,
+                attributes: [],
+                include: [{
+                    model: SolicitudServicio,
+                    as: 'solicitud',
+                    required: true,
+                    attributes: [],
+                    where: { id_tecnico }
+                }]
+            }],
+            where: {
+                tipo: 'ingreso',
+                estado: 'completado'
+            },
+            group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
+            order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']]
+        });
+
+        const resultado = data.map(item => ({
+            fecha: item.getDataValue('fecha'),
+            monto: parseFloat(item.getDataValue('monto'))
+        }));
+
+        res.json(resultado);
     } catch (error) {
-      console.error('Error en getIngresosMensuales:', error);
-      res.status(500).json({ 
-        success: false,
-        error: 'Error al obtener ingresos mensuales',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error('Error en getIngresosMensuales:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener ingresos mensuales',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
 //Obtener cantidad de servicios por mes
 const getServiciosPorMes = async (req, res) => {
     try {
-      const { id_tecnico } = req.params;
-  
-      const data = await Movimiento.findAll({
-        attributes: [
-          [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
-          [Sequelize.fn('COUNT', Sequelize.col('Movimiento.id_movimiento')), 'cantidad']
-        ],
-        include: [{
-          model: Cotizacion,
-          as: 'cotizacion',
-          required: true,
-          attributes: [],
-          include: [{
-            model: SolicitudServicio,
-            as: 'solicitud',
-            required: true,
-            attributes: [],
-            where: { id_tecnico }
-          }]
-        }],
-        where: {
-          tipo: 'ingreso',
-          estado: 'completado'
-        },
-        group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
-        order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']]
-      });
-  
-      const resultado = data.map(item => ({
-        fecha: item.getDataValue('fecha'),
-        cantidad: parseInt(item.getDataValue('cantidad'))
-      }));
-  
-      res.json(resultado);
+        const { id_tecnico } = req.params;
+
+        const data = await Movimiento.findAll({
+            attributes: [
+                [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
+                [Sequelize.fn('COUNT', Sequelize.col('Movimiento.id_movimiento')), 'cantidad']
+            ],
+            include: [{
+                model: Cotizacion,
+                as: 'cotizacion',
+                required: true,
+                attributes: [],
+                include: [{
+                    model: SolicitudServicio,
+                    as: 'solicitud',
+                    required: true,
+                    attributes: [],
+                    where: { id_tecnico }
+                }]
+            }],
+            where: {
+                tipo: 'ingreso',
+                estado: 'completado'
+            },
+            group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
+            order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']]
+        });
+
+        const resultado = data.map(item => ({
+            fecha: item.getDataValue('fecha'),
+            cantidad: parseInt(item.getDataValue('cantidad'))
+        }));
+
+        res.json(resultado);
     } catch (error) {
-      console.error('Error en getServiciosPorMes:', error);
-      res.status(500).json({ 
-        success: false,
-        error: 'Error al obtener servicios por mes',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error('Error en getServiciosPorMes:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener servicios por mes',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -1740,7 +1575,7 @@ const getServiciosPorTipo = async (req, res) => {
         res.json(resultado);
     } catch (error) {
         console.error('Error en getServiciosPorTipo:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener servicios por tipo',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1824,19 +1659,19 @@ const getEstadisticasGenerales = async (req, res) => {
 
     } catch (error) {
         console.error('Error en getEstadisticasGenerales:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener estadísticas generales',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 //Obtener ingresos totales por referido
 const getIngresosTotalesReferidos = async (req, res) => {
     try {
         const { id_usuario } = req.params;
-        
+
         // Obtener la suma de ingresos por referidos
         const ingresosTotales = await Movimiento.sum('monto', {
             where: { id_usuario, tipo: 'ingreso_referido', estado: 'completado' }
@@ -1854,8 +1689,8 @@ const getIngresosTotalesReferidos = async (req, res) => {
 
         // Calcular saldo disponible
         const saldoDisponible = ingresosTotales - retirosTotales;
-        
-        res.json({ 
+
+        res.json({
             success: true,
             total: ingresosTotales,
             saldoDisponible: saldoDisponible > 0 ? saldoDisponible : 0,
@@ -1863,13 +1698,13 @@ const getIngresosTotalesReferidos = async (req, res) => {
         });
     } catch (error) {
         console.error('Error en getIngresosTotalesReferidos:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener información de ingresos y retiros',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-};   
+};
 
 // Obtener historial de ingresos y/o retiros de referidos de un usuario, con límite, filtro por mes y tipo y resumen
 const getIngresosyRetirosdeReferidos = async (req, res) => {
@@ -1880,16 +1715,16 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
 
         // Validaciones
         if (!id_usuario) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: "El parámetro id_usuario es requerido" 
+                error: "El parámetro id_usuario es requerido"
             });
         }
 
         if (!mes || isNaN(mes) || mes < 1 || mes > 12) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: "Debe proporcionar un mes válido (1-12)" 
+                error: "Debe proporcionar un mes válido (1-12)"
             });
         }
 
@@ -1985,11 +1820,11 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 // Crear movimiento
 const crearMovimiento = async (req, res) => {
-    try { 
+    try {
         const movimiento = await Movimiento.create({
             ...req.body,
             estado: 'pendiente'
@@ -2001,7 +1836,7 @@ const crearMovimiento = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al crear movimiento:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al crear el movimiento',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -2069,15 +1904,15 @@ const eliminarMovimiento = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 // Función para ajustar fechas a la zona horaria local
 const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
     if (!fecha) return null;
-    
+
     // Si es una cadena de fecha, crear objeto Date en zona horaria local
     const date = typeof fecha === 'string' ? new Date(fecha + 'T00:00:00') : fecha;
-    
+
     // Crear una nueva fecha ajustada a la zona horaria local
     const fechaLocal = new Date(
         date.getFullYear(),
@@ -2088,15 +1923,17 @@ const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
         inicioDelDia ? 0 : 59,
         inicioDelDia ? 0 : 999
     );
-    
+
     // Convertir a ISO string manteniendo la zona horaria local
     return fechaLocal;
 };
 
+
+
 // Exportar controladores
 module.exports = {
     obtenerRetiros,
-    getAllMovimientos, 
+    getAllMovimientos,
     crearMovimiento,
     actualizarMovimiento,
     eliminarMovimiento,
@@ -2111,4 +1948,5 @@ module.exports = {
     getIngresosTotalesReferidos,
     getIngresosyRetirosdeReferidos,
     getTransacciones,
+    getMovimientosIngresoMes
 };

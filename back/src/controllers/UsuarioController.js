@@ -68,7 +68,7 @@ const obtenerUsuarios = async (req, res) => {
         const [usuarios, stats] = await Promise.all([
             Usuario.findAll({
                 where: whereCondition,
-                attributes: { 
+                attributes: {
                     exclude: ['password_hash', 'id_ciudad', 'reset_password_token', 'reset_password_expires'],
                     include: [
                         // Contar servicios solicitados como cliente
@@ -128,7 +128,7 @@ const obtenerUsuarios = async (req, res) => {
                 raw: true,
                 nest: true
             }),
-            
+
             // Consulta de estadísticas - Dividida en consultas separadas para evitar problemas de GROUP BY
             Promise.all([
                 // Contar usuarios por estado
@@ -170,10 +170,10 @@ const obtenerUsuarios = async (req, res) => {
                 )
             ])
         ]);
-        
+
         // Procesar estadísticas de las consultas separadas
         const [estados, usuariosServicios, tecnicosActivos, usuariosMembresias] = stats;
-        
+
         const estadisticas = {
             activos: parseInt(estados[0]?.activos) || 0,
             inactivos: parseInt(estados[0]?.inactivos) || 0,
@@ -183,7 +183,7 @@ const obtenerUsuarios = async (req, res) => {
             tecnicos_activos: parseInt(tecnicosActivos[0]?.tecnicos_activos) || 0,
             usuarios_con_membresia: parseInt(usuariosMembresias[0]?.usuarios_con_membresia) || 0
         };
-        
+
         // Procesar usuarios para asegurar que los contadores sean números
         const usuariosProcesados = usuarios.map(usuario => ({
             ...usuario,
@@ -192,7 +192,7 @@ const obtenerUsuarios = async (req, res) => {
             total_servicios: (parseInt(usuario.total_servicios_cliente) || 0) + (parseInt(usuario.total_servicios_tecnico) || 0),
             total_membresias: parseInt(usuario.total_membresias) || 0
         }));
-        
+
         res.json({
             success: true,
             data: usuariosProcesados,
@@ -204,26 +204,26 @@ const obtenerUsuarios = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener usuarios:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al obtener usuarios",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-};  
- 
+};
+
 //Obtener stats de usuarios para admin
 const obtenerEstadisticasUsuarios = async (req, res) => {
     try {
         // Obtener total de usuarios
         const totalUsuarios = await Usuario.count();
-        
+
         // Obtener total de referidos
         const totalReferidos = await Referido.count();
-        
+
         // Obtener suma total de créditos
         const totalCreditos = await CreditoUsuario.sum('monto_credito') || 0;
-        
+
         res.json({
             success: true,
             data: {
@@ -241,7 +241,7 @@ const obtenerEstadisticasUsuarios = async (req, res) => {
         });
     }
 };
- 
+
 // Obtener todos los técnicos de una ciudad (con filtros y paginación mejorada)
 const obtenerTecnicosPorCiudad = async (req, res) => {
     try {
@@ -296,7 +296,7 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         }
 
         // Obtener total de registros
-        const total = await Usuario.count({ 
+        const total = await Usuario.count({
             where: whereCondition,
             include: includeConditions
         });
@@ -322,15 +322,15 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
             ],
             where: whereCondition,
             include: [
-                { 
-                    model: Ciudad, 
-                    as: "ciudad", 
-                    attributes: ["id_ciudad", "nombre_ciudad"] 
+                {
+                    model: Ciudad,
+                    as: "ciudad",
+                    attributes: ["id_ciudad", "nombre_ciudad"]
                 },
-                { 
-                    model: Rol, 
-                    as: "rol", 
-                    attributes: ["nombre_rol"] 
+                {
+                    model: Rol,
+                    as: "rol",
+                    attributes: ["nombre_rol"]
                 },
                 ...(id_servicio ? [{
                     model: TecnicoServicio,
@@ -456,35 +456,35 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
- 
+};
+
 // Obtener todos los usuarios de una ciudad (con filtros)
 const obtenerUsuariosPorCiudad = async (req, res) => {
     const { id_ciudad, nombre, estado, limit = 10, offset = 0 } = req.query;
-  
+
     try {
-      // Rol dinámico de usuario
-      const rolUsuario = await Rol.findOne({
-        where: { nombre_rol: 'Usuario' },
-        attributes: ['id_rol'],
-        raw: true
-      });
-  
-      if (!rolUsuario) {
-        return res.status(404).json({
-          success: false,
-          error: 'No se encontró el rol de Usuario'
+        // Rol dinámico de usuario
+        const rolUsuario = await Rol.findOne({
+            where: { nombre_rol: 'Usuario' },
+            attributes: ['id_rol'],
+            raw: true
         });
-      }
-  
-      // 🧩 Filtros dinámicos (en SQL)
-      let filtrosSQL = `WHERE u.id_rol = :rolId`;
-      if (id_ciudad) filtrosSQL += ` AND u.id_ciudad = :ciudadId`;
-      if (estado) filtrosSQL += ` AND u.estado = :estado`;
-      if (nombre) filtrosSQL += ` AND u.nombre LIKE :nombre`;
-  
-      // 🧾 Consulta principal con filtros
-      let query = `
+
+        if (!rolUsuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'No se encontró el rol de Usuario'
+            });
+        }
+
+        // 🧩 Filtros dinámicos (en SQL)
+        let filtrosSQL = `WHERE u.id_rol = :rolId`;
+        if (id_ciudad) filtrosSQL += ` AND u.id_ciudad = :ciudadId`;
+        if (estado) filtrosSQL += ` AND u.estado = :estado`;
+        if (nombre) filtrosSQL += ` AND u.nombre LIKE :nombre`;
+
+        // 🧾 Consulta principal con filtros
+        let query = `
         SELECT 
             u.id_usuario,
             u.nombre,
@@ -507,65 +507,65 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
         ORDER BY u.nombre ASC
         LIMIT :limit OFFSET :offset
       `;
-  
-      // Parámetros seguros
-      const replacements = {
-        rolId: rolUsuario.id_rol,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      };
-      if (id_ciudad) replacements.ciudadId = id_ciudad;
-      if (estado) replacements.estado = estado;
-      if (nombre) replacements.nombre = `%${nombre}%`;
-  
-      // Ejecutar consulta
-      const [usuariosConReferidos] = await Usuario.sequelize.query(query, { replacements });
-  
-      if (!usuariosConReferidos.length) {
-        return res.status(200).json({
-          total: 0,
-          usuarios: []
-        });
-      }
-  
-      // 📦 Total (sin limit)
-      const totalUsuarios = await Usuario.count({
-        where: {
-          id_rol: rolUsuario.id_rol,
-          ...(id_ciudad && { id_ciudad }),
-          ...(estado && { estado }),
-          ...(nombre && { nombre: { [Op.like]: `%${nombre}%` } })
+
+        // Parámetros seguros
+        const replacements = {
+            rolId: rolUsuario.id_rol,
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        };
+        if (id_ciudad) replacements.ciudadId = id_ciudad;
+        if (estado) replacements.estado = estado;
+        if (nombre) replacements.nombre = `%${nombre}%`;
+
+        // Ejecutar consulta
+        const [usuariosConReferidos] = await Usuario.sequelize.query(query, { replacements });
+
+        if (!usuariosConReferidos.length) {
+            return res.status(200).json({
+                total: 0,
+                usuarios: []
+            });
         }
-      });
-  
-      // 🧮 Formatear respuesta
-      const usuariosFormateados = usuariosConReferidos.map(usuario => ({
-        id_usuario: usuario.id_usuario,
-        nombre: usuario.nombre,
-        identidad: usuario.identidad,
-        email: usuario.email,
-        telefono: usuario.telefono,
-        estado: usuario.estado,
-        credito: { monto: parseFloat(usuario.monto_credito) || 0 },
-        ciudad: {
-          id_ciudad: usuario.id_ciudad,
-          nombre_ciudad: usuario.nombre_ciudad
-        },
-        rol: { nombre_rol: usuario.nombre_rol },
-        total_referidos: parseInt(usuario.total_referidos) || 0
-      }));
-  
-      return res.json({
-        total: totalUsuarios,
-        usuarios: usuariosFormateados
-      });
-  
+
+        // 📦 Total (sin limit)
+        const totalUsuarios = await Usuario.count({
+            where: {
+                id_rol: rolUsuario.id_rol,
+                ...(id_ciudad && { id_ciudad }),
+                ...(estado && { estado }),
+                ...(nombre && { nombre: { [Op.like]: `%${nombre}%` } })
+            }
+        });
+
+        // 🧮 Formatear respuesta
+        const usuariosFormateados = usuariosConReferidos.map(usuario => ({
+            id_usuario: usuario.id_usuario,
+            nombre: usuario.nombre,
+            identidad: usuario.identidad,
+            email: usuario.email,
+            telefono: usuario.telefono,
+            estado: usuario.estado,
+            credito: { monto: parseFloat(usuario.monto_credito) || 0 },
+            ciudad: {
+                id_ciudad: usuario.id_ciudad,
+                nombre_ciudad: usuario.nombre_ciudad
+            },
+            rol: { nombre_rol: usuario.nombre_rol },
+            total_referidos: parseInt(usuario.total_referidos) || 0
+        }));
+
+        return res.json({
+            total: totalUsuarios,
+            usuarios: usuariosFormateados
+        });
+
     } catch (error) {
-      console.error("Error al obtener usuarios:", error);
-      return res.status(500).json({
-        error: "Error al obtener usuarios",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error("Error al obtener usuarios:", error);
+        return res.status(500).json({
+            error: "Error al obtener usuarios",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -598,24 +598,24 @@ const obtenerAdministradores = async (req, res) => {
         const administradores = await Usuario.findAll({
             attributes: [
                 "id_usuario",
-          "nombre",
-          "identidad",
-          "email",
-          "telefono",
-          "estado",
-          "id_ciudad"
+                "nombre",
+                "identidad",
+                "email",
+                "telefono",
+                "estado",
+                "id_ciudad"
             ],
             where: whereCondition,
             include: [
-                { 
-                    model: Ciudad, 
-                    as: "ciudad", 
-                    attributes: ["id_ciudad", "nombre_ciudad"] 
+                {
+                    model: Ciudad,
+                    as: "ciudad",
+                    attributes: ["id_ciudad", "nombre_ciudad"]
                 },
-                { 
-                    model: Rol, 
-                    as: "rol", 
-                    attributes: ["nombre_rol"] 
+                {
+                    model: Rol,
+                    as: "rol",
+                    attributes: ["nombre_rol"]
                 }
             ],
             limit: parseInt(limit),
@@ -655,11 +655,11 @@ const obtenerAdministradores = async (req, res) => {
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
     const { id } = req.params;
-    
+
     if (!id) {
         return res.status(400).json({ error: "Se requiere el ID del usuario" });
     }
-    
+
     try {
         const usuario = await Usuario.findByPk(id, {
             attributes: { exclude: ['password_hash'] },
@@ -676,18 +676,18 @@ const obtenerUsuarioPorId = async (req, res) => {
                 }
             ]
         });
-        
+
         if (!usuario) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 mensaje: "No se encontró ningún usuario con el ID proporcionado",
                 idBuscado: id
             });
         }
-        
+
         res.json(usuario);
     } catch (error) {
         console.error("Error al obtener usuario por ID:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener usuario por ID",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -697,33 +697,33 @@ const obtenerUsuarioPorId = async (req, res) => {
 //Obtener Usuario por nombre (búsqueda por aproximación)
 const obtenerUsuarioPorNombre = async (req, res) => {
     const { nombre } = req.params;
-    
+
     if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ error: "Se requiere un término de búsqueda" });
     }
-    
+
     try {
-        const usuarios = await Usuario.findAll({ 
+        const usuarios = await Usuario.findAll({
             attributes: { exclude: ['password_hash'] },
-            where: { 
+            where: {
                 nombre: {
                     [Op.like]: `%${nombre}%`
                 }
             },
             order: [['nombre', 'ASC']] // Ordenar por nombre
         });
-        
+
         if (!usuarios || usuarios.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 mensaje: "No se encontraron usuarios que coincidan con la búsqueda",
                 terminoBuscado: nombre
             });
         }
-        
+
         res.json(usuarios);
     } catch (error) {
         console.error("Error al buscar usuarios por nombre:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al buscar usuarios",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -733,25 +733,25 @@ const obtenerUsuarioPorNombre = async (req, res) => {
 //Obtener Usuario por identidad
 const obtenerUsuarioPorIdentidad = async (req, res) => {
     const { identidad } = req.params;
-    
+
     if (!identidad) {
         return res.status(400).json({ error: "Se requiere el parámetro de identidad" });
     }
-    
+
     try {
         const usuario = await Usuario.findOne({ where: { identidad } });
-        
+
         if (!usuario) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 mensaje: "No se encontró ningún usuario con la identidad proporcionada",
                 identidadBuscada: identidad
             });
         }
-        
+
         res.json(usuario);
     } catch (error) {
         console.error("Error al obtener usuario por identidad:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener usuario por identidad",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -760,20 +760,20 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
 
 //Crear Usuario
 const crearUsuario = async (req, res) => {
-    const { 
-        nombre, 
-        identidad, 
-        email, 
-        telefono, 
+    const {
+        nombre,
+        identidad,
+        email,
+        telefono,
         password_hash,
         id_ciudad,
-        es_tecnico 
+        es_tecnico
     } = req.body;
-     
+
     let rolAsignado;
     try {
         const nombreRol = es_tecnico ? 'Tecnico' : 'Usuario';
-        
+
         rolAsignado = await Rol.findOne({
             where: { nombre_rol: nombreRol },
             attributes: ['id_rol'],
@@ -796,7 +796,7 @@ const crearUsuario = async (req, res) => {
     }
 
     const id_rol = rolAsignado.id_rol;
-    
+
     try {
         // Verificar si ya existe un usuario con el mismo email, teléfono o identidad
         const usuarioExistente = await Usuario.findOne({
@@ -808,40 +808,40 @@ const crearUsuario = async (req, res) => {
                 ]
             }
         });
-        
+
         if (usuarioExistente) {
             let field = 'dato';
-            
+
             if (usuarioExistente.email === email) field = 'correo electrónico';
             else if (usuarioExistente.telefono === telefono) field = 'teléfono';
             else if (usuarioExistente.identidad === identidad) field = 'número de identidad';
-            
+
             return res.status(400).json({
                 status: 400,
                 error: "Error de validación",
                 message: `El ${field} ya está en uso por otro usuario`,
-                field: field === 'correo electrónico' ? 'email' : 
-                       field === 'teléfono' ? 'telefono' : 'identidad'
+                field: field === 'correo electrónico' ? 'email' :
+                    field === 'teléfono' ? 'telefono' : 'identidad'
             });
         }
-        
+
         // Hashear la contraseña
         const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
-        
-        const usuario = await Usuario.create({ 
-            nombre, 
+
+        const usuario = await Usuario.create({
+            nombre,
             id_rol,
-            identidad, 
-            email, 
-            telefono, 
+            identidad,
+            email,
+            telefono,
             password_hash: hashedPassword,
             id_ciudad
         });
-        
+
         // No devolver la contraseña en la respuesta
         const usuarioSinPassword = usuario.toJSON();
         delete usuarioSinPassword.password_hash;
-        
+
         res.status(201).json({
             status: 201,
             message: `${es_tecnico ? 'Técnico' : 'Usuario'} creado exitosamente`,
@@ -850,7 +850,7 @@ const crearUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al crear usuario:", error);
-        
+
         // Manejar errores de validación de Sequelize
         if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
             const errors = error.errors?.map(err => ({
@@ -859,28 +859,28 @@ const crearUsuario = async (req, res) => {
                 type: err.type,
                 value: err.value
             })) || [];
-            
+
             console.error('Errores de validación:', errors);
-            
+
             // Si es un error de duplicación pero no se pudo manejar antes
             if (error.name === 'SequelizeUniqueConstraintError' && errors.length === 0) {
                 console.error('Error de restricción única sin detalles:', error);
                 let field = 'dato';
                 const errorMessage = error.original?.message || '';
-                
+
                 if (errorMessage.includes('email')) field = 'correo electrónico';
                 else if (errorMessage.includes('telefono')) field = 'teléfono';
                 else if (errorMessage.includes('identidad')) field = 'número de identidad';
-                
+
                 return res.status(400).json({
                     status: 400,
                     error: "Error de validación",
                     message: `El ${field} ya está en uso por otro usuario`,
-                    field: field === 'correo electrónico' ? 'email' : 
-                           field === 'teléfono' ? 'telefono' : 'identidad'
+                    field: field === 'correo electrónico' ? 'email' :
+                        field === 'teléfono' ? 'telefono' : 'identidad'
                 });
             }
-            
+
             return res.status(400).json({
                 status: 400,
                 error: "Error de validación",
@@ -888,7 +888,7 @@ const crearUsuario = async (req, res) => {
                 validationErrors: errors
             });
         }
-        
+
         // Para otros errores
         return res.status(500).json({
             status: 500,
@@ -908,7 +908,7 @@ const crearUsuario = async (req, res) => {
 const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
     try {
         const { fechaInicio, fechaFin } = req.query;
-        
+
         // Establecer fechas por defecto (últimos 12 meses)
         const endDate = fechaFin ? new Date(fechaFin) : new Date();
         const startDate = fechaInicio ? new Date(fechaInicio) : new Date();
@@ -929,10 +929,10 @@ const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth();
             const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
-            
+
             labels.push(`${monthName} ${year}`);
             data.push(0); // Inicializar contador en 0
-            
+
             // Mover al siguiente mes
             currentMonth.setMonth(currentMonth.getMonth() + 1);
         }
@@ -992,36 +992,36 @@ const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
 
 //Actualizar Usuario
 const actualizarUsuario = async (req, res) => {
-    const { id } = req.params;  
-    const { 
-        nombre, 
-        identidad, 
-        email, 
-        telefono, 
+    const { id } = req.params;
+    const {
+        nombre,
+        identidad,
+        email,
+        telefono,
         id_ciudad,
         id_rol,
         password_hash,
         activo,
-        estado 
+        estado
     } = req.body;
-    
+
     if (!id) {
-        return res.status(400).json({ 
+        return res.status(400).json({
             status: 400,
-            error: "Se requiere el ID del usuario" 
+            error: "Se requiere el ID del usuario"
         });
     }
-    
+
     try {
         const usuario = await Usuario.findByPk(id);
         if (!usuario) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 status: 404,
                 error: "Usuario no encontrado",
                 message: `No se encontró un usuario con el ID: ${id}`
             });
         }
-        
+
         // Actualizar solo los campos que se proporcionaron en el body
         if (nombre !== undefined) usuario.nombre = nombre;
         if (identidad !== undefined) usuario.identidad = identidad;
@@ -1029,21 +1029,21 @@ const actualizarUsuario = async (req, res) => {
         if (telefono !== undefined) usuario.telefono = telefono;
         if (id_ciudad !== undefined) usuario.id_ciudad = id_ciudad;
         if (id_rol !== undefined) usuario.id_rol = id_rol;
-        
+
         if (password_hash) {
             const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
             usuario.password_hash = hashedPassword;
         }
-        
+
         if (activo !== undefined) usuario.activo = activo;
         if (estado !== undefined) usuario.estado = estado;
-        
+
         await usuario.save();
-        
+
         // No devolver la contraseña en la respuesta
         const usuarioActualizado = usuario.toJSON();
         delete usuarioActualizado.password_hash;
-        
+
         res.json({
             status: 200,
             message: "Perfil actualizado exitosamente",
@@ -1051,21 +1051,21 @@ const actualizarUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al actualizar usuario:", error);
-        
+
         if (error.name === 'SequelizeUniqueConstraintError' || error.code === 'ER_DUP_ENTRY') {
             let field = 'dato';
             let value = '';
-            
+
             const match = error.original?.message?.match(/Duplicate entry '(.+?)' for key '(.+?)'/);
             if (match) {
                 value = match[1];
                 const keyName = match[2];
-                
+
                 if (keyName.includes('telefono')) field = 'teléfono';
                 else if (keyName.includes('email')) field = 'correo electrónico';
                 else if (keyName.includes('identidad')) field = 'número de identidad';
-                
-                return res.status(400).json({ 
+
+                return res.status(400).json({
                     status: 400,
                     error: "Error de validación",
                     message: `El ${field} "${value}" ya está en uso por otro usuario`,
@@ -1073,13 +1073,13 @@ const actualizarUsuario = async (req, res) => {
                 });
             }
         }
-        
+
         if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
             const errors = error.errors.map(err => ({
                 field: err.path,
                 message: err.message
             }));
-            
+
             return res.status(400).json({
                 status: 400,
                 error: "Error de validación",
@@ -1087,8 +1087,8 @@ const actualizarUsuario = async (req, res) => {
                 validationErrors: errors
             });
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             status: 500,
             error: "Error al actualizar el perfil",
             message: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
@@ -1098,45 +1098,45 @@ const actualizarUsuario = async (req, res) => {
 };
 
 // Actualizar contraseña con verificación de contraseña actual
-const actualizarPassword = async (req, res) => { 
+const actualizarPassword = async (req, res) => {
 
     const { id } = req.params;
-    const { newPassword } = req.body;
-    
+    const { currentPassword, newPassword } = req.body;
+
     if (!id) {
         const error = "Se requiere el ID del usuario";
         console.error('Error de validación:', error);
-        return res.status(400).json({ 
+        return res.status(400).json({
             status: 400,
             error: error
         });
     }
-    
+
     if (!newPassword) {
         const error = "Se requiere la nueva contraseña";
         console.error('Error de validación:', error);
-        return res.status(400).json({ 
+        return res.status(400).json({
             status: 400,
             error: error
         });
     }
-    
+
     try {
         // Buscar el usuario por id_usuario (que es la clave primaria) 
         const usuario = await Usuario.findOne({
             where: { id_usuario: id },
             attributes: ['id_usuario', 'email', 'password_hash'] // Solo los campos necesarios
         });
-        
+
         if (!usuario) {
             const error = `Usuario con ID ${id} no encontrado`;
             console.error(error);
-            return res.status(404).json({ 
+            return res.status(404).json({
                 status: 404,
                 error: error
             });
         }
-        
+
         // Verificar que el password_hash existe
         if (!usuario.password_hash) {
             console.error('El usuario no tiene contraseña configurada');
@@ -1144,56 +1144,71 @@ const actualizarPassword = async (req, res) => {
                 status: 400,
                 error: 'No se puede verificar la contraseña actual'
             });
-        } 
-        
-        // No se requiere validar la contraseña actual para el administrador
-        
+        }
+
+        // Si se proporciona currentPassword, verificar que sea correcta (usuario cambiando su propia contraseña)
+        // Si no se proporciona, significa que un administrador está cambiando la contraseña
+        if (currentPassword) {
+            const isCurrentPasswordValid = await bcrypt.compare(currentPassword, usuario.password_hash);
+
+            if (!isCurrentPasswordValid) {
+                console.error('La contraseña actual proporcionada no es correcta');
+                return res.status(400).json({
+                    status: 400,
+                    error: "Contraseña actual incorrecta",
+                    message: "La contraseña actual proporcionada no es correcta."
+                });
+            }
+        }
+
         // Verificar que la nueva contraseña sea diferente a la actual
         const isSameAsCurrent = await bcrypt.compare(newPassword, usuario.password_hash);
-        
+
         if (isSameAsCurrent) {
             console.error('La nueva contraseña no puede ser igual a la actual');
-            return res.status(400).json({ 
+            return res.status(400).json({
                 status: 400,
-                error: "Contraseña actual incorrecta",
-                message: "La contraseña actual proporcionada no es correcta."
+                error: "La nueva contraseña no puede ser igual a la actual",
+                message: "La nueva contraseña debe ser diferente a la contraseña actual."
             });
         }
-        
+
         // Hashear y guardar la nueva contraseña
         const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
         usuario.password_hash = hashedPassword;
         await usuario.save();
-        
+
         // No devolver la contraseña en la respuesta
         const usuarioActualizado = usuario.toJSON();
         delete usuarioActualizado.password_hash;
-        
-        
+
+
         res.json({
             status: 200,
             message: "Contraseña actualizada exitosamente",
             usuario: usuarioActualizado
         });
-        
+
     } catch (error) {
         console.error("Error al actualizar la contraseña:", error);
-        
+
         // Detalles adicionales del error
         const errorDetails = {
             name: error.name,
             message: error.message,
-            ...(error.errors && { errors: error.errors.map(e => ({
-                message: e.message,
-                type: e.type,
-                path: e.path,
-                value: e.value
-            }))})
+            ...(error.errors && {
+                errors: error.errors.map(e => ({
+                    message: e.message,
+                    type: e.type,
+                    path: e.path,
+                    value: e.value
+                }))
+            })
         };
-        
+
         console.error('Detalles del error:', errorDetails);
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             status: 500,
             error: "Error al actualizar la contraseña",
             message: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
@@ -1205,33 +1220,33 @@ const actualizarPassword = async (req, res) => {
 //Función para verificar RTN por número de identidad
 const verificarRTN = async (req, res) => {
     const { id_usuario } = req.params;
-    
+
     if (!id_usuario) {
-        return res.status(400).json({ 
+        return res.status(400).json({
             success: false,
-            error: "Se requiere el ID del usuario" 
+            error: "Se requiere el ID del usuario"
         });
     }
-    
+
     try {
         // Buscar el usuario por id_usuario
-        const usuario = await Usuario.findOne({ 
+        const usuario = await Usuario.findOne({
             where: { id_usuario },
             attributes: ['id_usuario', 'nombre', 'identidad']
         });
-        
+
         if (!usuario) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
                 error: "No se encontró ningún usuario con el ID proporcionado",
                 idBuscado: id_usuario
             });
         }
-        
+
         // Verificar si la identidad tiene más de 13 dígitos
         const identidadSinGuiones = usuario.identidad.replace(/-/g, '');
         const cantidadDigitos = identidadSinGuiones.length;
-        
+
         if (cantidadDigitos > 13) {
             // Es un RTN
             return res.json({
@@ -1255,10 +1270,10 @@ const verificarRTN = async (req, res) => {
                 }
             });
         }
-        
+
     } catch (error) {
         console.error("Error al verificar RTN:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al verificar RTN",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1269,22 +1284,22 @@ const verificarRTN = async (req, res) => {
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
     const { id } = req.params; // Cambiado de id_usuario a id para que coincida con la ruta
-    
+
     if (!id) {
         return res.status(400).json({ error: "Se requiere el ID del usuario" });
     }
-    
+
     try {
         const usuario = await Usuario.findByPk(id);
         if (!usuario) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: "Usuario no encontrado",
                 idBuscado: id
             });
         }
-        
+
         await usuario.destroy();
-        
+
         res.json({
             status: 200,
             message: "Usuario eliminado exitosamente",
@@ -1292,7 +1307,7 @@ const eliminarUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al eliminar usuario:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al eliminar usuario",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });

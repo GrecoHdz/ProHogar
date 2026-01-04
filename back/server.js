@@ -4,7 +4,7 @@ const cookieParser = require("cookie-parser");
 const express = require("express")
 const morgan = require("morgan");
 const cors = require("cors");
-const app = express();  
+const app = express();
 
 //Rutas
 const userRoutes = require("./src/routes/UsuarioRoute");
@@ -19,19 +19,18 @@ const membresiaRoutes = require("./src/routes/MembresiaRoute");
 const cuentasRoutes = require("./src/routes/CuentasRoute");
 const configRoutes = require("./src/routes/ConfigRoute");
 const membresiaBeneficiosRoutes = require("./src/routes/MembresiBeneficiosRoute");
-const pagoVisitaRoutes = require("./src/routes/PagoVisitaRoute"); 
-const cotizacionRoutes = require("./src/routes/CotizacionRoute"); 
+const pagoVisitaRoutes = require("./src/routes/PagoVisitaRoute");
+const cotizacionRoutes = require("./src/routes/CotizacionRoute");
 const movimientosRoutes = require("./src/routes/MovimientosRoute");
 const calificacionesRoutes = require("./src/routes/CalificacionesRoute");
 const creditoRoutes = require("./src/routes/CreditoRoute");
 const referidoRoutes = require("./src/routes/ReferidoRoute");
-const pagoServicioRoutes = require("./src/routes/PagoServicioRoute"); 
+const pagoServicioRoutes = require("./src/routes/PagoServicioRoute");
 const notificacionesRoutes = require("./src/routes/NotificacionesRoute");
 const tecnicoServicioRoutes = require("./src/routes/TecnicoServicioRoute");
 const facturaRoutes = require("./src/routes/FacturaRoute");
 const facturaRelacionRoutes = require("./src/routes/FacturaRelacionRoute");
 const facturaCorrelativoRoutes = require("./src/routes/FacturaCorrelativoRoute");
-
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -54,16 +53,33 @@ app.use((req, res, next) => {
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(cookieParser());
-console.log("CORS origin:", process.env.FRONTEND_URL); 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
-    optionsSuccessStatus: 200,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'cache-control', 'pragma'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  })
-); 
+console.log("CORS origin:", process.env.FRONTEND_URL);
+// Configuración de CORS
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Permitir solicitudes sin 'origin' (como aplicaciones móviles o curl)
+    if (!origin) return callback(null, true);
+
+    // Lista blanca de orígenes permitidos
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      process.env.FRONTEND_URL
+    ].filter(Boolean); // Elimina valores undefined
+
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'Pragma'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+};
+
+app.use(cors(corsOptions));
 
 // Importar Rutas 
 app.use("/usuarios", userRoutes);
@@ -77,15 +93,15 @@ app.use("/membresia", membresiaRoutes);
 app.use("/cuentas", cuentasRoutes);
 app.use("/config", configRoutes);
 app.use("/membresiabeneficios", membresiaBeneficiosRoutes);
-app.use("/pagovisita", pagoVisitaRoutes); 
-app.use("/cotizacion", cotizacionRoutes);  
+app.use("/pagovisita", pagoVisitaRoutes);
+app.use("/cotizacion", cotizacionRoutes);
 app.use("/movimientos", movimientosRoutes);
 app.use("/calificaciones", calificacionesRoutes);
 app.use("/credito", creditoRoutes);
 app.use("/referidos", referidoRoutes);
 app.use("/pagoservicio", pagoServicioRoutes);
 app.use("/notificaciones", notificacionesRoutes);
-app.use("/tecnicoServicio", tecnicoServicioRoutes); 
+app.use("/tecnicoServicio", tecnicoServicioRoutes);
 app.use("/facturas/correlativos", facturaCorrelativoRoutes);
 app.use("/facturas/relaciones", facturaRelacionRoutes);
 app.use("/facturas", facturaRoutes);
@@ -95,7 +111,7 @@ const PORT = process.env.PORT || 4000;
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://0.0.0.0:${PORT}`);
     });
