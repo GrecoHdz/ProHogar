@@ -9,7 +9,8 @@ const {
     obtenerFacturaDetalle,
     crearFactura,
     anularFactura,
-    obtenerEstadoCorrelativo
+    obtenerEstadoCorrelativo,
+    obtenerPendientesFacturacion
 } = require("../controllers/facturaController");
 
 // Middleware para validar errores
@@ -44,6 +45,17 @@ router.get("/estado-correlativo",
     obtenerEstadoCorrelativo
 );
 
+// Obtener registros pendientes de facturación
+router.get("/pendientes",
+    [
+        query('month').notEmpty().matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('El mes es requerido (YYYY-MM)')
+    ],
+    validarErrores,
+    authMiddleware,
+    apiLimiter,
+    obtenerPendientesFacturacion
+);
+
 // Obtener detalle de una factura específica
 router.get("/:id",
     [
@@ -64,9 +76,9 @@ router.post("/",
         body('subtotal').isFloat({ min: 0 }).withMessage('Subtotal debe ser un número positivo'),
         body('isv').isFloat({ min: 0 }).withMessage('ISV debe ser un número positivo'),
         body('total').isFloat({ min: 0 }).withMessage('Total debe ser un número positivo'),
-        body('id_pagovisita').optional().isInt(),
-        body('id_cotizacion').optional().isInt(),
-        body('id_membresia').optional().isInt()
+        body('id_pagovisita').optional({ nullable: true }).isInt(),
+        body('id_cotizacion').optional({ nullable: true }).isInt(),
+        body('id_membresia').optional({ nullable: true }).isInt()
     ],
     validarErrores,
     authMiddleware,
@@ -83,6 +95,6 @@ router.put("/:id/anular",
     authMiddleware,
     apiLimiter,
     anularFactura
-); 
+);
 
 module.exports = router;

@@ -10,6 +10,7 @@ const { sequelize } = require("../config/database");
 const obtenerEstadoCorrelativo = async (req, res) => {
     try {
         const correlativo = await FacturaCorrelativo.findOne({
+            where: { estado: 'ACTIVO' },
             order: [['id', 'DESC']],
             raw: true
         });
@@ -163,11 +164,19 @@ const crearFactura = async (req, res) => {
         });
 
         if (!correlativo) {
-            throw new Error('No hay correlativo SAR activo');
+            await transaction.rollback();
+            return res.status(200).json({
+                status: 'error_config',
+                message: 'No hay correlativo SAR activo'
+            });
         }
 
         if (correlativo.correlativo_actual >= correlativo.rango_fin) {
-            throw new Error('Rango de facturación agotado');
+            await transaction.rollback();
+            return res.status(200).json({
+                status: 'error_config',
+                message: 'Rango de facturación agotado'
+            });
         }
 
         const nuevoCorrelativo = correlativo.correlativo_actual + 1;
@@ -246,13 +255,122 @@ const anularFactura = async (req, res) => {
     }
 };
 
+const obtenerPendientesFacturacion = async (req, res) => {
+    try {
+        const month = req.query.month; // YYYY-MM
+        if (!month) {
+            return res.status(400).json({ status: 'error', message: 'El mes es requerido (YYYY-MM)' });
+        }
+
+        const [year, monthNum] = month.split('-').map(Number);
+
+        // Modelos necesarios
+        const Membresia = require("../models/membresiaModel");
+        const PagoVisita = require("../models/pagoVisitaModel");
+        const Cotizacion = require("../models/cotizacionModel");
+        const SolicitudServicio = require("../models/solicitudServicioModel");
+        const Servicio = require("../models/serviciosModel");
+
+        // Consulta de Membresías pendientes
+        const membresias = await Membresia.findAll({
+            where: {
+                estado: 'activa',
+                [Op.and]: [
+                    Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Membresia.fecha')), year),
+                    Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Membresia.fecha')), monthNum)
+                ]
+            },
+            include: [
+                { model: Usuario, as: 'usuario', attributes: ['nombre', 'telefono'] },
+                { model: FacturaRelacion, as: 'facturaRelacion', include: [{ model: Factura, as: 'factura' }] }
+            ],
+            nest: true
+        });
+
+        // Consulta de Pagos de Visita pendientes
+        const visitas = await PagoVisita.findAll({
+            where: {
+                estado: 'aprobado',
+                [Op.and]: [
+                    Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('PagoVisita.fecha')), year),
+                    Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('PagoVisita.fecha')), monthNum)
+                ]
+            },
+            include: [
+                { model: Usuario, as: 'usuario', attributes: ['nombre', 'telefono'] },
+                {
+                    model: SolicitudServicio, as: 'solicitud',
+                    include: [{ model: Servicio, as: 'servicio', attributes: ['nombre'] }]
+                },
+                { model: FacturaRelacion, as: 'facturaRelacion', include: [{ model: Factura, as: 'factura' }] }
+            ],
+            nest: true
+        });
+
+        // Consulta de Cotizaciones (Servicios) pendientes
+        const cotizaciones = await Cotizacion.findAll({
+            where: {
+                estado: 'confirmado',
+                [Op.and]: [
+                    Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha')), year),
+                    Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha')), monthNum)
+                ]
+            },
+            include: [
+                {
+                    model: SolicitudServicio, as: 'solicitud',
+                    include: [
+                        { model: Usuario, as: 'cliente', attributes: ['nombre', 'telefono'] },
+                        { model: Servicio, as: 'servicio', attributes: ['nombre'] }
+                    ]
+                },
+                { model: FacturaRelacion, as: 'facturaRelacion', include: [{ model: Factura, as: 'factura' }] }
+            ],
+            nest: true
+        });
+
+        // Filtrar y unificar
+        const normalize = (items, type) => {
+            return items
+                .filter(item => !item.facturaRelacion?.factura)
+                .map(item => {
+                    const raw = item.toJSON ? item.toJSON() : item;
+                    return {
+                        ...raw,
+                        billingType: type,
+                        id_local: `${type}-${raw.id_membresia || raw.id_pagovisita || raw.id_cotizacion}`
+                    };
+                });
+        };
+
+        const result = [
+            ...normalize(membresias, 'membership'),
+            ...normalize(visitas, 'visits'),
+            ...normalize(cotizaciones, 'services')
+        ];
+
+        res.json({
+            status: 'success',
+            data: result
+        });
+
+    } catch (error) {
+        console.error("Error al obtener pendientes de facturación:", error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Error al obtener pendientes de facturación',
+            details: error.message
+        });
+    }
+};
+
 // Función para obtener la fecha actual del servidor
 const obtenerFechaActualServidor = () => {
     const ahora = new Date();
     // Obtener la fecha y hora local del servidor
     const offset = ahora.getTimezoneOffset();
     const fechaLocal = new Date(ahora.getTime() - (offset * 60000));
-    
+
     return new Date(
         fechaLocal.getFullYear(),
         fechaLocal.getMonth(),
@@ -270,5 +388,6 @@ module.exports = {
     crearFactura,
     anularFactura,
     obtenerEstadoCorrelativo,
+    obtenerPendientesFacturacion,
     obtenerFechaActualServidor
 };
