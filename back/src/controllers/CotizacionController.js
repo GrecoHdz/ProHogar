@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const Cotizacion = require("../models/cotizacionModel"); 
+const Cotizacion = require("../models/cotizacionModel");
 const Referido = require("../models/referidosModel");
 
 // Obtener todas las cotizaciones con información relacionada
@@ -30,7 +30,7 @@ const getAllCotizaciones = async (req, res) => {
                     { num_comprobante: { [Op.like]: `%${search}%` } },
                     { '$solicitud.descripcion$': { [Op.like]: `%${search}%` } },
                     { '$solicitud.cliente.nombre$': { [Op.like]: `%${search}%` } },
-                    { '$solicitud.cliente.telefono$': { [Op.like]: `%${search}%` }}
+                    { '$solicitud.cliente.telefono$': { [Op.like]: `%${search}%` } }
                 ]
             });
         }
@@ -50,7 +50,7 @@ const getAllCotizaciones = async (req, res) => {
         }
 
         // Obtener el conteo total
-        const total = await Cotizacion.count({ 
+        const total = await Cotizacion.count({
             where: whereCondition,
             distinct: true,
             col: 'id_cotizacion'
@@ -105,6 +105,17 @@ const getAllCotizaciones = async (req, res) => {
                         model: require('../models/cuentasModel'),
                         as: 'cuenta',
                         attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    },
+                    {
+                        model: require('../models/facturaRelacionModel'),
+                        as: 'facturaRelacion',
+                        include: [
+                            {
+                                model: require('../models/facturaModel'),
+                                as: 'factura',
+                                attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                            }
+                        ]
                     }
                 ],
                 order: [['fecha', 'DESC']],
@@ -125,7 +136,7 @@ const getAllCotizaciones = async (req, res) => {
         };
 
         // Formatear respuesta
-        const cotizacionesFormateadas = cotizaciones.map(({ 
+        const cotizacionesFormateadas = cotizaciones.map(({
             id_cotizacion,
             id_solicitud,
             id_cuenta,
@@ -138,7 +149,8 @@ const getAllCotizaciones = async (req, res) => {
             estado,
             num_comprobante,
             solicitud,
-            cuenta
+            cuenta,
+            facturaRelacion
         }) => ({
             id_cotizacion,
             id_solicitud,
@@ -183,7 +195,8 @@ const getAllCotizaciones = async (req, res) => {
                 beneficiario: cuenta.beneficiario,
                 num_cuenta: cuenta.num_cuenta,
                 tipo: cuenta.tipo
-            } : null
+            } : null,
+            facturaRelacion
         }));
 
         // Enviar respuesta
@@ -198,7 +211,7 @@ const getAllCotizaciones = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener las cotizaciones:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al obtener las cotizaciones',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -213,7 +226,7 @@ const getCotizacionesPorUsuario = async (req, res) => {
         res.json(cotizaciones);
     } catch (error) {
         console.error('Error al obtener las cotizaciones:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al obtener las cotizaciones',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -227,7 +240,7 @@ const getCotizacionPorSolicitud = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al obtener la cotizacion:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al obtener la cotizacion',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -239,7 +252,7 @@ const getUltimaCotizacionPorSolicitud = async (req, res) => {
     try {
         const cotizacion = await Cotizacion.findOne({
             where: { id_solicitud: req.params.id_solicitud },
-            order: [['id_cotizacion','DESC']]
+            order: [['id_cotizacion', 'DESC']]
         });
 
         if (!cotizacion) {
@@ -251,12 +264,12 @@ const getUltimaCotizacionPorSolicitud = async (req, res) => {
 
         return res.json({
             status: "success",
-            data: {   
+            data: {
                 id_cotizacion: cotizacion.id_cotizacion,
                 monto_manodeobra: cotizacion.monto_manodeobra,
                 monto_materiales: cotizacion.monto_materiales,
                 comentario: cotizacion.comentario,
-                estado: cotizacion.estado 
+                estado: cotizacion.estado
             }
         });
     } catch (error) {
@@ -279,7 +292,7 @@ const createCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al crear la cotizacion:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al crear la cotizacion',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -293,7 +306,7 @@ const updateCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al actualizar la cotizacion:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al actualizar la cotizacion',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -307,7 +320,7 @@ const deleteCotizacion = async (req, res) => {
         res.json(cotizacion);
     } catch (error) {
         console.error('Error al eliminar la cotizacion:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al eliminar la cotizacion',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });

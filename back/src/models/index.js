@@ -1,10 +1,10 @@
 // Importa todos los modelos
 const Usuario = require('./usuariosModel');
-const Rol = require('./rolesModel');  
+const Rol = require('./rolesModel');
 const Servicio = require('./serviciosModel');
 const SolicitudServicio = require('./solicitudServicioModel');
-const Membresia = require('./membresiaModel'); 
-const PagoVisita = require('./pagoVisitaModel'); 
+const Membresia = require('./membresiaModel');
+const PagoVisita = require('./pagoVisitaModel');
 const Ciudad = require('./ciudadesModel');
 const RefreshToken = require('./refreshtokenModel');
 const Cuenta = require('./cuentasModel');
@@ -25,41 +25,41 @@ const FacturaCorrelativo = require('./facturaCorrelativoModel');
 // Función para configurar las asociaciones
 const setupAssociations = () => {
   // Relación Usuario - Rol
-  Usuario.belongsTo(Rol, { 
-    foreignKey: 'id_rol', 
-    as: 'rol' 
+  Usuario.belongsTo(Rol, {
+    foreignKey: 'id_rol',
+    as: 'rol'
   });
-  Rol.hasMany(Usuario, { 
-    foreignKey: 'id_rol', 
-    as: 'usuarios' 
+  Rol.hasMany(Usuario, {
+    foreignKey: 'id_rol',
+    as: 'usuarios'
   });
 
   // Relación Usuario - Ciudad
-  Usuario.belongsTo(Ciudad, { 
-    foreignKey: 'id_ciudad', 
-    as: 'ciudad' 
+  Usuario.belongsTo(Ciudad, {
+    foreignKey: 'id_ciudad',
+    as: 'ciudad'
   });
-  Ciudad.hasMany(Usuario, { 
-    foreignKey: 'id_ciudad', 
-    as: 'usuarios' 
-  });  
+  Ciudad.hasMany(Usuario, {
+    foreignKey: 'id_ciudad',
+    as: 'usuarios'
+  });
 
   // Relación Usuario - Solicitud de Servicio (como cliente)
-  Usuario.hasMany(SolicitudServicio, { 
+  Usuario.hasMany(SolicitudServicio, {
     foreignKey: 'id_usuario',
     as: 'solicitudesCliente',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
+
   // Relación Usuario - Solicitud de Servicio (como técnico)
-  Usuario.hasMany(SolicitudServicio, { 
-    foreignKey: 'id_tecnico', 
+  Usuario.hasMany(SolicitudServicio, {
+    foreignKey: 'id_tecnico',
     as: 'solicitudesTecnico',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
+
   // Relación SolicitudServicio - Usuario (cliente)
   SolicitudServicio.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
@@ -69,22 +69,22 @@ const setupAssociations = () => {
   });
 
   // Relación SolicitudServicio - Usuario (técnico)
-  SolicitudServicio.belongsTo(Usuario, { 
-    foreignKey: 'id_tecnico', 
+  SolicitudServicio.belongsTo(Usuario, {
+    foreignKey: 'id_tecnico',
     as: 'tecnico',
     onUpdate: 'CASCADE',
     onDelete: 'SET NULL'
   });
 
   // Relación SolicitudServicio - Cotización
-  SolicitudServicio.hasOne(Cotizacion, { 
+  SolicitudServicio.hasOne(Cotizacion, {
     foreignKey: 'id_solicitud',
     as: 'cotizacion',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   });
-  
-  Cotizacion.belongsTo(SolicitudServicio, { 
+
+  Cotizacion.belongsTo(SolicitudServicio, {
     foreignKey: 'id_solicitud',
     as: 'solicitud',
     onUpdate: 'CASCADE',
@@ -92,14 +92,14 @@ const setupAssociations = () => {
   });
 
   // Relación Servicio - SolicitudServicio
-  Servicio.hasMany(SolicitudServicio, { 
+  Servicio.hasMany(SolicitudServicio, {
     foreignKey: 'id_servicio',
     as: 'solicitudes',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  SolicitudServicio.belongsTo(Servicio, { 
+
+  SolicitudServicio.belongsTo(Servicio, {
     foreignKey: 'id_servicio',
     as: 'servicio',
     onUpdate: 'CASCADE',
@@ -107,14 +107,14 @@ const setupAssociations = () => {
   });
 
   // Relación Ciudad - SolicitudServicio
-  Ciudad.hasMany(SolicitudServicio, { 
+  Ciudad.hasMany(SolicitudServicio, {
     foreignKey: 'id_ciudad',
     as: 'solicitudes',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  SolicitudServicio.belongsTo(Ciudad, { 
+
+  SolicitudServicio.belongsTo(Ciudad, {
     foreignKey: 'id_ciudad',
     as: 'ciudad',
     onUpdate: 'CASCADE',
@@ -122,29 +122,29 @@ const setupAssociations = () => {
   });
 
   // Relación Usuario - RefreshToken
-  Usuario.hasMany(RefreshToken, { 
+  Usuario.hasMany(RefreshToken, {
     foreignKey: 'usuario_id',
     as: 'refreshTokens',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   });
-  
-  RefreshToken.belongsTo(Usuario, { 
+
+  RefreshToken.belongsTo(Usuario, {
     foreignKey: 'usuario_id',
     as: 'usuario',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
-  }); 
+  });
 
   // Relación Usuario - Membresía
-  Usuario.hasMany(Membresia, { 
+  Usuario.hasMany(Membresia, {
     foreignKey: 'id_usuario',
     as: 'membresias',
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   });
-  
-  Membresia.belongsTo(Usuario, { 
+
+  Membresia.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
     as: 'usuario',
     onUpdate: 'CASCADE',
@@ -167,14 +167,14 @@ const setupAssociations = () => {
   });
 
   // Relación Usuario - Movimiento
-  Usuario.hasMany(Movimiento, { 
+  Usuario.hasMany(Movimiento, {
     foreignKey: 'id_usuario',
     as: 'movimientos',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  Movimiento.belongsTo(Usuario, { 
+
+  Movimiento.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
     as: 'usuario',
     onUpdate: 'CASCADE',
@@ -188,7 +188,7 @@ const setupAssociations = () => {
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
+
   Movimiento.belongsTo(Cotizacion, {
     foreignKey: 'id_cotizacion',
     as: 'cotizacion',
@@ -197,14 +197,14 @@ const setupAssociations = () => {
   });
 
   // Relación PagoVisita - SolicitudServicio
-  PagoVisita.belongsTo(SolicitudServicio, { 
+  PagoVisita.belongsTo(SolicitudServicio, {
     foreignKey: 'id_solicitud',
     as: 'solicitud',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  SolicitudServicio.hasOne(PagoVisita, { 
+
+  SolicitudServicio.hasOne(PagoVisita, {
     foreignKey: 'id_solicitud',
     as: 'pagoVisita',
     onUpdate: 'CASCADE',
@@ -212,14 +212,14 @@ const setupAssociations = () => {
   });
 
   // Relación PagoVisita - Cuenta
-  PagoVisita.belongsTo(Cuenta, { 
+  PagoVisita.belongsTo(Cuenta, {
     foreignKey: 'id_cuenta',
     as: 'cuenta',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  Cuenta.hasMany(PagoVisita, { 
+
+  Cuenta.hasMany(PagoVisita, {
     foreignKey: 'id_cuenta',
     as: 'pagosVisita',
     onUpdate: 'CASCADE',
@@ -227,14 +227,14 @@ const setupAssociations = () => {
   });
 
   // Relación PagoVisita - Usuario
-  PagoVisita.belongsTo(Usuario, { 
+  PagoVisita.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
     as: 'usuario',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  Usuario.hasMany(PagoVisita, { 
+
+  Usuario.hasMany(PagoVisita, {
     foreignKey: 'id_usuario',
     as: 'pagosVisita',
     onUpdate: 'CASCADE',
@@ -242,14 +242,14 @@ const setupAssociations = () => {
   });
 
   // Relación Cotización - Cuenta
-  Cotizacion.belongsTo(Cuenta, { 
+  Cotizacion.belongsTo(Cuenta, {
     foreignKey: 'id_cuenta',
     as: 'cuenta',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   });
-  
-  Cuenta.hasMany(Cotizacion, { 
+
+  Cuenta.hasMany(Cotizacion, {
     foreignKey: 'id_cuenta',
     as: 'cotizaciones',
     onUpdate: 'CASCADE',
@@ -257,7 +257,7 @@ const setupAssociations = () => {
   });
 
   // Relación Calificación - SolicitudServicio
-  Calificacion.belongsTo(SolicitudServicio, { 
+  Calificacion.belongsTo(SolicitudServicio, {
     foreignKey: 'id_solicitud',
     as: 'calificacionsolicitud',
     onUpdate: 'CASCADE',
@@ -265,7 +265,7 @@ const setupAssociations = () => {
   });
 
   // Relación Calificación - Usuario calificador
-  Calificacion.belongsTo(Usuario, { 
+  Calificacion.belongsTo(Usuario, {
     foreignKey: 'id_usuario_calificador',
     as: 'usuarioCalificador',
     onUpdate: 'CASCADE',
@@ -273,7 +273,7 @@ const setupAssociations = () => {
   });
 
   // Relación Calificación - Usuario calificado
-  Calificacion.belongsTo(Usuario, { 
+  Calificacion.belongsTo(Usuario, {
     foreignKey: 'id_usuario_calificado',
     as: 'usuarioCalificado',
     onUpdate: 'CASCADE',
@@ -289,20 +289,20 @@ const setupAssociations = () => {
   });
 
   // Relación Credito - Usuario
-  CreditoUsuario.belongsTo(Usuario, { 
+  CreditoUsuario.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
     as: 'usuario',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
-  }); 
+  });
 
   // Relación Referido - Usuario
-  Referido.belongsTo(Usuario, { 
+  Referido.belongsTo(Usuario, {
     foreignKey: 'id_referido_usuario',
     as: 'usuario',
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
-  }); 
+  });
 
   // Relación Notificación - NotificaciónDestinatario
   Notificacion.hasMany(NotificacionDestinatario, {
@@ -318,18 +318,18 @@ const setupAssociations = () => {
     foreignKey: "id_usuario",
     as: "notificacionesDestinatario"
   });
-  
+
   NotificacionDestinatario.belongsTo(Usuario, {
     foreignKey: "id_usuario",
     as: "usuario"
   });
 
   // Relación Config - Usuario (para referidor predeterminado)
-Config.belongsTo(Usuario, {
-  foreignKey: 'valor',  // This assumes 'valor' in Config stores the user ID
-  as: 'usuario',
-  constraints: false  // This allows the foreign key to reference a non-primary key
-});
+  Config.belongsTo(Usuario, {
+    foreignKey: 'valor',  // This assumes 'valor' in Config stores the user ID
+    as: 'usuario',
+    constraints: false  // This allows the foreign key to reference a non-primary key
+  });
 
   // Relaciones de TecnicoServicio
   // Relación Técnico (Usuario) - TecnicoServicio
@@ -339,7 +339,7 @@ Config.belongsTo(Usuario, {
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   });
-  
+
   TecnicoServicio.belongsTo(Usuario, {
     foreignKey: 'id_tecnico',
     as: 'tecnico',
@@ -354,7 +354,7 @@ Config.belongsTo(Usuario, {
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   });
-  
+
   TecnicoServicio.belongsTo(Servicio, {
     foreignKey: 'id_servicio',
     as: 'servicio',
@@ -401,7 +401,22 @@ Config.belongsTo(Usuario, {
     onUpdate: 'CASCADE',
     onDelete: 'SET NULL'
   });
-  
+
+  Membresia.hasOne(FacturaRelacion, {
+    foreignKey: 'id_membresia',
+    as: 'facturaRelacion'
+  });
+
+  PagoVisita.hasOne(FacturaRelacion, {
+    foreignKey: 'id_pagovisita',
+    as: 'facturaRelacion'
+  });
+
+  Cotizacion.hasOne(FacturaRelacion, {
+    foreignKey: 'id_cotizacion',
+    as: 'facturaRelacion'
+  });
+
   console.log('Asociaciones configuradas correctamente');
 };
 

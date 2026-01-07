@@ -76,6 +76,17 @@ const obtenerMembresias = async (req, res) => {
                         model: Cuenta,
                         as: 'cuenta',
                         attributes: ['banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    },
+                    {
+                        model: require('../models/facturaRelacionModel'),
+                        as: 'facturaRelacion',
+                        include: [
+                            {
+                                model: require('../models/facturaModel'),
+                                as: 'factura',
+                                attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                            }
+                        ]
                     }
                 ],
                 order: [['fecha', 'DESC']],
@@ -84,11 +95,11 @@ const obtenerMembresias = async (req, res) => {
                 raw: true,
                 nest: true
             }),
-            
+
             // Consulta de estadísticas
             Membresia.findAll({
                 attributes: [
-                    [Sequelize.literal("COUNT(CASE WHEN estado = 'activa' OR estado = 'vencida' THEN 1 END)"), 'activas'], 
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'activa' OR estado = 'vencida' THEN 1 END)"), 'activas'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazada' THEN 1 END)"), 'rechazadas'],
                     [Sequelize.literal("SUM(CASE WHEN estado IN ('activa', 'vencida') THEN monto ELSE 0 END)"), 'total']
@@ -97,7 +108,7 @@ const obtenerMembresias = async (req, res) => {
                 raw: true
             })
         ]);
-        
+
         // Procesar estadísticas
         const statsData = stats[0] || { activas: 0, pendientes: 0, rechazadas: 0, total: 0 };
         const estadisticas = {
@@ -106,7 +117,7 @@ const obtenerMembresias = async (req, res) => {
             pendientes: parseInt(statsData.pendientes) || 0,
             total: parseFloat(statsData.total) || 0
         };
-        
+
         res.json({
             success: true,
             data: membresias,
@@ -118,7 +129,7 @@ const obtenerMembresias = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener membresías:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al obtener membresías",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -129,19 +140,19 @@ const obtenerMembresias = async (req, res) => {
 // Obtener historial completo de membresías de un usuario
 const obtenerHistorialMembresias = async (req, res) => {
     try {
-        const membresias = await Membresia.findAll({ 
+        const membresias = await Membresia.findAll({
             where: { id_usuario: req.params.id },
             order: [['fecha', 'DESC']], // Ordenar por fecha descendente
             raw: true
         });
-        
+
         if (!membresias || membresias.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 status: 'not_found',
                 message: 'No se encontraron membresías para este usuario'
             });
         }
-        
+
         res.json({
             status: 'success',
             data: membresias,
@@ -149,48 +160,48 @@ const obtenerHistorialMembresias = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener el historial de membresías:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             status: 'error',
             message: 'Error al obtener el historial de membresías',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
- 
+
 // Obtener la membresía activa más reciente de un usuario
 const obtenerMembresiaActual = async (req, res) => {
     try {
-      const { id } = req.params;
-  
-      const membresia = await Membresia.findOne({
-        where: { id_usuario: id },
-        order: [['fecha', 'DESC']],
-        raw: true
-      });
-  
-      if (!membresia) {
-        console.log(`ℹ️ [INFO] Usuario ${id} no tiene membresía activa.`);
-        return res.json({
-          status: 'not_found',
-          data: null,
-          message: 'El usuario no tiene una membresía activa.'
+        const { id } = req.params;
+
+        const membresia = await Membresia.findOne({
+            where: { id_usuario: id },
+            order: [['fecha', 'DESC']],
+            raw: true
         });
-      }
-  
-      return res.json({
-        status: 'success',
-        data: membresia
-      });
+
+        if (!membresia) {
+            console.log(`ℹ️ [INFO] Usuario ${id} no tiene membresía activa.`);
+            return res.json({
+                status: 'not_found',
+                data: null,
+                message: 'El usuario no tiene una membresía activa.'
+            });
+        }
+
+        return res.json({
+            status: 'success',
+            data: membresia
+        });
     } catch (error) {
-      console.error("❌ [ERROR] Al obtener la membresía actual:", error);
-      return res.status(500).json({
-        status: 'error',
-        message: 'Error al obtener la membresía actual',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error("❌ [ERROR] Al obtener la membresía actual:", error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error al obtener la membresía actual',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-  };
-  
+};
+
 
 // Obtener progreso de membresía por usuario
 const obtenerProgresoMembresia = async (req, res) => {
@@ -212,7 +223,7 @@ const obtenerProgresoMembresia = async (req, res) => {
 
         // Obtener todas las membresías del usuario
         const membresias = await Membresia.findAll({
-            where: { 
+            where: {
                 id_usuario: req.params.id_usuario,
                 estado: ['activa']
             },
@@ -240,7 +251,7 @@ const obtenerProgresoMembresia = async (req, res) => {
             if (!ultimaFecha) {
                 progreso = 1;
             } else {
-                const diffMeses = 
+                const diffMeses =
                     (fechaActual.getFullYear() - ultimaFecha.getFullYear()) * 12 +
                     (fechaActual.getMonth() - ultimaFecha.getMonth());
 
@@ -267,7 +278,7 @@ const obtenerProgresoMembresia = async (req, res) => {
 
     } catch (error) {
         console.error("Error al obtener progreso de membresía:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             status: 'error',
             message: 'Error al obtener progreso de membresía',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -283,12 +294,12 @@ const crearMembresia = async (req, res) => {
             fecha: new Date(),  // Agregar la fecha actual
             estado: 'pendiente' // Establecer estado inicial como pendiente
         };
-        
+
         const membresia = await Membresia.create(datosMembresia);
         res.json(membresia);
     } catch (error) {
         console.error("Error al crear membresía:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al crear membresía",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -298,12 +309,12 @@ const crearMembresia = async (req, res) => {
 //Actualizar membresia
 const actualizarMembresia = async (req, res) => {
     try {
-        const [updated] = await Membresia.update(req.body, { 
-            where: { 
-                id_membresia: req.params.id 
-            } 
+        const [updated] = await Membresia.update(req.body, {
+            where: {
+                id_membresia: req.params.id
+            }
         });
-        
+
         if (updated) {
             const updatedMembresia = await Membresia.findByPk(req.params.id);
             return res.json({
@@ -311,11 +322,11 @@ const actualizarMembresia = async (req, res) => {
                 data: updatedMembresia
             });
         }
-        
+
         throw new Error('No se pudo actualizar la membresía');
     } catch (error) {
         console.error("Error al actualizar membresia:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             status: 'error',
             message: 'Error al actualizar membresía',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -330,7 +341,7 @@ const eliminarMembresia = async (req, res) => {
         res.json(membresia);
     } catch (error) {
         console.error("Error al eliminar membresía:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al eliminar membresía",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });

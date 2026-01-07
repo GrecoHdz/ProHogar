@@ -18,7 +18,7 @@ const obtenerPagos = async (req, res) => {
         // Construcción de condiciones
         const whereCondition = {};
         const whereClauses = [];
-        
+
         // Filtro por mes (año y mes)
         if (month) {
             const [year, monthNum] = month.split('-').map(Number);
@@ -27,12 +27,12 @@ const obtenerPagos = async (req, res) => {
                 Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('PagoVisita.fecha')), monthNum)
             );
         }
-        
+
         // Filtro por estado
         if (req.query.estado) {
             whereClauses.push({ estado: req.query.estado });
         }
-        
+
         // Combinar condiciones con AND
         if (whereClauses.length > 0) {
             whereCondition[Op.and] = whereClauses;
@@ -85,6 +85,17 @@ const obtenerPagos = async (req, res) => {
                         model: Cuenta,
                         as: 'cuenta',
                         attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    },
+                    {
+                        model: require('../models/facturaRelacionModel'),
+                        as: 'facturaRelacion',
+                        include: [
+                            {
+                                model: require('../models/facturaModel'),
+                                as: 'factura',
+                                attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                            }
+                        ]
                     }
                 ],
                 order: [['fecha', 'DESC']],
@@ -93,7 +104,7 @@ const obtenerPagos = async (req, res) => {
                 raw: true,
                 nest: true
             }),
-            
+
             // Consulta de estadísticas
             PagoVisita.findAll({
                 attributes: [
@@ -106,7 +117,7 @@ const obtenerPagos = async (req, res) => {
                 raw: true
             })
         ]);
-        
+
         // Procesar estadísticas
         const statsData = stats[0] || { aprobados: 0, rechazados: 0, pendientes: 0, total: 0 };
         const monthlyStats = {
@@ -117,14 +128,14 @@ const obtenerPagos = async (req, res) => {
         };
 
         // Formatear respuesta
-        const pagosFormateados = pagos.map(({ 
-            id_usuario, 
-            id_solicitud, 
-            id_cuenta, 
-            usuario, 
-            solicitud, 
-            cuenta, 
-            ...pago 
+        const pagosFormateados = pagos.map(({
+            id_usuario,
+            id_solicitud,
+            id_cuenta,
+            usuario,
+            solicitud,
+            cuenta,
+            ...pago
         }) => ({
             ...pago,
             cliente: usuario ? {
@@ -159,9 +170,10 @@ const obtenerPagos = async (req, res) => {
                 beneficiario: cuenta.beneficiario,
                 num_cuenta: cuenta.num_cuenta,
                 tipo: cuenta.tipo
-            } : null
+            } : null,
+            facturaRelacion: pago.facturaRelacion
         }));
-        
+
         // Enviar respuesta
         res.json({
             success: true,
@@ -174,7 +186,7 @@ const obtenerPagos = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener pagos de visita:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al obtener pagos de visita",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -209,16 +221,16 @@ const obtenerUltimoPagoPorSolicitud = async (req, res) => {
     try {
         const pago = await PagoVisita.findOne({
             where: { id_solicitud: req.params.id_solicitud },
-            order: [['id_pagovisita','DESC']],
-            attributes: ['estado']  
+            order: [['id_pagovisita', 'DESC']],
+            attributes: ['estado']
         });
 
         if (!pago) {
             return res.json({
-              status: "not_found",
-              data: { estado: "pendiente" }
+                status: "not_found",
+                data: { estado: "pendiente" }
             });
-          } 
+        }
 
         return res.json({
             status: "success",
@@ -232,12 +244,12 @@ const obtenerUltimoPagoPorSolicitud = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 //Crear un pago
 const crearPago = async (req, res) => {
     const t = await PagoVisita.sequelize.transaction();
-    
+
     try {
         const { id_solicitud } = req.body;
 
@@ -255,14 +267,14 @@ const crearPago = async (req, res) => {
 
         // Crear el nuevo pago
         const newPago = await PagoVisita.create(req.body, { transaction: t });
-        
+
         // Confirmar la transacción
         await t.commit();
-        
+
         res.status(201).json({
             success: true,
-            message: pagoExistente 
-                ? 'Pago actualizado correctamente (reemplazado el anterior)' 
+            message: pagoExistente
+                ? 'Pago actualizado correctamente (reemplazado el anterior)'
                 : 'Pago creado correctamente',
             data: newPago,
             pago_anterior_eliminado: !!pagoExistente
@@ -272,7 +284,7 @@ const crearPago = async (req, res) => {
         // Hacer rollback en caso de error
         await t.rollback();
         console.error('[ERROR] Error al crear/actualizar pago:', error);
-        
+
         res.status(500).json({
             success: false,
             message: 'Error al procesar el pago',
@@ -305,120 +317,120 @@ const eliminarPago = async (req, res) => {
 
 // Confirma un pago de visita y actualiza el estado de la solicitud 
 const confirmarPagoVisita = async (req, res) => {
-  const t = await PagoVisita.sequelize.transaction();
+    const t = await PagoVisita.sequelize.transaction();
 
-  try {
-    const { id_solicitud } = req.body;
+    try {
+        const { id_solicitud } = req.body;
 
-    console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/confirmar:', req.body);
+        console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/confirmar:', req.body);
 
-    // 1️⃣ Buscar el pago de visita por id_solicitud
-    const pagoVisita = await PagoVisita.findOne({ 
-      where: { id_solicitud },
-      transaction: t 
-    });
-    
-    if (!pagoVisita) {
-      await t.rollback();
-      return res.status(404).json({
-        success: false,
-        message: 'No se encontró un pago de visita para la solicitud especificada'
-      });
+        // 1️⃣ Buscar el pago de visita por id_solicitud
+        const pagoVisita = await PagoVisita.findOne({
+            where: { id_solicitud },
+            transaction: t
+        });
+
+        if (!pagoVisita) {
+            await t.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'No se encontró un pago de visita para la solicitud especificada'
+            });
+        }
+
+        // 2️⃣ Actualizar estados
+        await pagoVisita.update({
+            estado: 'aprobado'
+        }, { transaction: t });
+
+        await SolicitudServicio.update(
+            {
+                estado: 'pendiente_asignacion'
+            },
+            {
+                where: { id_solicitud },
+                transaction: t
+            }
+        );
+
+        console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} confirmado y actualizado a 'pendiente_asignacion'.`);
+
+        // ✅ Confirmar transacción
+        await t.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Pago de visita confirmado correctamente.'
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error('[ERROR] Error al confirmar pago de visita:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Error al confirmar el pago de visita. Se revertieron los cambios.',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    // 2️⃣ Actualizar estados
-    await pagoVisita.update({ 
-      estado: 'aprobado'
-    }, { transaction: t });
-    
-    await SolicitudServicio.update(
-      { 
-        estado: 'pendiente_asignacion'
-      },
-      { 
-        where: { id_solicitud },
-        transaction: t 
-      }
-    );
-
-    console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} confirmado y actualizado a 'pendiente_asignacion'.`);
-
-    // ✅ Confirmar transacción
-    await t.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: 'Pago de visita confirmado correctamente.'
-    });
-  } catch (error) {
-    await t.rollback();
-    console.error('[ERROR] Error al confirmar pago de visita:', error);
-
-    return res.status(500).json({
-      success: false,
-      message: 'Error al confirmar el pago de visita. Se revertieron los cambios.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
 };
 
 // Denegar un pago de visita y actualiza el estado de la solicitud 
 const denegarPagoVisita = async (req, res) => {
-  const t = await PagoVisita.sequelize.transaction();
+    const t = await PagoVisita.sequelize.transaction();
 
-  try {
-    const { id_solicitud } = req.body;
+    try {
+        const { id_solicitud } = req.body;
 
-    console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/denegar:', req.body);
+        console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/denegar:', req.body);
 
-    // 1️⃣ Buscar el pago de visita por id_solicitud
-    const pagoVisita = await PagoVisita.findOne({ 
-      where: { id_solicitud },
-      transaction: t 
-    });
-    
-    if (!pagoVisita) {
-      await t.rollback();
-      return res.status(404).json({
-        success: false,
-        message: 'No se encontró un pago de visita para la solicitud especificada'
-      });
+        // 1️⃣ Buscar el pago de visita por id_solicitud
+        const pagoVisita = await PagoVisita.findOne({
+            where: { id_solicitud },
+            transaction: t
+        });
+
+        if (!pagoVisita) {
+            await t.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'No se encontró un pago de visita para la solicitud especificada'
+            });
+        }
+
+        // 2️⃣ Actualizar estados
+        await pagoVisita.update({
+            estado: 'rechazado'
+        }, { transaction: t });
+
+        await SolicitudServicio.update(
+            {
+                estado: 'pendiente_pagovisita'
+            },
+            {
+                where: { id_solicitud },
+                transaction: t
+            }
+        );
+
+        console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} denegado y actualizado a 'pendiente_pagovisita'.`);
+
+        // ✅ Confirmar transacción
+        await t.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Pago de visita denegado correctamente.'
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error('[ERROR] Error al denegar pago de visita:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Error al denegar el pago de visita. Se revertieron los cambios.',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    // 2️⃣ Actualizar estados
-    await pagoVisita.update({ 
-      estado: 'rechazado'
-    }, { transaction: t });
-    
-    await SolicitudServicio.update(
-      { 
-        estado: 'pendiente_pagovisita'
-      }, 
-      { 
-        where: { id_solicitud },
-        transaction: t 
-      }
-    );
-
-    console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} denegado y actualizado a 'pendiente_pagovisita'.`);
-
-    // ✅ Confirmar transacción
-    await t.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: 'Pago de visita denegado correctamente.'
-    });
-  } catch (error) {
-    await t.rollback();
-    console.error('[ERROR] Error al denegar pago de visita:', error);
-
-    return res.status(500).json({
-      success: false,
-      message: 'Error al denegar el pago de visita. Se revertieron los cambios.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
 };
 
 
