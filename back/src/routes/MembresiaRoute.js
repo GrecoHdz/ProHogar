@@ -5,6 +5,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { apiLimiter } = require('../middleware/rateLimiters'); 
 const { 
     obtenerMembresias, 
+    obtenerMembresiaPorId,
     obtenerHistorialMembresias,
     obtenerMembresiaActual,
     crearMembresia, 
@@ -43,6 +44,8 @@ router.get("/:id",
   validarErrores, 
   obtenerMembresiaActual
 );
+
+router.get('/buscar/:id', validarErrores, obtenerMembresiaPorId);
 
 // Obtener historial de membresias de un usuario
 router.get("/historial/:id", 

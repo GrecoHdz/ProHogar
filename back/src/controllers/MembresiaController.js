@@ -137,6 +137,108 @@ const obtenerMembresias = async (req, res) => {
     }
 };
 
+// Obtener membresía por ID
+const obtenerMembresiaPorId = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const whereCondition = {
+            id_membresia: id
+        };
+
+        // Total (para que el frontend no falle)
+        const total = await Membresia.count({ where: whereCondition });
+
+        if (total === 0) {
+            return res.json({
+                success: false,
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0,
+                hasMore: false,
+                estadisticas: {
+                    aprobados: 0,
+                    rechazados: 0,
+                    pendientes: 0,
+                    total: 0
+                }
+            });
+        }
+
+        const [membresias, stats] = await Promise.all([
+            Membresia.findAll({
+                where: whereCondition,
+                attributes: { exclude: ['id_usuario', 'id_cuenta'] },
+                include: [
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        attributes: ['id_usuario', 'nombre', 'telefono']
+                    },
+                    {
+                        model: Cuenta,
+                        as: 'cuenta',
+                        attributes: ['banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    },
+                    {
+                        model: require('../models/facturaRelacionModel'),
+                        as: 'facturaRelacion',
+                        include: [
+                            {
+                                model: require('../models/facturaModel'),
+                                as: 'factura',
+                                attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                            }
+                        ]
+                    }
+                ],
+                order: [['fecha', 'DESC']],
+                raw: true,
+                nest: true
+            }),
+
+            // Estadísticas (misma lógica)
+            Membresia.findAll({
+                attributes: [
+                    [Sequelize.literal("COUNT(CASE WHEN estado IN ('activa','vencida') THEN 1 END)"), 'activas'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazada' THEN 1 END)"), 'rechazadas'],
+                    [Sequelize.literal("SUM(CASE WHEN estado IN ('activa','vencida') THEN monto ELSE 0 END)"), 'total']
+                ],
+                where: whereCondition,
+                raw: true
+            })
+        ]);
+
+        const statsData = stats[0] || {};
+        const estadisticas = {
+            aprobados: parseInt(statsData.activas) || 0,
+            rechazados: parseInt(statsData.rechazadas) || 0,
+            pendientes: parseInt(statsData.pendientes) || 0,
+            total: parseFloat(statsData.total) || 0
+        };
+
+        return res.json({
+            success: true,
+            data: membresias,
+            total: 1,
+            page: 1,
+            totalPages: 1,
+            hasMore: false,
+            estadisticas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener membresía por ID:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al obtener la membresía',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 // Obtener historial completo de membresías de un usuario
 const obtenerHistorialMembresias = async (req, res) => {
     try {
@@ -350,6 +452,7 @@ const eliminarMembresia = async (req, res) => {
 
 module.exports = {
     obtenerMembresias,
+    obtenerMembresiaPorId,
     obtenerHistorialMembresias,
     obtenerMembresiaActual,
     crearMembresia,

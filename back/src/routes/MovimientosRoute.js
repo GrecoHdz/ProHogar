@@ -8,6 +8,7 @@ const {
     obtenerEstadisticasDashboard,
     obtenerReporteIngresos,
     obtenerRetiros,
+    obtenerRetiroPorId,
     getMovimientosPorUsuario,
     getIngresosMensuales,
     getServiciosPorMes,
@@ -43,6 +44,11 @@ router.get("/", validarErrores, getAllMovimientos);
 
 //Obtener retiros
 router.get("/retiros", validarErrores, obtenerRetiros);
+
+//Obtener retiro por ID
+router.get("/retiros/:id", [
+    param("id").isInt().withMessage("El id debe ser un numero entero")
+], validarErrores, obtenerRetiroPorId);
 
 //Obtener estadisticas del dashboard admin
 router.get("/estadisticas/admin", validarErrores, obtenerEstadisticasDashboard);

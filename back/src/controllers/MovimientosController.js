@@ -616,6 +616,109 @@ const obtenerRetiros = async (req, res) => {
     }
 };
 
+// Obtener retiro por ID
+const obtenerRetiroPorId = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const whereCondition = {
+            tipo: 'retiro',
+            id_movimiento: id
+        };
+
+        const movimientos = await Movimiento.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    required: false,
+                    attributes: ['nombre']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    required: false,
+                    attributes: ['id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        required: false,
+                        attributes: ['colonia', 'id_solicitud'],
+                        include: [{
+                            model: Servicio,
+                            as: 'servicio',
+                            required: false,
+                            attributes: ['nombre']
+                        }]
+                    }]
+                }
+            ],
+            order: [['fecha', 'DESC']]
+        });
+
+        if (!movimientos.length) {
+            return res.json({
+                success: false,
+                movimientos: [],
+                estadisticas: {
+                    pendientes: 0,
+                    aprobados: 0,
+                    rechazados: 0,
+                    total: 0
+                },
+                paginacion: {
+                    total: 0,
+                    totalPages: 0,
+                    limit: 10,
+                    offset: 0
+                }
+            });
+        }
+
+        const movimientosFormateados = movimientos.map(movimiento => {
+            const m = movimiento.get({ plain: true });
+
+            return {
+                id_movimiento: m.id_movimiento,
+                monto: parseFloat(m.monto || 0).toFixed(2),
+                fecha: new Date(m.fecha).toISOString().split('T')[0],
+                estado: (m.estado || '').toLowerCase(),
+                tipo: m.tipo,
+                descripcion: m.descripcion,
+                nombre_usuario: m.usuario?.nombre || 'Usuario no encontrado'
+            };
+        });
+
+        const totalMonto = movimientosFormateados.reduce((sum, m) => {
+            if (m.estado === 'completado') {
+                return sum + parseFloat(m.monto);
+            }
+            return sum;
+        }, 0);
+
+       res.json({
+           success: true,
+           movimientos: movimientosFormateados,
+           estadisticas: {
+               pendientes: movimientosFormateados.filter(m => m.estado === 'pendiente').length,
+               aprobados: movimientosFormateados.filter(m => m.estado === 'aprobado').length,
+               rechazados: movimientosFormateados.filter(m => m.estado === 'rechazado').length,
+               total: movimientosFormateados.length
+           }
+       });
+
+
+    } catch (error) {
+        console.error('Error al obtener retiro por ID:', error);
+        res.status(500).json({
+            success: false,
+            mensaje: 'Error al obtener el retiro',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 // Obtener reporte de ingresos y gráfico mensual
 const obtenerReporteIngresos = async (req, res) => {
     try {
@@ -1928,11 +2031,10 @@ const ajustarFechaLocal = (fecha, inicioDelDia = false) => {
     return fechaLocal;
 };
 
-
-
 // Exportar controladores
 module.exports = {
     obtenerRetiros,
+    obtenerRetiroPorId,
     getAllMovimientos,
     crearMovimiento,
     actualizarMovimiento,

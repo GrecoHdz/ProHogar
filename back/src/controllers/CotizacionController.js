@@ -5,25 +5,21 @@ const Referido = require("../models/referidosModel");
 // Obtener todas las cotizaciones con información relacionada
 const getAllCotizaciones = async (req, res) => {
     try {
-        // Obtener parámetros de paginación
         let limit = parseInt(req.query.limit) || 10;
-        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        limit = Math.min(limit, 10);
         const offset = parseInt(req.query.offset) || 0;
         const { estado, search, month } = req.query;
 
-        // Construir condiciones de búsqueda
         const whereCondition = {
-            id_cuenta: { [Op.ne]: null },  // Solo cotizaciones con id_cuenta no nulo
-            estado: { [Op.in]: ['rechazado', 'pagado', 'confirmado'] },  // Excluir cotizaciones pendientes
+            id_cuenta: { [Op.ne]: null },
+            estado: { [Op.in]: ['rechazado', 'pagado', 'confirmado'] },
         };
         const andConditions = [];
 
-        // Filtro por estado
         if (estado) {
             whereCondition.estado = estado;
         }
 
-        // Filtro por término de búsqueda
         if (search) {
             andConditions.push({
                 [Op.or]: [
@@ -35,7 +31,6 @@ const getAllCotizaciones = async (req, res) => {
             });
         }
 
-        // Filtro por mes
         if (month) {
             const [year, monthNum] = month.split('-').map(Number);
             andConditions.push(
@@ -44,21 +39,17 @@ const getAllCotizaciones = async (req, res) => {
             );
         }
 
-        // Combinar condiciones
         if (andConditions.length > 0) {
             whereCondition[Op.and] = andConditions;
         }
 
-        // Obtener el conteo total
         const total = await Cotizacion.count({
             where: whereCondition,
             distinct: true,
             col: 'id_cotizacion'
         });
 
-        // Obtener estadísticas y cotizaciones en paralelo
         const [stats, cotizaciones] = await Promise.all([
-            // Obtener estadísticas por estado
             Cotizacion.findAll({
                 attributes: [
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'confirmado' THEN 1 END)"), 'aprobados'],
@@ -69,8 +60,6 @@ const getAllCotizaciones = async (req, res) => {
                 where: whereCondition,
                 raw: true
             }),
-
-            // Obtener cotizaciones con paginación
             Cotizacion.findAll({
                 where: whereCondition,
                 include: [
@@ -79,26 +68,10 @@ const getAllCotizaciones = async (req, res) => {
                         as: 'solicitud',
                         attributes: ['id_solicitud', 'descripcion', 'direccion_precisa', 'colonia', 'estado'],
                         include: [
-                            {
-                                model: require('../models/usuariosModel'),
-                                as: 'cliente',
-                                attributes: ['id_usuario', 'nombre', 'telefono']
-                            },
-                            {
-                                model: require('../models/usuariosModel'),
-                                as: 'tecnico',
-                                attributes: ['id_usuario', 'nombre', 'telefono']
-                            },
-                            {
-                                model: require('../models/serviciosModel'),
-                                as: 'servicio',
-                                attributes: ['id_servicio', 'nombre']
-                            },
-                            {
-                                model: require('../models/ciudadesModel'),
-                                as: 'ciudad',
-                                attributes: ['id_ciudad', 'nombre_ciudad']
-                            }
+                            { model: require('../models/usuariosModel'), as: 'cliente', attributes: ['id_usuario', 'nombre', 'telefono'] },
+                            { model: require('../models/usuariosModel'), as: 'tecnico', attributes: ['id_usuario', 'nombre', 'telefono'] },
+                            { model: require('../models/serviciosModel'), as: 'servicio', attributes: ['id_servicio', 'nombre'] },
+                            { model: require('../models/ciudadesModel'), as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
                         ]
                     },
                     {
@@ -126,8 +99,7 @@ const getAllCotizaciones = async (req, res) => {
             })
         ]);
 
-        // Procesar estadísticas
-        const statsData = stats[0] || { aprobados: 0, rechazados: 0, pendientes: 0, total: 0 };
+        const statsData = stats[0] || {};
         const monthlyStats = {
             aprobados: parseInt(statsData.aprobados) || 0,
             rechazados: parseInt(statsData.rechazados) || 0,
@@ -135,72 +107,25 @@ const getAllCotizaciones = async (req, res) => {
             total: parseFloat(statsData.total) || 0
         };
 
-        // Formatear respuesta
-        const cotizacionesFormateadas = cotizaciones.map(({
-            id_cotizacion,
-            id_solicitud,
-            id_cuenta,
-            monto_manodeobra,
-            monto_materiales,
-            descuento_membresia,
-            credito_usado,
-            comentario,
-            fecha,
-            estado,
-            num_comprobante,
-            solicitud,
-            cuenta,
-            facturaRelacion
-        }) => ({
-            id_cotizacion,
-            id_solicitud,
-            id_cuenta,
-            monto_manodeobra,
-            monto_materiales,
-            descuento_membresia: descuento_membresia || 0,
-            credito_usado: credito_usado || 0,
-            monto_total: monto_manodeobra - (descuento_membresia || 0) - (credito_usado || 0),
-            comentario,
-            fecha,
-            estado,
-            num_comprobante,
-            solicitud: solicitud ? {
-                id_solicitud: solicitud.id_solicitud,
-                descripcion: solicitud.descripcion,
-                direccion_precisa: solicitud.direccion_precisa,
-                colonia: solicitud.colonia,
-                estado: solicitud.estado,
-                cliente: solicitud.cliente ? {
-                    id_usuario: solicitud.cliente.id_usuario,
-                    nombre: solicitud.cliente.nombre,
-                    telefono: solicitud.cliente.telefono
-                } : null,
-                servicio: solicitud.servicio ? {
-                    id_servicio: solicitud.servicio.id_servicio,
-                    nombre: solicitud.servicio.nombre
-                } : null,
-                tecnico: solicitud.tecnico ? {
-                    id_usuario: solicitud.tecnico.id_usuario,
-                    nombre: solicitud.tecnico.nombre,
-                    telefono: solicitud.tecnico.telefono
-                } : null,
-                ciudad: solicitud.ciudad ? {
-                    id_ciudad: solicitud.ciudad.id_ciudad,
-                    nombre: solicitud.ciudad.nombre_ciudad
-                } : null
-            } : null,
-            cuenta: cuenta ? {
-                id_cuenta: cuenta.id_cuenta,
-                banco: cuenta.banco,
-                beneficiario: cuenta.beneficiario,
-                num_cuenta: cuenta.num_cuenta,
-                tipo: cuenta.tipo
-            } : null,
-            facturaRelacion
+        const cotizacionesFormateadas = cotizaciones.map(c => ({
+            id_cotizacion: c.id_cotizacion,
+            id_solicitud: c.id_solicitud,
+            id_cuenta: c.id_cuenta,
+            monto_manodeobra: c.monto_manodeobra,
+            monto_materiales: c.monto_materiales,
+            descuento_membresia: c.descuento_membresia || 0,
+            credito_usado: c.credito_usado || 0,
+            monto_total: c.monto_manodeobra - (c.descuento_membresia || 0) - (c.credito_usado || 0),
+            comentario: c.comentario,
+            fecha: c.fecha,
+            estado: c.estado,
+            num_comprobante: c.num_comprobante,
+            solicitud: c.solicitud,
+            cuenta: c.cuenta,
+            facturaRelacion: c.facturaRelacion
         }));
 
-        // Enviar respuesta
-        res.json({
+        const response = {
             success: true,
             data: cotizacionesFormateadas,
             total,
@@ -208,7 +133,12 @@ const getAllCotizaciones = async (req, res) => {
             totalPages: Math.ceil(total / limit),
             hasMore: offset + limit < total,
             estadisticas: monthlyStats
-        });
+        };
+
+        console.log('📦 getAllCotizaciones response:', JSON.stringify(response, null, 2));
+
+        res.json(response);
+
     } catch (error) {
         console.error('Error al obtener las cotizaciones:', error);
         res.status(500).json({
@@ -218,6 +148,138 @@ const getAllCotizaciones = async (req, res) => {
         });
     }
 };
+
+// Obtener cotización por ID
+const getCotizacionPorId = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const whereCondition = {
+            id_cotizacion: id,
+            id_cuenta: { [Op.ne]: null },
+            estado: { [Op.in]: ['rechazado', 'pagado', 'confirmado'] }
+        };
+
+        const total = await Cotizacion.count({
+            where: whereCondition,
+            distinct: true,
+            col: 'id_cotizacion'
+        });
+
+        if (total === 0) {
+            return res.json({
+                success: false,
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0,
+                hasMore: false,
+                estadisticas: {
+                    aprobados: 0,
+                    rechazados: 0,
+                    pendientes: 0,
+                    total: 0
+                }
+            });
+        }
+
+        const stats = await Cotizacion.findAll({
+            attributes: [
+                [Sequelize.literal("COUNT(CASE WHEN estado = 'confirmado' THEN 1 END)"), 'aprobados'],
+                [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
+                [Sequelize.literal("COUNT(CASE WHEN estado = 'pagado' THEN 1 END)"), 'pendientes'],
+                [Sequelize.literal("SUM(CASE WHEN estado = 'confirmado' THEN (monto_manodeobra - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)) ELSE 0 END)"), 'total']
+            ],
+            where: whereCondition,
+            raw: true
+        });
+
+        const cotizaciones = await Cotizacion.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: require('../models/solicitudServicioModel'),
+                    as: 'solicitud',
+                    attributes: ['id_solicitud', 'descripcion', 'direccion_precisa', 'colonia', 'estado'],
+                    include: [
+                        { model: require('../models/usuariosModel'), as: 'cliente', attributes: ['id_usuario', 'nombre', 'telefono'] },
+                        { model: require('../models/usuariosModel'), as: 'tecnico', attributes: ['id_usuario', 'nombre', 'telefono'] },
+                        { model: require('../models/serviciosModel'), as: 'servicio', attributes: ['id_servicio', 'nombre'] },
+                        { model: require('../models/ciudadesModel'), as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
+                    ]
+                },
+                {
+                    model: require('../models/cuentasModel'),
+                    as: 'cuenta',
+                    attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo']
+                },
+                {
+                    model: require('../models/facturaRelacionModel'),
+                    as: 'facturaRelacion',
+                    include: [
+                        {
+                            model: require('../models/facturaModel'),
+                            as: 'factura',
+                            attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                        }
+                    ]
+                }
+            ],
+            order: [['fecha', 'DESC']],
+            raw: true,
+            nest: true
+        });
+
+        const cotizacionesFormateadas = cotizaciones.map(c => ({
+            id_cotizacion: c.id_cotizacion,
+            id_solicitud: c.id_solicitud,
+            id_cuenta: c.id_cuenta,
+            monto_manodeobra: c.monto_manodeobra,
+            monto_materiales: c.monto_materiales,
+            descuento_membresia: c.descuento_membresia || 0,
+            credito_usado: c.credito_usado || 0,
+            monto_total: c.monto_manodeobra - (c.descuento_membresia || 0) - (c.credito_usado || 0),
+            comentario: c.comentario,
+            fecha: c.fecha,
+            estado: c.estado,
+            num_comprobante: c.num_comprobante,
+            solicitud: c.solicitud,
+            cuenta: c.cuenta,
+            facturaRelacion: c.facturaRelacion
+        }));
+
+        const statsData = stats[0] || {};
+        const estadisticas = {
+            aprobados: parseInt(statsData.aprobados) || 0,
+            rechazados: parseInt(statsData.rechazados) || 0,
+            pendientes: parseInt(statsData.pendientes) || 0,
+            total: parseFloat(statsData.total) || 0
+        };
+
+        const response = {
+            success: true,
+            data: cotizacionesFormateadas,
+            total,
+            page: 1,
+            totalPages: 1,
+            hasMore: false,
+            estadisticas
+        };
+
+        console.log('📦 getCotizacionPorId response:', JSON.stringify(response, null, 2));
+
+        return res.json(response);
+
+    } catch (error) {
+        console.error('Error al obtener la cotización por ID:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al obtener la cotización',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 
 //Obtener cotizaciones por usuario
 const getCotizacionesPorUsuario = async (req, res) => {
@@ -327,8 +389,10 @@ const deleteCotizacion = async (req, res) => {
     }
 };
 
+
 module.exports = {
     getAllCotizaciones,
+    getCotizacionPorId,
     getCotizacionesPorUsuario,
     getUltimaCotizacionPorSolicitud,
     getCotizacionPorSolicitud,

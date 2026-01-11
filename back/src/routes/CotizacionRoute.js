@@ -5,6 +5,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { apiLimiter } = require('../middleware/rateLimiters'); 
 const { 
     getAllCotizaciones,
+    getCotizacionPorId,
     getCotizacionesPorUsuario,
     getCotizacionPorSolicitud,
     getUltimaCotizacionPorSolicitud,
@@ -32,6 +33,12 @@ const validarErrores = (req, res, next) => {
 router.get("/", [
     validarErrores
 ], getAllCotizaciones);
+
+// Obtener cotización por ID
+router.get("/:id", [
+    param("id").isInt().withMessage("El ID debe ser un número entero"),
+    validarErrores
+], getCotizacionPorId);
 
 //Obtener cotizaciones por usuario
 router.get("/usuario/:id", [

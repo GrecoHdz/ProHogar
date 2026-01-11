@@ -19,9 +19,9 @@ const processPayment = async (req, res) => {
       descuento_membresia,
       id_usuario,
       monto_credito,
-      id_referidor, // opcional si lo recibes por frontend
+      id_referidor, 
       nombre,
-      comision_referido // opcional, calculada desde Config
+      comision_referido 
     } = req.body;
 
     // Validaciones básicas

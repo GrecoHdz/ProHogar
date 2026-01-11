@@ -194,16 +194,185 @@ const obtenerPagos = async (req, res) => {
     }
 };
 
-//Obtener un pago por id
-const obtenerPagoPorId = async (req, res) => {
+// Obtener pago de visita por ID
+const obtenerPagoVisitaPorId = async (req, res) => {
     try {
-        const pago = await PagoVisita.findByPk(id);
-        res.json(pago);
+        const { id } = req.params;
+
+        // Condición base (misma lógica que obtenerPagos)
+        const whereCondition = {
+            id_pagovisita: id
+        };
+
+        // Conteo (para mantener compatibilidad con frontend)
+        const total = await PagoVisita.count({ where: whereCondition });
+
+        // Si no existe
+        if (total === 0) {
+            return res.json({
+                success: false,
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0,
+                hasMore: false,
+                estadisticas: {
+                    aprobados: 0,
+                    rechazados: 0,
+                    pendientes: 0,
+                    total: 0
+                }
+            });
+        }
+
+        // Obtener pago + estadísticas en paralelo
+        const [pagos, stats] = await Promise.all([
+            // Pago por ID (misma query que obtenerPagos, sin paginar)
+            PagoVisita.findAll({
+                where: whereCondition,
+                include: [
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        attributes: ['id_usuario', 'nombre', 'telefono', 'email']
+                    },
+                    {
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        include: [
+                            {
+                                model: Servicio,
+                                as: 'servicio',
+                                attributes: ['id_servicio', 'nombre']
+                            },
+                            {
+                                model: Usuario,
+                                as: 'tecnico',
+                                attributes: ['id_usuario', 'nombre']
+                            },
+                            {
+                                model: Ciudad,
+                                as: 'ciudad',
+                                attributes: ['id_ciudad', 'nombre_ciudad']
+                            }
+                        ],
+                        attributes: [
+                            'id_solicitud',
+                            'fecha_solicitud',
+                            'descripcion',
+                            'direccion_precisa',
+                            'colonia',
+                            'estado'
+                        ]
+                    },
+                    {
+                        model: Cuenta,
+                        as: 'cuenta',
+                        attributes: ['id_cuenta', 'banco', 'beneficiario', 'num_cuenta', 'tipo']
+                    },
+                    {
+                        model: require('../models/facturaRelacionModel'),
+                        as: 'facturaRelacion',
+                        include: [
+                            {
+                                model: require('../models/facturaModel'),
+                                as: 'factura',
+                                attributes: ['id_factura', 'numero_factura_correlativo', 'estado']
+                            }
+                        ]
+                    }
+                ],
+                order: [['fecha', 'DESC']],
+                raw: true,
+                nest: true
+            }),
+
+            // Estadísticas (misma estructura que obtenerPagos)
+            PagoVisita.findAll({
+                attributes: [
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'aprobado' THEN 1 END)"), 'aprobados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente' THEN 1 END)"), 'pendientes'],
+                    [Sequelize.literal("SUM(CASE WHEN estado = 'aprobado' THEN monto ELSE 0 END)"), 'total']
+                ],
+                where: whereCondition,
+                raw: true
+            })
+        ]);
+
+        // Procesar estadísticas
+        const statsData = stats[0] || {};
+        const estadisticas = {
+            aprobados: parseInt(statsData.aprobados) || 0,
+            rechazados: parseInt(statsData.rechazados) || 0,
+            pendientes: parseInt(statsData.pendientes) || 0,
+            total: parseFloat(statsData.total) || 0
+        };
+
+        // Formateo EXACTO al de obtenerPagos
+        const pagosFormateados = pagos.map(({
+            usuario,
+            solicitud,
+            cuenta,
+            ...pago
+        }) => ({
+            ...pago,
+            cliente: usuario ? {
+                id_usuario: usuario.id_usuario,
+                nombre: usuario.nombre,
+                telefono: usuario.telefono,
+                email: usuario.email
+            } : null,
+            solicitud: solicitud ? {
+                id_solicitud: solicitud.id_solicitud,
+                fecha_solicitud: solicitud.fecha_solicitud,
+                descripcion: solicitud.descripcion,
+                direccion_precisa: solicitud.direccion_precisa,
+                colonia: solicitud.colonia,
+                estado: solicitud.estado,
+                servicio: solicitud.servicio ? {
+                    id_servicio: solicitud.servicio.id_servicio,
+                    nombre: solicitud.servicio.nombre
+                } : null,
+                tecnico: solicitud.tecnico ? {
+                    id_tecnico: solicitud.tecnico.id_usuario,
+                    nombre: solicitud.tecnico.nombre
+                } : null,
+                ciudad: solicitud.ciudad ? {
+                    id_ciudad: solicitud.ciudad.id_ciudad,
+                    nombre: solicitud.ciudad.nombre_ciudad
+                } : null
+            } : null,
+            cuenta: cuenta ? {
+                id_cuenta: cuenta.id_cuenta,
+                banco: cuenta.banco,
+                beneficiario: cuenta.beneficiario,
+                num_cuenta: cuenta.num_cuenta,
+                tipo: cuenta.tipo
+            } : null,
+            facturaRelacion: pago.facturaRelacion
+        }));
+
+        // 🔑 MISMA RESPUESTA que obtenerPagos
+        return res.json({
+            success: true,
+            data: pagosFormateados,
+            total,
+            page: 1,
+            totalPages: 1,
+            hasMore: false,
+            estadisticas
+        });
+
     } catch (error) {
-        console.error(error);
-        return null;
+        console.error("Error al obtener pago de visita por ID:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al obtener el pago de visita",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-}
+};
 
 //Obtener pagos por usuario
 const obtenerPagosPorUsuario = async (req, res) => {
@@ -436,7 +605,7 @@ const denegarPagoVisita = async (req, res) => {
 
 module.exports = {
     obtenerPagos,
-    obtenerPagoPorId,
+    obtenerPagoVisitaPorId,
     obtenerUltimoPagoPorSolicitud,
     confirmarPagoVisita,
     denegarPagoVisita,

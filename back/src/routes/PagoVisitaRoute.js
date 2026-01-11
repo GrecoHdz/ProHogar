@@ -5,7 +5,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 const { apiLimiter } = require('../middleware/rateLimiters'); 
 const { 
     obtenerPagos,
-    obtenerPagoPorId,
+    obtenerPagoVisitaPorId,
     obtenerPagosPorUsuario,
     obtenerUltimoPagoPorSolicitud,
     confirmarPagoVisita,
@@ -34,7 +34,7 @@ const validarErrores = (req, res, next) => {
 router.get("/", validarErrores, obtenerPagos);
 
 //Obtener un pago por id
-router.get("/:id", validarErrores, obtenerPagoPorId);
+router.get('/:id', validarErrores, obtenerPagoVisitaPorId);
 
 //Obtener pagos por usuario
 router.get("/usuario/:id", validarErrores, obtenerPagosPorUsuario); 
