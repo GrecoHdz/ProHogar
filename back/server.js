@@ -31,6 +31,7 @@ const tecnicoServicioRoutes = require("./src/routes/TecnicoServicioRoute");
 const facturaRoutes = require("./src/routes/FacturaRoute");
 const facturaRelacionRoutes = require("./src/routes/FacturaRelacionRoute");
 const facturaCorrelativoRoutes = require("./src/routes/FacturaCorrelativoRoute");
+const paquetesRoutes = require("./src/routes/PaquetesRoute");
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
 setupAssociations();
@@ -105,6 +106,7 @@ app.use("/tecnicoServicio", tecnicoServicioRoutes);
 app.use("/facturas/correlativos", facturaCorrelativoRoutes);
 app.use("/facturas/relaciones", facturaRelacionRoutes);
 app.use("/facturas", facturaRoutes);
+app.use("/paquetes", paquetesRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
