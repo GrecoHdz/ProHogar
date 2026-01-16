@@ -13,7 +13,7 @@ const CreditoUsuario = sequelize.define("CreditoUsuario", {
         unique: true
     },
     monto_credito: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 2), // 10 dígitos en total, 2 decimales
         allowNull: false
     }, 
     fecha: {

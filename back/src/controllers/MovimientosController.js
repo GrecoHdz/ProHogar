@@ -8,6 +8,8 @@ const Membresia = require('../models/membresiaModel');
 const PagoVisita = require('../models/pagoVisitaModel');
 const Usuario = require('../models/usuariosModel');
 const Rol = require('../models/rolesModel');
+const PagoPaquete = require("../models/pagoPaqueteModel");
+const Config = require("../models/configModel");
 
 //Obtener transacciones con datos de cotización y suma total de montos
 const getTransacciones = async (req, res) => {
@@ -200,6 +202,43 @@ const getTransacciones = async (req, res) => {
     }
 };
 
+//Obtener informacion de paquetes adquiridos
+const getpaquetesadquiridos = async (req, res) => {
+    try {
+        // Buscar movimientos con tipo 'ingreso' y descripción no nula, incluyendo datos del usuario
+        const movimientos = await Movimiento.findAll({
+            where: {
+                tipo: 'ingreso',
+                descripcion: {
+                    [Op.ne]: null
+                }
+            },
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    attributes: ['nombre']
+                }
+            ],
+            order: [['fecha', 'DESC']]
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: movimientos,
+            total: movimientos.length
+        });
+    } catch (error) {
+        console.error('Error al obtener movimientos de ingreso con descripción:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error al obtener movimientos de ingreso',
+            error: error.message
+        });
+    }
+};
+
+
 const getTopUsuariosCredito = async (req, res) => {
     try {
         // Obtener el top 5 de técnicos con más crédito
@@ -300,7 +339,7 @@ const obtenerRetiros = async (req, res) => {
     try {
         // Obtener parámetros de paginación y búsqueda
         let limit = parseInt(req.query.limit) || 10;
-        limit = Math.min(limit, 10); // Máximo 10 por rendimiento
+        limit = Math.min(limit, 1000); // Máximo 1000 para reportes
         const offset = parseInt(req.query.offset) || 0;
         const searchTerm = req.query.search || '';
         const estado = req.query.estado;
@@ -697,16 +736,16 @@ const obtenerRetiroPorId = async (req, res) => {
             return sum;
         }, 0);
 
-       res.json({
-           success: true,
-           movimientos: movimientosFormateados,
-           estadisticas: {
-               pendientes: movimientosFormateados.filter(m => m.estado === 'pendiente').length,
-               aprobados: movimientosFormateados.filter(m => m.estado === 'aprobado').length,
-               rechazados: movimientosFormateados.filter(m => m.estado === 'rechazado').length,
-               total: movimientosFormateados.length
-           }
-       });
+        res.json({
+            success: true,
+            movimientos: movimientosFormateados,
+            estadisticas: {
+                pendientes: movimientosFormateados.filter(m => m.estado === 'pendiente').length,
+                aprobados: movimientosFormateados.filter(m => m.estado === 'aprobado').length,
+                rechazados: movimientosFormateados.filter(m => m.estado === 'rechazado').length,
+                total: movimientosFormateados.length
+            }
+        });
 
 
     } catch (error) {
@@ -732,13 +771,20 @@ const obtenerReporteIngresos = async (req, res) => {
             fechaReferencia = new Date(anio, mes - 1, 1);
         }
 
+        // Obtener el porcentaje de comisión para paquetes
+        const configComision = await Config.findOne({
+            where: { tipo_config: 'comision_por_paquete' }
+        });
+        const porcentajeComision = configComision ? parseFloat(configComision.valor) : 10;
+
         // 1. Obtener ingresos por diferentes fuentes con filtros de fecha
         const [
             ingresosMembresias,
             ingresosVisitas,
             cotizaciones,
             totalRetiros,
-            totalComisiones
+            totalComisiones,
+            sumatoriaMontoPaquetes
         ] = await Promise.all([
             // Ingresos por membresías activadas
             Membresia.sum('monto', {
@@ -805,8 +851,22 @@ const obtenerReporteIngresos = async (req, res) => {
                         }
                     } : {})
                 }
+            }),
+            // Sumatoria de montos de paquetes para calcular comisión
+            PagoPaquete.sum('monto', {
+                where: {
+                    estado: 'aprobado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
             })
         ]);
+
+        const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
 
         // Calcular ingresos por servicios (cotizaciones)
         const ingresosServicios = cotizaciones.reduce((total, cotizacion) => {
@@ -818,7 +878,8 @@ const obtenerReporteIngresos = async (req, res) => {
         // Calcular ingresos totales (solo sumamos ingresos, no restamos retiros ni comisiones aquí)
         const ingresosTotales = (ingresosServicios || 0) +
             (ingresosMembresias || 0) +
-            (ingresosVisitas || 0);
+            (ingresosVisitas || 0) +
+            (ingresosPaquetes || 0);
 
         // Calcular ganancia neta (ingresos - retiros - comisiones)
         const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
@@ -907,7 +968,22 @@ const obtenerReporteIngresos = async (req, res) => {
                 }
             }) || 0;
 
-            const ingresosTotalesMes = (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0);
+            // Obtener sumatoria de montos por paquetes del mes para calcular comisión
+            const sumatoriaPaquetesMes = await PagoPaquete.sum('monto', {
+                where: {
+                    estado: 'aprobado',
+                    fecha: {
+                        [Op.between]: [
+                            fechaInicio,
+                            fechaFin
+                        ]
+                    }
+                }
+            }) || 0;
+
+            const ingresosPaquetesMes = (parseFloat(sumatoriaPaquetesMes) * porcentajeComision) / 100;
+
+            const ingresosTotalesMes = (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + (ingresosPaquetesMes || 0);
             const gananciaNetaMes = ingresosTotalesMes - (retirosMes || 0);
 
             return {
@@ -924,6 +1000,7 @@ const obtenerReporteIngresos = async (req, res) => {
                 ingresosServicios: parseFloat(ingresosServicios || 0).toFixed(2),
                 ingresosMembresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 ingresosVisitas: parseFloat(ingresosVisitas || 0).toFixed(2),
+                ingresosPaquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
                 retiros: parseFloat(totalRetiros || 0).toFixed(2),
                 comisiones: parseFloat(totalComisiones || 0).toFixed(2),
                 gananciaNeta: parseFloat(gananciaNeta).toFixed(2)
@@ -1031,6 +1108,7 @@ const getAllMovimientos = async (req, res) => {
             const base = {
                 id_movimiento: data.id_movimiento,
                 id_solicitud: data.cotizacion?.id_solicitud || null,
+                descripcion: data.descripcion || null,
                 monto: monto,
                 fecha: data.fecha, // Mantener Date para ordenar, lo formatearemos al final
                 estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
@@ -1260,16 +1338,22 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             raw: true
         });
 
-        // Calcular el total usando JavaScript
         const totalCotizaciones = cotizaciones.reduce((total, cotizacion) => {
             const descuento = cotizacion.descuento_membresia || 0;
             const credito = cotizacion.credito_usado || 0;
             return total + (cotizacion.monto_manodeobra - descuento - credito);
         }, 0);
 
+        // Obtener el porcentaje de comisión para paquetes
+        const configComision = await Config.findOne({
+            where: { tipo_config: 'comision_por_paquete' }
+        });
+        const porcentajeComision = configComision ? parseFloat(configComision.valor) : 10;
+
         const [
             ingresosMembresias,
-            ingresosVisitas
+            ingresosVisitas,
+            sumatoriaMontoPaquetes
         ] = await Promise.all([
             // Ingresos por membresías activadas
             Membresia.sum('monto', {
@@ -1296,13 +1380,28 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                         }
                     } : {})
                 }
+            }),
+            // Sumatoria de montos de paquetes para calcular comisión
+            PagoPaquete.sum('monto', {
+                where: {
+                    estado: 'aprobado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
             })
         ]);
+
+        const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
 
         // Calcular el total sumando todas las fuentes de ingreso
         const ingresosTotales = (totalCotizaciones || 0) +
             (ingresosMembresias || 0) +
-            (ingresosVisitas || 0);
+            (ingresosVisitas || 0) +
+            (ingresosPaquetes || 0);
 
         // Verificar si hay servicios pendientes (sin filtro de fecha)
         const serviciosPendientes = await SolicitudServicio.count({
@@ -1333,7 +1432,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             desgloseIngresos: {
                 servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
                 membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
-                visitas: parseFloat(ingresosVisitas || 0).toFixed(2)
+                visitas: parseFloat(ingresosVisitas || 0).toFixed(2),
+                paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2)
             }
         };
 
@@ -1410,7 +1510,7 @@ const getMovimientosPorUsuario = async (req, res) => {
                 }]
             }];
 
-            queryOptions.attributes = ['id_movimiento', 'monto', 'fecha', 'estado', 'tipo', 'id_cotizacion'];
+            queryOptions.attributes = ['id_movimiento', 'descripcion', 'monto', 'fecha', 'estado', 'tipo', 'id_cotizacion'];
         }
 
         // Obtener total de registros para paginación
@@ -1430,7 +1530,7 @@ const getMovimientosPorUsuario = async (req, res) => {
         // Obtener movimientos paginados
         const { rows: movimientos } = await Movimiento.findAndCountAll({
             ...queryOptions,
-            attributes: ['id_movimiento', 'id_cotizacion', 'tipo', 'monto', 'fecha', 'estado']
+            attributes: ['id_movimiento', 'id_cotizacion', 'tipo', 'monto', 'fecha', 'estado', 'descripcion']
         });
 
         // Cargar relaciones manualmente
@@ -1480,8 +1580,8 @@ const getMovimientosPorUsuario = async (req, res) => {
                 const sol = cot?.solicitud;
 
                 Object.assign(base, {
-                    colonia: sol?.colonia || 'Sin colonia especificada',
-                    servicio: sol?.servicio?.nombre || 'Servicio no especificado'
+                    colonia: sol?.colonia,
+                    servicio: sol?.servicio?.nombre || datos.descripcion || 'Servicio no especificado'
                 });
             } else if (esRetiro) {
                 base.descripcion = datos.descripcion || 'Retiro de fondos';
@@ -1560,7 +1660,7 @@ const getIngresosMensuales = async (req, res) => {
             include: [{
                 model: Cotizacion,
                 as: 'cotizacion',
-                required: true,
+                required: false,
                 attributes: [],
                 include: [{
                     model: SolicitudServicio,
@@ -1594,41 +1694,86 @@ const getIngresosMensuales = async (req, res) => {
     }
 };
 
-//Obtener cantidad de servicios por mes
+// Obtener cantidad de servicios por mes
 const getServiciosPorMes = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
 
-        const data = await Movimiento.findAll({
-            attributes: [
-                [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
-                [Sequelize.fn('COUNT', Sequelize.col('Movimiento.id_movimiento')), 'cantidad']
-            ],
-            include: [{
-                model: Cotizacion,
-                as: 'cotizacion',
-                required: true,
-                attributes: [],
+        // Obtener servicios por mes
+        const [serviciosPorMes, movimientosPorMes] = await Promise.all([
+            // Consulta original para servicios
+            Movimiento.findAll({
+                attributes: [
+                    [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'fecha'],
+                    [Sequelize.fn('COUNT', Sequelize.col('Movimiento.id_movimiento')), 'cantidad']
+                ],
                 include: [{
-                    model: SolicitudServicio,
-                    as: 'solicitud',
+                    model: Cotizacion,
+                    as: 'cotizacion',
                     required: true,
                     attributes: [],
-                    where: { id_tecnico }
-                }]
-            }],
-            where: {
-                tipo: 'ingreso',
-                estado: 'completado'
-            },
-            group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
-            order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']]
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        required: true,
+                        attributes: [],
+                        where: { id_tecnico }
+                    }]
+                }],
+                where: {
+                    tipo: 'ingreso',
+                    estado: 'completado'
+                },
+                group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m')],
+                order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('Movimiento.fecha'), '%Y-%m'), 'ASC']],
+                raw: true
+            }),
+            // Consulta para movimientos de ingreso directos
+            Movimiento.findAll({
+                attributes: [
+                    [Sequelize.fn('DATE_FORMAT', Sequelize.col('fecha'), '%Y-%m'), 'fecha'],
+                    [Sequelize.fn('COUNT', Sequelize.col('id_movimiento')), 'cantidad']
+                ],
+                where: {
+                    id_usuario: id_tecnico,
+                    tipo: 'ingreso',
+                    estado: 'completado',
+                    id_cotizacion: null // Solo movimientos directos, no asociados a cotizaciones
+                },
+                group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('fecha'), '%Y-%m')],
+                order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('fecha'), '%Y-%m'), 'ASC']],
+                raw: true
+            })
+        ]);
+
+        // Combinar y sumar los resultados por fecha
+        const resultado = [];
+        const totalPorFecha = new Map();
+
+        // Procesar servicios por mes
+        serviciosPorMes.forEach(item => {
+            const fecha = item.fecha;
+            const cantidad = parseInt(item.cantidad);
+            totalPorFecha.set(fecha, (totalPorFecha.get(fecha) || 0) + cantidad);
         });
 
-        const resultado = data.map(item => ({
-            fecha: item.getDataValue('fecha'),
-            cantidad: parseInt(item.getDataValue('cantidad'))
-        }));
+        // Procesar movimientos directos por mes
+        movimientosPorMes.forEach(item => {
+            const fecha = item.fecha;
+            const cantidad = parseInt(item.cantidad);
+            totalPorFecha.set(fecha, (totalPorFecha.get(fecha) || 0) + cantidad);
+        });
+
+        // Convertir el mapa a array de objetos
+        totalPorFecha.forEach((cantidad, fecha) => {
+            resultado.push({
+                fecha,
+                cantidad
+            });
+        });
+
+        // Ordenar por fecha
+        resultado.sort((a, b) => a.fecha.localeCompare(b.fecha));
 
         res.json(resultado);
     } catch (error) {
@@ -1646,34 +1791,61 @@ const getServiciosPorTipo = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
 
-        // Contar servicios por tipo para el técnico
-        const serviciosPorTipo = await SolicitudServicio.findAll({
-            attributes: [
-                [Sequelize.col('servicio.nombre'), 'tipo_servicio'],
-                [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'cantidad']
-            ],
-            include: [{
-                model: Servicio,
-                as: 'servicio',
-                attributes: [],
-                required: true
-            }],
-            where: {
-                id_tecnico: id_tecnico,
-                estado: {
-                    [Op.in]: ['finalizado', 'calificado']
-                }
-            },
-            group: ['servicio.nombre'],
-            order: [[Sequelize.literal('cantidad'), 'DESC']],
-            raw: true
-        });
+        // Obtener servicios por tipo para el técnico
+        const [serviciosPorTipo, movimientosIngreso] = await Promise.all([
+            // Consulta original para servicios
+            SolicitudServicio.findAll({
+                attributes: [
+                    [Sequelize.col('servicio.nombre'), 'tipo_servicio'],
+                    [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'cantidad']
+                ],
+                include: [{
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: [],
+                    required: true
+                }],
+                where: {
+                    id_tecnico: id_tecnico,
+                    estado: {
+                        [Op.in]: ['finalizado', 'calificado']
+                    }
+                },
+                group: ['servicio.nombre'],
+                order: [[Sequelize.literal('cantidad'), 'DESC']],
+                raw: true
+            }),
+            // Consulta para movimientos de ingreso completados
+            Movimiento.findAll({
+                attributes: [
+                    [Sequelize.literal("REPLACE(descripcion, 'Ingreso por ', '')"), 'descripcion'],
+                    [Sequelize.fn('COUNT', Sequelize.col('id_movimiento')), 'cantidad']
+                ],
+                where: {
+                    id_usuario: id_tecnico,
+                    tipo: 'ingreso',
+                    estado: 'completado',
+                    descripcion: { [Op.not]: null }
+                },
+                group: ['descripcion'],
+                order: [[Sequelize.literal('cantidad'), 'DESC']],
+                raw: true
+            })
+        ]);
 
-        // Formatear el resultado
+        // Formatear el resultado de servicios
         const resultado = serviciosPorTipo.map(item => ({
             tipo: item.tipo_servicio,
             cantidad: parseInt(item.cantidad)
         }));
+
+        // Agregar movimientos de ingreso al resultado
+        movimientosIngreso.forEach(movimiento => {
+            resultado.push({
+                tipo: movimiento.descripcion,
+                cantidad: parseInt(movimiento.cantidad)
+            });
+        });
 
         res.json(resultado);
     } catch (error) {
@@ -1930,7 +2102,7 @@ const crearMovimiento = async (req, res) => {
     try {
         const movimiento = await Movimiento.create({
             ...req.body,
-            estado: 'pendiente'
+            estado: req.body.estado || 'pendiente'
         });
         res.status(201).json({
             success: true,
@@ -2050,5 +2222,6 @@ module.exports = {
     getIngresosTotalesReferidos,
     getIngresosyRetirosdeReferidos,
     getTransacciones,
-    getMovimientosIngresoMes
+    getMovimientosIngresoMes,
+    getpaquetesadquiridos
 };

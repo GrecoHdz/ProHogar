@@ -6,7 +6,7 @@ const Referido = require("../models/referidosModel");
 const getAllCotizaciones = async (req, res) => {
     try {
         let limit = parseInt(req.query.limit) || 10;
-        limit = Math.min(limit, 10);
+        limit = Math.min(limit, 1000); // Máximo 1000 para reportes
         const offset = parseInt(req.query.offset) || 0;
         const { estado, search, month } = req.query;
 

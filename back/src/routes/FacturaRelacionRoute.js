@@ -49,12 +49,12 @@ router.post("/",
     [
         body('id_factura').isInt().withMessage('ID de factura es requerido'),
         body().custom((value, { req }) => {
-            const { id_pagovisita, id_cotizacion, id_membresia } = req.body;
-            const count = [id_pagovisita, id_cotizacion, id_membresia]
+            const { id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete } = req.body;
+            const count = [id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete]
                 .filter(v => v !== null && v !== undefined).length;
-            
+
             if (count !== 1) {
-                throw new Error('Debe proporcionar exactamente un tipo de pago (visita, servicio o membresía)');
+                throw new Error('Debe proporcionar exactamente un tipo de pago (visita, cotizacion, membresia o paquete)');
             }
             return true;
         })
@@ -76,12 +76,13 @@ router.delete("/:id",
     eliminarRelacionFactura
 );
 
-// Buscar factura por ID de pago (servicio, membresía o visita)
+// Buscar factura por ID de pago (servicio, membresía, visita o paquete)
 router.get("/idpago",
     [
         query('id_pagovisita').optional().isInt().toInt(),
         query('id_cotizacion').optional().isInt().toInt(),
-        query('id_membresia').optional().isInt().toInt()
+        query('id_membresia').optional().isInt().toInt(),
+        query('id_pago_paquete').optional().isInt().toInt()
     ],
     validarErrores,
     authMiddleware,

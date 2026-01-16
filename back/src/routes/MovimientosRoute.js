@@ -7,6 +7,7 @@ const {
     getAllMovimientos,
     obtenerEstadisticasDashboard,
     obtenerReporteIngresos,
+    getpaquetesadquiridos,
     obtenerRetiros,
     obtenerRetiroPorId,
     getMovimientosPorUsuario,
@@ -41,6 +42,9 @@ const validarErrores = (req, res, next) => {
 
 //Obtener todos los movimientos
 router.get("/", validarErrores, getAllMovimientos);
+
+// Obtener ingresos con descripción
+router.get('/paquetes', validarErrores, getpaquetesadquiridos);
 
 //Obtener retiros
 router.get("/retiros", validarErrores, obtenerRetiros);
@@ -114,6 +118,7 @@ router.post("/", [
     body("tipo").isIn(["ingreso", "retiro", "ingreso_referido"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
     body("monto").isFloat({ min: 0 }).withMessage("El monto debe ser un número válido (entero o decimal) y mayor o igual a 0"),
     body("descripcion").optional().isString().withMessage("La descripción debe ser un texto"),
+    body("estado").optional().isIn(["pendiente", "completado", "rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
 ], validarErrores, crearMovimiento);
 
 //Actualizar movimiento

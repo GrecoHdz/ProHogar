@@ -196,14 +196,29 @@ const crearFactura = async (req, res) => {
             facturaData.nombre_cliente = 'CONSUMIDOR FINAL';
         }
 
-        const factura = await Factura.create(facturaData, { transaction });
+        console.log('--- Creando Factura ---');
+        console.log('Body recibido:', JSON.stringify(req.body, null, 2));
 
-        await FacturaRelacion.create({
+        const factura = await Factura.create(facturaData, { transaction });
+        console.log('Factura creada ID:', factura.id_factura);
+
+        // Extraer IDs de relación explícitamente
+        const id_pagovisita = req.body.id_pagovisita || null;
+        const id_cotizacion = req.body.id_cotizacion || null;
+        const id_membresia = req.body.id_membresia || null;
+        const id_pago_paquete = req.body.id_pago_paquete || null;
+
+        console.log('IDs para relación:', { id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete });
+
+        const relacion = await FacturaRelacion.create({
             id_factura: factura.id_factura,
-            id_pagovisita: req.body.id_pagovisita || null,
-            id_cotizacion: req.body.id_cotizacion || null,
-            id_membresia: req.body.id_membresia || null
+            id_pagovisita,
+            id_cotizacion,
+            id_membresia,
+            id_pago_paquete
         }, { transaction });
+
+        console.log('Relación creada ID:', relacion.id);
 
         await FacturaCorrelativo.update(
             { correlativo_actual: nuevoCorrelativo },
@@ -270,6 +285,15 @@ const obtenerPendientesFacturacion = async (req, res) => {
         const Cotizacion = require("../models/cotizacionModel");
         const SolicitudServicio = require("../models/solicitudServicioModel");
         const Servicio = require("../models/serviciosModel");
+        const PagoPaquete = require("../models/pagoPaqueteModel");
+        const Paquete = require("../models/paquetesModel");
+        const PaqueteUsuario = require("../models/paquetesUsuariosModel");
+
+        // Obtener el porcentaje de comisión para paquetes
+        const configComision = await Config.findOne({
+            where: { tipo_config: 'comision_por_paquete' }
+        });
+        const porcentajeComision = configComision ? parseFloat(configComision.valor) : 10;
 
         // Consulta de Membresías pendientes
         const membresias = await Membresia.findAll({
@@ -329,16 +353,43 @@ const obtenerPendientesFacturacion = async (req, res) => {
             nest: true
         });
 
+        // Consulta de Pagos de Paquetes pendientes
+        const pagosPaquetes = await PagoPaquete.findAll({
+            where: {
+                estado: 'aprobado',
+                [Op.and]: [
+                    Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('PagoPaquete.fecha')), year),
+                    Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('PagoPaquete.fecha')), monthNum)
+                ]
+            },
+            include: [
+                { model: Usuario, as: 'usuario', attributes: ['nombre', 'telefono'] },
+                {
+                    model: PaqueteUsuario, as: 'paqueteUsuario',
+                    include: [{ model: Paquete, attributes: ['nombre'] }]
+                },
+                { model: FacturaRelacion, as: 'facturaRelacion', include: [{ model: Factura, as: 'factura' }] }
+            ],
+            nest: true
+        });
+
         // Filtrar y unificar
         const normalize = (items, type) => {
             return items
                 .filter(item => !item.facturaRelacion?.factura)
                 .map(item => {
                     const raw = item.toJSON ? item.toJSON() : item;
+
+                    // Si es un paquete, el monto a facturar es solo la comisión de la app
+                    if (type === 'packages') {
+                        raw.monto_total_paquete = raw.monto; // Guardamos el original por si acaso
+                        raw.monto = (parseFloat(raw.monto) * porcentajeComision) / 100;
+                    }
+
                     return {
                         ...raw,
                         billingType: type,
-                        id_local: `${type}-${raw.id_membresia || raw.id_pagovisita || raw.id_cotizacion}`
+                        id_local: `${type}-${raw.id_membresia || raw.id_pagovisita || raw.id_cotizacion || raw.id_pago_paquete}`
                     };
                 });
         };
@@ -346,7 +397,8 @@ const obtenerPendientesFacturacion = async (req, res) => {
         const result = [
             ...normalize(membresias, 'membership'),
             ...normalize(visitas, 'visits'),
-            ...normalize(cotizaciones, 'services')
+            ...normalize(cotizaciones, 'services'),
+            ...normalize(pagosPaquetes, 'packages')
         ];
 
         res.json({

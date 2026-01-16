@@ -70,14 +70,14 @@ const obtenerRelacionPorFactura = async (req, res) => {
 
 const buscarFacturaPorPago = async (req, res) => {
     try {
-        const { id_pagovisita, id_cotizacion, id_membresia } = req.query;
-        
+        const { id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete } = req.query;
+
         // Validar que solo se proporcione un tipo de ID
-        const ids = [id_pagovisita, id_cotizacion, id_membresia].filter(Boolean);
+        const ids = [id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete].filter(Boolean);
         if (ids.length !== 1) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Debe proporcionar exactamente un tipo de ID (id_pagovisita, id_cotizacion o id_membresia)'
+                message: 'Debe proporcionar exactamente un tipo de ID (id_pagovisita, id_cotizacion, id_membresia o id_pago_paquete)'
             });
         }
 
@@ -86,9 +86,10 @@ const buscarFacturaPorPago = async (req, res) => {
         if (id_pagovisita) whereClause.id_pagovisita = id_pagovisita;
         if (id_cotizacion) whereClause.id_cotizacion = id_cotizacion;
         if (id_membresia) whereClause.id_membresia = id_membresia;
+        if (id_pago_paquete) whereClause.id_pago_paquete = id_pago_paquete;
 
         // Buscar la relación con include de factura (la más reciente)
-        const relacion = await FacturaRelacion.findOne({ 
+        const relacion = await FacturaRelacion.findOne({
             where: whereClause,
             include: [{
                 model: Factura,
@@ -133,17 +134,20 @@ const buscarFacturaPorPago = async (req, res) => {
 
 const crearRelacionFactura = async (req, res) => {
     try {
-        const { id_factura, id_pagovisita, id_cotizacion, id_membresia } = req.body;
+        const { id_factura, id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete } = req.body;
 
-        const countIds = [id_pagovisita, id_cotizacion, id_membresia]
+        const countIds = [id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete]
             .filter(v => v !== null && v !== undefined).length;
 
         if (countIds !== 1) {
+            console.warn('Fallo en conteo de IDs:', { id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete });
             return res.status(400).json({
                 status: 'error',
                 message: 'Debe existir exactamente un tipo de pago relacionado'
             });
         }
+
+        console.log('Creando relación manual:', { id_factura, id_pago_paquete });
 
         const existe = await FacturaRelacion.findOne({
             where: { id_factura }
@@ -160,7 +164,8 @@ const crearRelacionFactura = async (req, res) => {
             id_factura,
             id_pagovisita: id_pagovisita || null,
             id_cotizacion: id_cotizacion || null,
-            id_membresia: id_membresia || null
+            id_membresia: id_membresia || null,
+            id_pago_paquete: id_pago_paquete || null
         });
 
         res.json({
@@ -204,7 +209,7 @@ const eliminarRelacionFactura = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 module.exports = {
     obtenerRelacionesFactura,

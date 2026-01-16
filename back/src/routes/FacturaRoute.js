@@ -78,7 +78,8 @@ router.post("/",
         body('total').isFloat({ min: 0 }).withMessage('Total debe ser un número positivo'),
         body('id_pagovisita').optional({ nullable: true }).isInt(),
         body('id_cotizacion').optional({ nullable: true }).isInt(),
-        body('id_membresia').optional({ nullable: true }).isInt()
+        body('id_membresia').optional({ nullable: true }).isInt(),
+        body('id_pago_paquete').optional({ nullable: true }).isInt()
     ],
     validarErrores,
     authMiddleware,

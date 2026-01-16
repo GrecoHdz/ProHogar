@@ -1,12 +1,12 @@
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
 const Usuario = require("../models/usuariosModel");
-const Ciudad = require("../models/ciudadesModel"); 
-const Calificacion = require("../models/calificacionesModels"); 
-const Pagovisita = require("../models/pagoVisitaModel"); 
-const Cuenta = require("../models/cuentasModel"); 
-const Cotizacion = require("../models/cotizacionModel"); 
-const { Op, Sequelize } = require("sequelize"); 
+const Ciudad = require("../models/ciudadesModel");
+const Calificacion = require("../models/calificacionesModels");
+const Pagovisita = require("../models/pagoVisitaModel");
+const Cuenta = require("../models/cuentasModel");
+const Cotizacion = require("../models/cotizacionModel");
+const { Op, Sequelize } = require("sequelize");
 
 // Obtener estadísticas de pagos con filtros
 const obtenerEstadisticasPagos = async (req, res) => {
@@ -59,7 +59,7 @@ const obtenerEstadisticasPagos = async (req, res) => {
                 where: whereCondition,
                 raw: true
             }),
-            
+
             // Servicios más solicitados
             SolicitudServicio.findAll({
                 attributes: [
@@ -81,11 +81,11 @@ const obtenerEstadisticasPagos = async (req, res) => {
         ]);
 
         // Procesar estadísticas
-        const statsData = estadisticas[0] || { 
-            completadas: 0, 
-            canceladas: 0, 
-            en_proceso: 0, 
-            pendientes_asignacion: 0 
+        const statsData = estadisticas[0] || {
+            completadas: 0,
+            canceladas: 0,
+            en_proceso: 0,
+            pendientes_asignacion: 0
         };
 
         // Calcular total sumando todos los estados
@@ -116,7 +116,7 @@ const obtenerEstadisticasPagos = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al obtener estadísticas de solicitudes:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al obtener estadísticas de solicitudes",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -128,7 +128,7 @@ const obtenerEstadisticasPagos = async (req, res) => {
 const verificarPagosPendientes = async (req, res) => {
     try {
         const id_usuario = req.params.id_usuario;
-        
+
         if (!id_usuario) {
             return res.status(400).json({
                 success: false,
@@ -153,7 +153,7 @@ const verificarPagosPendientes = async (req, res) => {
         res.json({
             success: true,
             hasPendingPayments: tienePagosPendientes,
-            message: tienePagosPendientes 
+            message: tienePagosPendientes
                 ? 'El usuario tiene servicios con pagos pendientes'
                 : 'El usuario no tiene servicios con pagos pendientes'
         });
@@ -171,284 +171,284 @@ const verificarPagosPendientes = async (req, res) => {
 //Obtener todas las solicitudes de servicios con paginación 
 const obtenerSolicitudesServicios = async (req, res) => {
     try {
-      // Obtener parámetros de paginación y filtros
-      let limit = parseInt(req.query.limit) || 10;
-      limit = Math.min(limit, 100); // Aumentado a 100 como máximo para mejor rendimiento
-      const offset = parseInt(req.query.offset) || 0;
-      const month = req.query.month;
+        // Obtener parámetros de paginación y filtros
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 1000); // Máximo 1000 para reportes
+        const offset = parseInt(req.query.offset) || 0;
+        const month = req.query.month;
 
-      // Construcción de condiciones
-      const whereCondition = {};
-      const andConditions = [];
+        // Construcción de condiciones
+        const whereCondition = {};
+        const andConditions = [];
 
-      // Filtrar por técnico si se proporciona el ID
-      if (req.query.id_tecnico) {
-        whereCondition.id_tecnico = req.query.id_tecnico;
-      }
-
-      // Filtrar por id_usuario si se proporciona el ID
-      if (req.query.id_usuario) {
-        whereCondition.id_usuario = req.query.id_usuario;
-      }
-  
-      // Filtro por mes (año y mes)
-      if (month) {
-        const [year, monthNum] = month.split('-').map(Number);
-        andConditions.push(
-          Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), year),
-          Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), monthNum)
-        );
-      }
-  
-      // Filtro por estado (incluir)
-      if (req.query.status) {
-        const statuses = req.query.status.split(',');
-        whereCondition.estado = { [Op.in]: statuses };
-      }
-      // Filtro por estado (excluir)
-      else if (req.query.excludeStatus) {
-        const statusesToExclude = req.query.excludeStatus.split(',');
-        whereCondition.estado = { [Op.notIn]: statusesToExclude };
-      }
-  
-      // Filtro por tipo de servicio
-      if (req.query.serviceType) {
-        whereCondition.id_servicio = parseInt(req.query.serviceType);
-      }
-  
-      // Filtro por búsqueda
-      if (req.query.search) {
-        const searchTerm = req.query.search;
-        
-        const usuarios = await Usuario.findAll({
-          where: {
-            nombre: { [Op.like]: `%${searchTerm}%` }
-          },
-          attributes: ['id_usuario'],
-          raw: true
-        });
-        
-        const idsUsuarios = usuarios.map(u => u.id_usuario);
-        
-        if (idsUsuarios.length > 0) {
-          andConditions.push({
-            [Op.or]: [
-              { id_solicitud: { [Op.like]: `%${searchTerm}%` } },
-              { id_usuario: { [Op.in]: idsUsuarios } }
-            ]
-          });
-        } else {
-          andConditions.push({
-            id_solicitud: { [Op.like]: `%${searchTerm}%` }
-          });
+        // Filtrar por técnico si se proporciona el ID
+        if (req.query.id_tecnico) {
+            whereCondition.id_tecnico = req.query.id_tecnico;
         }
-      }
-  
-      // Combinar condiciones
-      if (andConditions.length > 0) {
-        whereCondition[Op.and] = andConditions;
-      }
-  
-      // Obtener estadísticas de solicitudes por estado (sin filtros para los contadores históricos)
-      const [total, stats, totalActivos, totalCompletados, totalGeneral] = await Promise.all([
-        // Contador total de solicitudes que coinciden con los filtros actuales
-        SolicitudServicio.count({
-          where: whereCondition,
-          distinct: true,
-          col: 'id_solicitud'
-        }),
-        
-        // Estadísticas detalladas por estado (con filtros aplicados)
-        SolicitudServicio.findAll({
-          attributes: [
-            [Sequelize.literal("COUNT(CASE WHEN estado = 'completado' OR estado = 'finalizado' OR estado = 'calificado' THEN 1 END)"), 'aprobados'],
-            [Sequelize.literal("COUNT(CASE WHEN estado = 'cancelado' THEN 1 END)"), 'rechazados'],
-            [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente_pagoservicio' THEN 1 END)"), 'pendientes']
-          ],
-          where: whereCondition,
-          raw: true
-        }),
-        
-        // Contar TODAS las solicitudes activas (sin filtros)
-        SolicitudServicio.count({
-          where: {
-            estado: {
-              [Op.notIn]: ['finalizado', 'calificado', 'cancelado']
-            }
-          },
-          distinct: true,
-          col: 'id_solicitud'
-        }),
-        
-        // Contar TODAS las solicitudes completadas (sin filtros)
-        SolicitudServicio.count({
-          where: {
-            estado: {
-              [Op.in]: ['finalizado', 'calificado']
-            }
-          },
-          distinct: true,
-          col: 'id_solicitud'
-        }),
-        
-        // Contar TODAS las solicitudes (sin filtros)
-        SolicitudServicio.count({
-          distinct: true,
-          col: 'id_solicitud'
-        })
-      ]);
-      
-      // Procesar estadísticas
-      const statsData = stats[0] || { aprobados: 0, rechazados: 0, pendientes: 0 };
-      const monthlyStats = {
-        aprobados: parseInt(statsData.aprobados) || 0,
-        rechazados: parseInt(statsData.rechazados) || 0,
-        pendientes: parseInt(statsData.pendientes) || 0,
-        total: parseInt(statsData.aprobados || 0) + parseInt(statsData.rechazados || 0) + parseInt(statsData.pendientes || 0)
-      };
 
-      // Obtener los registros paginados
-      const solicitudes = await SolicitudServicio.findAll({
-        where: whereCondition,
-        include: [
-          {
-            model: Servicio,
-            as: 'servicio',
-            attributes: ['id_servicio', 'nombre']
-          },
-          {
-            model: Usuario,
-            as: 'tecnico',
-            attributes: ['id_usuario', 'nombre']
-          },
-          {
-            model: Usuario,
-            as: 'cliente',
-            attributes: ['id_usuario', 'nombre', 'telefono']
-          },
-          {
-            model: Ciudad,
-            as: 'ciudad',
-            attributes: ['id_ciudad', 'nombre_ciudad']
-          },
-          {
-            model: Calificacion,
-            as: 'calificacion',
-            attributes: ['calificacion', 'comentario']
-          },
-          {
-            model: Pagovisita,
-            as: 'pagoVisita',
-            include: [
-              {
-                model: Cuenta,
-                as: 'cuenta',
-                attributes: ['banco', 'num_cuenta', 'tipo']
-              }
-            ],
-            attributes: ['id_cuenta', 'monto', 'num_comprobante', 'fecha']
-          },
-          {
-            model: Cotizacion,
-            as: 'cotizacion',
-            include: [
-              {
-                model: Cuenta,
-                as: 'cuenta',
-                attributes: ['banco', 'num_cuenta', 'tipo']
-              }
-            ],
-            attributes: [
-              'id_cotizacion',
-              'num_comprobante',
-              'monto_manodeobra',
-              'descuento_membresia',
-              'credito_usado'
-            ]
-          }
-        ],
-        order: [['fecha_solicitud', 'DESC']],
-        limit,
-        offset,
-        distinct: true,  // Asegura que no haya duplicados
-        subQuery: false  // Útil para consultas complejas con includes
-      });
+        // Filtrar por id_usuario si se proporciona el ID
+        if (req.query.id_usuario) {
+            whereCondition.id_usuario = req.query.id_usuario;
+        }
 
-      // Formatear respuesta manualmente para mayor control
-      const solicitudesFormateadas = solicitudes.map(solicitud => {
-        const plainSolicitud = solicitud.get({ plain: true });
-        
-        return {
-          ...plainSolicitud,
-          servicio: plainSolicitud.servicio ? {
-            id_servicio: plainSolicitud.servicio.id_servicio,
-            nombre: plainSolicitud.servicio.nombre
-          } : null,
-          tecnico: plainSolicitud.tecnico ? {
-            id_tecnico: plainSolicitud.tecnico.id_usuario,
-            nombre: plainSolicitud.tecnico.nombre
-          } : null,
-          cliente: plainSolicitud.cliente ? {
-            id_cliente: plainSolicitud.cliente.id_usuario,
-            nombre: plainSolicitud.cliente.nombre,
-            telefono: plainSolicitud.cliente.telefono
-          } : null,
-          ciudad: plainSolicitud.ciudad ? {
-            id_ciudad: plainSolicitud.ciudad.id_ciudad,
-            nombre: plainSolicitud.ciudad.nombre_ciudad
-          } : null,
-          calificacion: plainSolicitud.calificacion ? {
-            calificacion: plainSolicitud.calificacion.calificacion,
-            comentario: plainSolicitud.calificacion.comentario
-          } : null,
-          pagoVisita: plainSolicitud.pagoVisita ? {
-            monto: plainSolicitud.pagoVisita.monto,
-            num_comprobante: plainSolicitud.pagoVisita.num_comprobante,
-            fecha: plainSolicitud.pagoVisita.fecha,
-            cuenta: plainSolicitud.pagoVisita.cuenta ? {
-              banco: plainSolicitud.pagoVisita.cuenta.banco,
-              num_cuenta: plainSolicitud.pagoVisita.cuenta.num_cuenta,
-              tipo: plainSolicitud.pagoVisita.cuenta.tipo
-            } : null
-          } : null,
-          cotizacion: plainSolicitud.cotizacion ? {
-            id_cotizacion: plainSolicitud.cotizacion.id_cotizacion,
-            num_comprobante: plainSolicitud.cotizacion.num_comprobante,
-            monto_manodeobra: plainSolicitud.cotizacion.monto_manodeobra,
-            descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
-            credito_usado: plainSolicitud.cotizacion.credito_usado,
-            total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
-                   (plainSolicitud.cotizacion.descuento_membresia || 0) -
-                   (plainSolicitud.cotizacion.credito_usado || 0),
-            cuenta: plainSolicitud.cotizacion.cuenta ? {
-              banco: plainSolicitud.cotizacion.cuenta.banco,
-              num_cuenta: plainSolicitud.cotizacion.cuenta.num_cuenta,
-              tipo: plainSolicitud.cotizacion.cuenta.tipo
-            } : null
-          } : null
+        // Filtro por mes (año y mes)
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            andConditions.push(
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_solicitud')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_solicitud')), monthNum)
+            );
+        }
+
+        // Filtro por estado (incluir)
+        if (req.query.status) {
+            const statuses = req.query.status.split(',');
+            whereCondition.estado = { [Op.in]: statuses };
+        }
+        // Filtro por estado (excluir)
+        else if (req.query.excludeStatus) {
+            const statusesToExclude = req.query.excludeStatus.split(',');
+            whereCondition.estado = { [Op.notIn]: statusesToExclude };
+        }
+
+        // Filtro por tipo de servicio
+        if (req.query.serviceType) {
+            whereCondition.id_servicio = parseInt(req.query.serviceType);
+        }
+
+        // Filtro por búsqueda
+        if (req.query.search) {
+            const searchTerm = req.query.search;
+
+            const usuarios = await Usuario.findAll({
+                where: {
+                    nombre: { [Op.like]: `%${searchTerm}%` }
+                },
+                attributes: ['id_usuario'],
+                raw: true
+            });
+
+            const idsUsuarios = usuarios.map(u => u.id_usuario);
+
+            if (idsUsuarios.length > 0) {
+                andConditions.push({
+                    [Op.or]: [
+                        { id_solicitud: { [Op.like]: `%${searchTerm}%` } },
+                        { id_usuario: { [Op.in]: idsUsuarios } }
+                    ]
+                });
+            } else {
+                andConditions.push({
+                    id_solicitud: { [Op.like]: `%${searchTerm}%` }
+                });
+            }
+        }
+
+        // Combinar condiciones
+        if (andConditions.length > 0) {
+            whereCondition[Op.and] = andConditions;
+        }
+
+        // Obtener estadísticas de solicitudes por estado (sin filtros para los contadores históricos)
+        const [total, stats, totalActivos, totalCompletados, totalGeneral] = await Promise.all([
+            // Contador total de solicitudes que coinciden con los filtros actuales
+            SolicitudServicio.count({
+                where: whereCondition,
+                distinct: true,
+                col: 'id_solicitud'
+            }),
+
+            // Estadísticas detalladas por estado (con filtros aplicados)
+            SolicitudServicio.findAll({
+                attributes: [
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'completado' OR estado = 'finalizado' OR estado = 'calificado' THEN 1 END)"), 'aprobados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'cancelado' THEN 1 END)"), 'rechazados'],
+                    [Sequelize.literal("COUNT(CASE WHEN estado = 'pendiente_pagoservicio' THEN 1 END)"), 'pendientes']
+                ],
+                where: whereCondition,
+                raw: true
+            }),
+
+            // Contar TODAS las solicitudes activas (sin filtros)
+            SolicitudServicio.count({
+                where: {
+                    estado: {
+                        [Op.notIn]: ['finalizado', 'calificado', 'cancelado']
+                    }
+                },
+                distinct: true,
+                col: 'id_solicitud'
+            }),
+
+            // Contar TODAS las solicitudes completadas (sin filtros)
+            SolicitudServicio.count({
+                where: {
+                    estado: {
+                        [Op.in]: ['finalizado', 'calificado']
+                    }
+                },
+                distinct: true,
+                col: 'id_solicitud'
+            }),
+
+            // Contar TODAS las solicitudes (sin filtros)
+            SolicitudServicio.count({
+                distinct: true,
+                col: 'id_solicitud'
+            })
+        ]);
+
+        // Procesar estadísticas
+        const statsData = stats[0] || { aprobados: 0, rechazados: 0, pendientes: 0 };
+        const monthlyStats = {
+            aprobados: parseInt(statsData.aprobados) || 0,
+            rechazados: parseInt(statsData.rechazados) || 0,
+            pendientes: parseInt(statsData.pendientes) || 0,
+            total: parseInt(statsData.aprobados || 0) + parseInt(statsData.rechazados || 0) + parseInt(statsData.pendientes || 0)
         };
-      });
 
-      // Enviar respuesta con contadores históricos
-      res.json({
-        data: solicitudesFormateadas,
-        total,  // Total de registros que coinciden con los filtros actuales
-        page: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        hasMore: offset + limit < total,
-        contadores: {
-          total: totalGeneral || 0,  // Total histórico sin filtros
-          activos: totalActivos || 0,  // Activos históricos sin filtros
-          completados: totalCompletados || 0  // Completados históricos sin filtros
-        },
-        estadisticas: monthlyStats  // Estadísticas con filtros aplicados
-      });
+        // Obtener los registros paginados
+        const solicitudes = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: ['id_servicio', 'nombre']
+                },
+                {
+                    model: Usuario,
+                    as: 'tecnico',
+                    attributes: ['id_usuario', 'nombre']
+                },
+                {
+                    model: Usuario,
+                    as: 'cliente',
+                    attributes: ['id_usuario', 'nombre', 'telefono']
+                },
+                {
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['id_ciudad', 'nombre_ciudad']
+                },
+                {
+                    model: Calificacion,
+                    as: 'calificacion',
+                    attributes: ['calificacion', 'comentario']
+                },
+                {
+                    model: Pagovisita,
+                    as: 'pagoVisita',
+                    include: [
+                        {
+                            model: Cuenta,
+                            as: 'cuenta',
+                            attributes: ['banco', 'num_cuenta', 'tipo']
+                        }
+                    ],
+                    attributes: ['id_cuenta', 'monto', 'num_comprobante', 'fecha']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    include: [
+                        {
+                            model: Cuenta,
+                            as: 'cuenta',
+                            attributes: ['banco', 'num_cuenta', 'tipo']
+                        }
+                    ],
+                    attributes: [
+                        'id_cotizacion',
+                        'num_comprobante',
+                        'monto_manodeobra',
+                        'descuento_membresia',
+                        'credito_usado'
+                    ]
+                }
+            ],
+            order: [['fecha_solicitud', 'DESC']],
+            limit,
+            offset,
+            distinct: true,  // Asegura que no haya duplicados
+            subQuery: false  // Útil para consultas complejas con includes
+        });
+
+        // Formatear respuesta manualmente para mayor control
+        const solicitudesFormateadas = solicitudes.map(solicitud => {
+            const plainSolicitud = solicitud.get({ plain: true });
+
+            return {
+                ...plainSolicitud,
+                servicio: plainSolicitud.servicio ? {
+                    id_servicio: plainSolicitud.servicio.id_servicio,
+                    nombre: plainSolicitud.servicio.nombre
+                } : null,
+                tecnico: plainSolicitud.tecnico ? {
+                    id_tecnico: plainSolicitud.tecnico.id_usuario,
+                    nombre: plainSolicitud.tecnico.nombre
+                } : null,
+                cliente: plainSolicitud.cliente ? {
+                    id_cliente: plainSolicitud.cliente.id_usuario,
+                    nombre: plainSolicitud.cliente.nombre,
+                    telefono: plainSolicitud.cliente.telefono
+                } : null,
+                ciudad: plainSolicitud.ciudad ? {
+                    id_ciudad: plainSolicitud.ciudad.id_ciudad,
+                    nombre: plainSolicitud.ciudad.nombre_ciudad
+                } : null,
+                calificacion: plainSolicitud.calificacion ? {
+                    calificacion: plainSolicitud.calificacion.calificacion,
+                    comentario: plainSolicitud.calificacion.comentario
+                } : null,
+                pagoVisita: plainSolicitud.pagoVisita ? {
+                    monto: plainSolicitud.pagoVisita.monto,
+                    num_comprobante: plainSolicitud.pagoVisita.num_comprobante,
+                    fecha: plainSolicitud.pagoVisita.fecha,
+                    cuenta: plainSolicitud.pagoVisita.cuenta ? {
+                        banco: plainSolicitud.pagoVisita.cuenta.banco,
+                        num_cuenta: plainSolicitud.pagoVisita.cuenta.num_cuenta,
+                        tipo: plainSolicitud.pagoVisita.cuenta.tipo
+                    } : null
+                } : null,
+                cotizacion: plainSolicitud.cotizacion ? {
+                    id_cotizacion: plainSolicitud.cotizacion.id_cotizacion,
+                    num_comprobante: plainSolicitud.cotizacion.num_comprobante,
+                    monto_manodeobra: plainSolicitud.cotizacion.monto_manodeobra,
+                    descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
+                    credito_usado: plainSolicitud.cotizacion.credito_usado,
+                    total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
+                        (plainSolicitud.cotizacion.descuento_membresia || 0) -
+                        (plainSolicitud.cotizacion.credito_usado || 0),
+                    cuenta: plainSolicitud.cotizacion.cuenta ? {
+                        banco: plainSolicitud.cotizacion.cuenta.banco,
+                        num_cuenta: plainSolicitud.cotizacion.cuenta.num_cuenta,
+                        tipo: plainSolicitud.cotizacion.cuenta.tipo
+                    } : null
+                } : null
+            };
+        });
+
+        // Enviar respuesta con contadores históricos
+        res.json({
+            data: solicitudesFormateadas,
+            total,  // Total de registros que coinciden con los filtros actuales
+            page: Math.floor(offset / limit) + 1,
+            totalPages: Math.ceil(total / limit),
+            hasMore: offset + limit < total,
+            contadores: {
+                total: totalGeneral || 0,  // Total histórico sin filtros
+                activos: totalActivos || 0,  // Activos históricos sin filtros
+                completados: totalCompletados || 0  // Completados históricos sin filtros
+            },
+            estadisticas: monthlyStats  // Estadísticas con filtros aplicados
+        });
     } catch (error) {
-      console.error('Error en obtenerSolicitudesServicios:', error);
-      res.status(500).json({ 
-        error: 'Error al obtener las solicitudes de servicios',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+        console.error('Error en obtenerSolicitudesServicios:', error);
+        res.status(500).json({
+            error: 'Error al obtener las solicitudes de servicios',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -463,7 +463,7 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
         res.json(solicitudes);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener las solicitudes de servicios por servicio",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -474,7 +474,7 @@ const obtenerSolicitudServicioPorServicio = async (req, res) => {
 const obtenerGraficaServiciosPorTipo = async (req, res) => {
     try {
         const { fechaInicio, fechaFin } = req.query;
-        
+
         // Construir condición de fecha si se proporciona
         const whereCondition = {};
         if (fechaInicio || fechaFin) {
@@ -540,7 +540,7 @@ const obtenerGraficaServiciosPorMes = async (req, res) => {
     try {
         const { fechaActual } = req.query;
         const endDate = fechaActual ? new Date(fechaActual) : new Date();
-        
+
         // Calcular la fecha de inicio (12 meses atrás)
         const startDate = new Date(endDate);
         startDate.setMonth(startDate.getMonth() - 11); // 11 meses + el mes actual = 12 meses
@@ -560,12 +560,12 @@ const obtenerGraficaServiciosPorMes = async (req, res) => {
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth();
             const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
-            
+
             meses.push(`${monthName} ${year}`);
-            
+
             // Inicializar contador para este mes
             data.push(0);
-            
+
             // Mover al siguiente mes
             currentMonth.setMonth(currentMonth.getMonth() + 1);
         }
@@ -624,7 +624,7 @@ const obtenerGraficaServiciosPorMes = async (req, res) => {
 const obtenerGraficaServiciosPorCiudad = async (req, res) => {
     try {
         const { fechaInicio, fechaFin } = req.query;
-        
+
         // Construir condición de fecha si se proporciona
         const whereCondition = {};
         if (fechaInicio || fechaFin) {
@@ -692,7 +692,7 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     try {
         const idUsuario = req.params.id;
-        
+
         // Obtener todas las solicitudes con los datos del servicio
         const solicitudes = await SolicitudServicio.findAll({
             where: {
@@ -706,9 +706,9 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             {
                 model: Usuario,
                 as: 'tecnico',
-                attributes: ['nombre'] 
+                attributes: ['nombre']
             }
-        ],
+            ],
             order: [['fecha_solicitud', 'DESC']],
             raw: true,
             nest: true
@@ -722,7 +722,7 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                 nombre: servicio?.nombre || 'Servicio no disponible'
             }
         }));
-        
+
         // Contar las solicitudes totales
         const totalSolicitudes = await SolicitudServicio.count({
             where: {
@@ -748,7 +748,7 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                     { estado: { [Op.ne]: 'cancelado' } }
                 ]
             }
-        });   
+        });
 
         res.json({
             solicitudes: solicitudesFormateadas,
@@ -758,7 +758,7 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener las solicitudes de servicios por usuario",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -769,11 +769,11 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
 const obtenerSolicitudesPorTecnico = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
-        const { 
-            limit = 10, 
+        const {
+            limit = 10,
             offset = 0,
-            fechaInicio, 
-            fechaFin 
+            fechaInicio,
+            fechaFin
         } = req.query;
 
         // Crear objeto de condiciones base
@@ -806,7 +806,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             {
                 model: Usuario,
                 as: 'cliente',
-                attributes: ['id_usuario','nombre','telefono'] 
+                attributes: ['id_usuario', 'nombre', 'telefono']
             }],
             order: [['fecha_solicitud', 'DESC']],
             limit: parseInt(limit),
@@ -815,7 +815,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
 
         // Contar total de solicitudes para este técnico con los mismos filtros
         const countWhereClause = { ...whereClause };
-        
+
         const totalSolicitudes = await SolicitudServicio.count({
             where: countWhereClause
         });
@@ -848,7 +848,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
                     { estado: { [Op.ne]: 'finalizado' } },
                     { estado: { [Op.ne]: 'cancelado' } },
                     { estado: { [Op.ne]: 'pendiente_pagoservicio' } },
-                    { estado: { [Op.ne]: 'pendiente_asignacion' } } 
+                    { estado: { [Op.ne]: 'pendiente_asignacion' } }
                 ]
             }
         });
@@ -866,7 +866,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener las solicitudes del técnico:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al obtener las solicitudes del técnico',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -880,7 +880,7 @@ const crearSolicitudServicio = async (req, res) => {
         res.json(solicitud);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al crear la solicitud de servicio",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -894,11 +894,11 @@ const actualizarSolicitudServicio = async (req, res) => {
         if (!solicitud) {
             return res.status(404).json({ error: "Solicitud de servicio no encontrada" });
         }
-        
+
         // Si se está cancelando la solicitud
         if (req.body.estado === 'cancelado') {
             // Agregar comentario
-            await solicitud.update({ 
+            await solicitud.update({
                 comentario: req.body.comentario,
                 estado: 'cancelado'
             });
@@ -906,11 +906,11 @@ const actualizarSolicitudServicio = async (req, res) => {
             // Actualización normal
             await solicitud.update(req.body);
         }
-        
+
         res.json(solicitud);
     } catch (error) {
         console.error('Error al actualizar la solicitud de servicio:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al actualizar la solicitud de servicio",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -928,7 +928,7 @@ const eliminarSolicitudServicio = async (req, res) => {
         res.json({ message: "Solicitud de servicio eliminada correctamente" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al eliminar la solicitud de servicio",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });

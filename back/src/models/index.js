@@ -20,10 +20,42 @@ const TecnicoServicio = require('./tecnicosServiciosModel');
 const Factura = require('./facturaModel');
 const FacturaRelacion = require('./facturaRelacionModel');
 const FacturaCorrelativo = require('./facturaCorrelativoModel');
+const Paquete = require('./paquetesModel');
+const PaqueteUsuario = require('./paquetesUsuariosModel');
+const PagoPaquete = require('./pagoPaqueteModel');
 
 
 // Función para configurar las asociaciones
 const setupAssociations = () => {
+  // Relación PaqueteUsuario - PagoPaquete
+  PaqueteUsuario.hasMany(PagoPaquete, {
+    foreignKey: 'id_paquete_usuario',
+    as: 'pagos',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  PagoPaquete.belongsTo(PaqueteUsuario, {
+    foreignKey: 'id_paquete_usuario',
+    as: 'paqueteUsuario',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  PagoPaquete.belongsTo(Usuario, {
+    foreignKey: 'id_usuario',
+    as: 'usuario',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
+  Usuario.hasMany(PagoPaquete, {
+    foreignKey: 'id_usuario',
+    as: 'pagosPaquetes',
+    onUpdate: 'CASCADE',
+    onDelete: 'CASCADE'
+  });
+
   // Relación Usuario - Rol
   Usuario.belongsTo(Rol, {
     foreignKey: 'id_rol',
@@ -415,6 +447,53 @@ const setupAssociations = () => {
   Cotizacion.hasOne(FacturaRelacion, {
     foreignKey: 'id_cotizacion',
     as: 'facturaRelacion'
+  });
+
+  // Relación FacturaRelacion - PagoPaquete
+  FacturaRelacion.belongsTo(PagoPaquete, {
+    foreignKey: 'id_pago_paquete',
+    as: 'pagoPaquete',
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  });
+
+  PagoPaquete.hasOne(FacturaRelacion, {
+    foreignKey: 'id_pago_paquete',
+    as: 'facturaRelacion'
+  });
+
+  // User and Package relationship (Many-to-Many through PaqueteUsuario)
+  Usuario.belongsToMany(Paquete, {
+    through: PaqueteUsuario,
+    foreignKey: 'id_usuario',
+    otherKey: 'id_paquete'
+  });
+
+  Paquete.belongsToMany(Usuario, {
+    through: PaqueteUsuario,
+    foreignKey: 'id_paquete',
+    otherKey: 'id_usuario'
+  });
+
+  PaqueteUsuario.belongsTo(Usuario, {
+    foreignKey: 'id_usuario'
+  });
+
+  PaqueteUsuario.belongsTo(Paquete, {
+    foreignKey: 'id_paquete'
+  });
+
+  Usuario.hasMany(PaqueteUsuario, {
+    foreignKey: 'id_usuario'
+  });
+
+  Paquete.hasMany(PaqueteUsuario, {
+    foreignKey: 'id_paquete'
+  });
+
+  PagoPaquete.belongsTo(Cuenta, {
+    foreignKey: 'id_cuenta',
+    as: 'cuenta'
   });
 
   console.log('Asociaciones configuradas correctamente');

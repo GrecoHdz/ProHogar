@@ -61,7 +61,6 @@ const getCreditoPorUsuario = async (req, res) => {
     }
   };
   
-
 // Crear o actualizar crédito
 const createCredito = async (req, res) => {
     try {
@@ -72,12 +71,16 @@ const createCredito = async (req, res) => {
             where: { id_usuario } 
         });
 
-        let montoFinal = parseInt(monto_credito);
+        // Convertir a número flotante para manejar decimales
+        let montoFinal = parseFloat(monto_credito);
         
         // Si ya existe un crédito, sumar el monto
         if (creditoExistente) {
-            montoFinal += parseInt(creditoExistente.monto_credito);
+            montoFinal += parseFloat(creditoExistente.monto_credito);
         }
+        
+        // Redondear a 2 decimales para evitar problemas de precisión
+        montoFinal = parseFloat(montoFinal.toFixed(2));
         
         // Crear o actualizar el crédito con el monto total
         const [credito, created] = await CreditoUsuario.upsert(

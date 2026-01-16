@@ -1,4 +1,6 @@
 const Servicio = require("../models/serviciosModel");
+const Paquete = require("../models/paquetesModel");
+const PaqueteUsuario = require("../models/paquetesUsuariosModel");
 
 //Obtener todos los servicios
 const obtenerServicios = async (req, res) => {

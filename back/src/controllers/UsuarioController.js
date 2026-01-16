@@ -18,7 +18,7 @@ const obtenerUsuarios = async (req, res) => {
     try {
         // Obtener parámetros de paginación y búsqueda
         let limit = parseInt(req.query.limit) || 100;
-        limit = Math.min(limit, 100); // Máximo 10 por rendimiento
+        limit = Math.min(limit, 1000); // Máximo 1000 para reportes
         const offset = parseInt(req.query.offset) || 0;
         const estado = req.query.estado;
         const rol = req.query.rol;
