@@ -23,6 +23,8 @@ const FacturaCorrelativo = require('./facturaCorrelativoModel');
 const Paquete = require('./paquetesModel');
 const PaqueteUsuario = require('./paquetesUsuariosModel');
 const PagoPaquete = require('./pagoPaqueteModel');
+const ServicioCiudad = require('./serviciosCiudadesModel');
+const PaqueteCiudad = require('./paquetesCiudadesModel');
 
 
 // Función para configurar las asociaciones
@@ -495,6 +497,46 @@ const setupAssociations = () => {
     foreignKey: 'id_cuenta',
     as: 'cuenta'
   });
+
+  // Relaciones Muchos a Muchos: Servicio - Ciudad
+  Servicio.belongsToMany(Ciudad, {
+    through: ServicioCiudad,
+    foreignKey: 'id_servicio',
+    otherKey: 'id_ciudad',
+    as: 'ciudades'
+  });
+
+  Ciudad.belongsToMany(Servicio, {
+    through: ServicioCiudad,
+    foreignKey: 'id_ciudad',
+    otherKey: 'id_servicio',
+    as: 'servicios'
+  });
+
+  Servicio.hasMany(ServicioCiudad, { foreignKey: 'id_servicio' });
+  ServicioCiudad.belongsTo(Servicio, { foreignKey: 'id_servicio' });
+  Ciudad.hasMany(ServicioCiudad, { foreignKey: 'id_ciudad' });
+  ServicioCiudad.belongsTo(Ciudad, { foreignKey: 'id_ciudad' });
+
+  // Relaciones Muchos a Muchos: Paquete - Ciudad
+  Paquete.belongsToMany(Ciudad, {
+    through: PaqueteCiudad,
+    foreignKey: 'id_paquete',
+    otherKey: 'id_ciudad',
+    as: 'ciudades'
+  });
+
+  Ciudad.belongsToMany(Paquete, {
+    through: PaqueteCiudad,
+    foreignKey: 'id_ciudad',
+    otherKey: 'id_paquete',
+    as: 'paquetes'
+  });
+
+  Paquete.hasMany(PaqueteCiudad, { foreignKey: 'id_paquete' });
+  PaqueteCiudad.belongsTo(Paquete, { foreignKey: 'id_paquete' });
+  Ciudad.hasMany(PaqueteCiudad, { foreignKey: 'id_ciudad' });
+  PaqueteCiudad.belongsTo(Ciudad, { foreignKey: 'id_ciudad' });
 
   console.log('Asociaciones configuradas correctamente');
 };

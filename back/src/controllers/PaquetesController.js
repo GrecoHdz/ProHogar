@@ -1,13 +1,28 @@
 const Paquete = require("../models/paquetesModel");
+const Ciudad = require("../models/ciudadesModel");
 
 // Obtener todos los paquetes
 const obtenerPaquetes = async (req, res) => {
     try {
-        const paquetes = await Paquete.findAll();
+        const { id_ciudad } = req.query;
+        const queryOptions = {
+            include: [{
+                model: Ciudad,
+                as: 'ciudades',
+                through: { attributes: [] }
+            }]
+        };
+
+        if (id_ciudad) {
+            queryOptions.include[0].where = { id_ciudad };
+            queryOptions.include[0].required = true;
+        }
+
+        const paquetes = await Paquete.findAll(queryOptions);
         res.json(paquetes);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener los paquetes",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -17,11 +32,26 @@ const obtenerPaquetes = async (req, res) => {
 // Obtener todos los paquetes activos
 const obtenerPaquetesActivos = async (req, res) => {
     try {
-        const paquetes = await Paquete.findAll({ where: { estado: true } });
+        const { id_ciudad } = req.query;
+        const queryOptions = {
+            where: { estado: true },
+            include: [{
+                model: Ciudad,
+                as: 'ciudades',
+                through: { attributes: [] }
+            }]
+        };
+
+        if (id_ciudad) {
+            queryOptions.include[0].where = { id_ciudad };
+            queryOptions.include[0].required = true;
+        }
+
+        const paquetes = await Paquete.findAll(queryOptions);
         res.json(paquetes);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Error al obtener los paquetes activos",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -31,17 +61,23 @@ const obtenerPaquetesActivos = async (req, res) => {
 // Obtener un paquete por ID
 const obtenerPaquetePorId = async (req, res) => {
     try {
-        const paquete = await Paquete.findByPk(req.params.id);
+        const paquete = await Paquete.findByPk(req.params.id, {
+            include: [{
+                model: Ciudad,
+                as: 'ciudades',
+                through: { attributes: [] }
+            }]
+        });
         if (!paquete) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                error: "Paquete no encontrado" 
+                error: "Paquete no encontrado"
             });
         }
         res.json(paquete);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al obtener el paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -52,8 +88,8 @@ const obtenerPaquetePorId = async (req, res) => {
 // Crear un nuevo paquete
 const crearPaquete = async (req, res) => {
     try {
-        const { nombre, descripcion, costo } = req.body;
-        
+        const { nombre, descripcion, costo, id_ciudades } = req.body;
+
         // Validar que se proporcionen todos los campos requeridos
         if (!nombre || !descripcion || costo === undefined) {
             return res.status(400).json({
@@ -77,14 +113,26 @@ const crearPaquete = async (req, res) => {
             estado: true
         });
 
-        res.status(201).json({ 
+        if (id_ciudades && Array.isArray(id_ciudades)) {
+            await paquete.setCiudades(id_ciudades);
+        }
+
+        const paqueteCompleto = await Paquete.findByPk(paquete.id_paquete, {
+            include: [{
+                model: Ciudad,
+                as: 'ciudades',
+                through: { attributes: [] }
+            }]
+        });
+
+        res.status(201).json({
             success: true,
             message: 'Paquete creado correctamente',
-            data: paquete 
+            data: paqueteCompleto
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al crear el paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -96,13 +144,13 @@ const crearPaquete = async (req, res) => {
 const actualizarPaquete = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, descripcion, costo, estado } = req.body;
+        const { nombre, descripcion, costo, estado, id_ciudades } = req.body;
 
         const paquete = await Paquete.findByPk(id);
         if (!paquete) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                error: "Paquete no encontrado" 
+                error: "Paquete no encontrado"
             });
         }
 
@@ -122,15 +170,27 @@ const actualizarPaquete = async (req, res) => {
         if (estado !== undefined) datosActualizados.estado = estado;
 
         await paquete.update(datosActualizados);
-        
-        res.json({ 
+
+        if (id_ciudades && Array.isArray(id_ciudades)) {
+            await paquete.setCiudades(id_ciudades);
+        }
+
+        const paqueteCompleto = await Paquete.findByPk(id, {
+            include: [{
+                model: Ciudad,
+                as: 'ciudades',
+                through: { attributes: [] }
+            }]
+        });
+
+        res.json({
             success: true,
             message: 'Paquete actualizado correctamente',
-            data: paquete 
+            data: paqueteCompleto
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al actualizar el paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -146,25 +206,25 @@ const desactivarPaquete = async (req, res) => {
 
         // Validar que el estado sea un booleano
         if (typeof estado !== 'boolean') {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: "El estado debe ser un valor booleano (true/false)" 
+                error: "El estado debe ser un valor booleano (true/false)"
             });
         }
 
         const paquete = await Paquete.findByPk(id);
         if (!paquete) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                error: "Paquete no encontrado" 
+                error: "Paquete no encontrado"
             });
         }
 
         // Actualizar el estado del paquete
         await paquete.update({ estado });
-        
+
         const accion = estado ? 'activado' : 'desactivado';
-        res.json({ 
+        res.json({
             success: true,
             message: `Paquete ${accion} correctamente`,
             data: {
@@ -174,7 +234,7 @@ const desactivarPaquete = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al cambiar el estado del paquete:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al cambiar el estado del paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -187,21 +247,21 @@ const eliminarPaquete = async (req, res) => {
     try {
         const paquete = await Paquete.findByPk(req.params.id);
         if (!paquete) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                error: "Paquete no encontrado" 
+                error: "Paquete no encontrado"
             });
         }
 
         await paquete.destroy();
-        
-        res.json({ 
+
+        res.json({
             success: true,
-            message: "Paquete eliminado permanentemente" 
+            message: "Paquete eliminado permanentemente"
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: "Error al eliminar el paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
