@@ -1,5 +1,6 @@
 const { Sequelize, Op } = require("sequelize");
 const Membresia = require("../models/membresiaModel");
+const MembresiaBeneficio = require("../models/membresiaBeneficiosModel");
 const Config = require("../models/configModel");
 const Usuario = require("../models/usuariosModel");
 const Cuenta = require("../models/cuentasModel");
@@ -230,7 +231,6 @@ const obtenerMembresiaPorId = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error al obtener membresía por ID:', error);
         return res.status(500).json({
             success: false,
             error: 'Error al obtener la membresía',
@@ -261,7 +261,6 @@ const obtenerHistorialMembresias = async (req, res) => {
             count: membresias.length
         });
     } catch (error) {
-        console.error("Error al obtener el historial de membresías:", error);
         res.status(500).json({
             status: 'error',
             message: 'Error al obtener el historial de membresías',
@@ -282,7 +281,6 @@ const obtenerMembresiaActual = async (req, res) => {
         });
 
         if (!membresia) {
-            console.log(`ℹ️ [INFO] Usuario ${id} no tiene membresía activa.`);
             return res.json({
                 status: 'not_found',
                 data: null,
@@ -295,7 +293,6 @@ const obtenerMembresiaActual = async (req, res) => {
             data: membresia
         });
     } catch (error) {
-        console.error("❌ [ERROR] Al obtener la membresía actual:", error);
         return res.status(500).json({
             status: 'error',
             message: 'Error al obtener la membresía actual',
@@ -304,15 +301,37 @@ const obtenerMembresiaActual = async (req, res) => {
     }
 };
 
-
 // Obtener progreso de membresía por usuario
 const obtenerProgresoMembresia = async (req, res) => {
-    try {
-        // Obtener el valor de la membresía desde la tabla de configuración
-        const configMembresia = await Config.findOne({
-            where: { tipo_config: 'membresia' },
-            raw: true
-        });
+    try { 
+        
+        // Obtener configuración de membresía, descuentos, beneficios y días de gracia
+        const [configs, beneficios, configMembresia, configGracia] = await Promise.all([
+            Config.findAll({
+                where: {
+                    tipo_config: {
+                        [Op.or]: ['porcentaje_descuento', 'porcentaje_descuento_especial']
+                    }
+                },
+                raw: true
+            }),
+            MembresiaBeneficio.findAll({
+                where: {
+                    tipo_beneficio: {
+                        [Op.or]: ['Descuento en todos los servicios', 'Descuento Especial en todos los Servicios']
+                    }
+                },
+                raw: true
+            }),
+            Config.findOne({
+                where: { tipo_config: 'membresia' },
+                raw: true
+            }),
+            Config.findOne({
+                where: { tipo_config: 'reset_credito' },
+                raw: true
+            })
+        ]); 
 
         if (!configMembresia) {
             return res.status(500).json({
@@ -322,14 +341,16 @@ const obtenerProgresoMembresia = async (req, res) => {
         }
 
         const valorMembresia = configMembresia.valor;
+        const diasGracia = parseInt(configGracia?.valor || '5', 10);
+        const diasPorMes = 30 + diasGracia; 
 
-        // Obtener todas las membresías del usuario
+        // Obtener membresías del usuario
         const membresias = await Membresia.findAll({
             where: {
                 id_usuario: req.params.id_usuario,
-                estado: ['activa']
+                estado: ['activa', 'vencida']
             },
-            order: [['fecha', 'ASC']], // Orden cronológico
+            order: [['fecha', 'ASC']],
             raw: true
         });
 
@@ -338,44 +359,103 @@ const obtenerProgresoMembresia = async (req, res) => {
                 status: 'success',
                 mesesProgreso: 0,
                 montoTotal: 0,
-                valorMembresia: valorMembresia
+                valorMembresia,
+                porcentaje_descuento: '0'
             });
         }
 
-        let progreso = 0;
-        let maxProgreso = 0;
-        let ultimaFecha = null;
+        // Procesar fechas de membresías
+        const fechasMembresias = membresias
+            .filter(m => m.estado === 'activa' || m.estado === 'vencida')
+            .map(m => new Date(m.fecha))
+            .sort((a, b) => a - b);
 
-        // Calcular progreso
-        for (const m of membresias) {
-            const fechaActual = new Date(m.fecha);
+        // Calcular progreso basado en la fecha actual y período de gracia
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        // Ordenar fechas de más reciente a más antigua
+        const fechasOrdenadas = fechasMembresias.sort((a, b) => b - a);
 
-            if (!ultimaFecha) {
-                progreso = 1;
-            } else {
-                const diffMeses =
-                    (fechaActual.getFullYear() - ultimaFecha.getFullYear()) * 12 +
-                    (fechaActual.getMonth() - ultimaFecha.getMonth());
+        // Calcular meses consecutivos verificando gaps entre pagos
+        let mesesConsecutivos = 0;
 
-                if (diffMeses === 1) {
-                    progreso++;
-                } else {
-                    progreso = 1; // reinicia progreso
-                }
-            }
+        // Verificar si el pago más reciente está vigente (dentro del período de gracia desde hoy)
+        const pagoMasReciente = fechasOrdenadas[0];
+        const diffDesdeHoy = Math.floor((hoy - pagoMasReciente) / (1000 * 60 * 60 * 24));
 
-            ultimaFecha = new Date(fechaActual);
-            maxProgreso = Math.max(maxProgreso, progreso);
+        if (diffDesdeHoy > diasPorMes) {
+            return res.json({
+                status: 'success',
+                mesesProgreso: 0,
+                montoTotal: 0,
+                valorMembresia,
+                porcentaje_descuento: '0'
+            });
         }
 
-        // Calcular el monto total como valor_membresia * meses de progreso
-        const montoTotal = valorMembresia * maxProgreso;
+        // El primer pago cuenta
+        mesesConsecutivos = 1;
+
+        // Verificar los pagos subsecuentes
+        for (let i = 0; i < fechasOrdenadas.length - 1; i++) {
+            const pagoActual = fechasOrdenadas[i];
+            const pagoAnterior = fechasOrdenadas[i + 1];
+
+            // Calcular diferencia en días entre este pago y el anterior
+            const diffTiempo = pagoActual - pagoAnterior;
+            const diffDias = Math.floor(diffTiempo / (1000 * 60 * 60 * 24));
+
+            // Si la diferencia es mayor o igual a diasPorMes días, hay un gap y se rompe la cadena
+            if (diffDias >= diasPorMes) {
+                break;
+            }
+
+            // Si está dentro del rango, cuenta como mes consecutivo
+            mesesConsecutivos++;
+        }
+
+        if (mesesConsecutivos === 0) {
+            return res.json({
+                status: 'success',
+                mesesProgreso: 0,
+                montoTotal: 0,
+                valorMembresia,
+                porcentaje_descuento: '0'
+            });
+        }
+
+        const montoTotal = valorMembresia * mesesConsecutivos;
+
+        // Determinar el descuento aplicable basado en el progreso
+        const configDescuentoEspecial = configs.find(c => c.tipo_config === 'porcentaje_descuento_especial');
+        const configDescuentoRegular = configs.find(c => c.tipo_config === 'porcentaje_descuento');
+        
+        const beneficioEspecial = beneficios.find(b => 
+            b.tipo_beneficio === 'Descuento Especial en todos los Servicios'
+        );
+        const beneficioRegular = beneficios.find(b => 
+            b.tipo_beneficio === 'Descuento en todos los servicios'
+        );
+
+        const mesRequeridoEspecial = parseInt(beneficioEspecial?.mes_requerido || '0', 10);
+        const mesRequeridoRegular = parseInt(beneficioRegular?.mes_requerido || '0', 10);
+        
+        // Determinar el descuento: prioridad al especial si ambos califican
+        let porcentajeDescuento = '0';
+        
+        if (mesesConsecutivos >= mesRequeridoEspecial && mesRequeridoEspecial > 0) {
+            porcentajeDescuento = configDescuentoEspecial?.valor || '0';
+        } else if (mesesConsecutivos >= mesRequeridoRegular && mesRequeridoRegular > 0) {
+            porcentajeDescuento = configDescuentoRegular?.valor || '0';
+        }
 
         res.json({
             status: 'success',
-            mesesProgreso: maxProgreso,
-            montoTotal: montoTotal,
-            valorMembresia: valorMembresia
+            mesesProgreso: mesesConsecutivos,
+            montoTotal,
+            valorMembresia,
+            porcentaje_descuento: porcentajeDescuento
         });
 
     } catch (error) {

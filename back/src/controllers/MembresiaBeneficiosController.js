@@ -11,7 +11,7 @@ const obtenerBeneficios = async (req, res) => {
         });
 
         // Obtener valores de configuración
-        const [visitaTecnico, porcentajeDescuento] = await Promise.all([
+        const [visitaTecnico, porcentajeDescuento, porcentajeDescuentoEspecial] = await Promise.all([
             Config.findOne({ 
                 where: { tipo_config: 'visita_tecnico' },
                 attributes: ['valor'],
@@ -19,6 +19,11 @@ const obtenerBeneficios = async (req, res) => {
             }),
             Config.findOne({ 
                 where: { tipo_config: 'porcentaje_descuento' },
+                attributes: ['valor'],
+                raw: true
+            }),
+            Config.findOne({ 
+                where: { tipo_config: 'porcentaje_descuento_especial' },
                 attributes: ['valor'],
                 raw: true
             })
@@ -29,15 +34,24 @@ const obtenerBeneficios = async (req, res) => {
             let tipoBeneficio = benefit.tipo_beneficio;
             let descripcion = benefit.descripcion;
 
-            // Reemplazar marcadores en el título y descripción
+            // Reemplazar marcadores en el título
             if (tipoBeneficio.includes('%')) {
                 tipoBeneficio = tipoBeneficio.replace('%', porcentajeDescuento?.valor || '0');
+            } else if (tipoBeneficio.includes('%ESPECIAL%')) {
+                tipoBeneficio = tipoBeneficio.replace('%ESPECIAL%', porcentajeDescuentoEspecial?.valor || '0');
             }
-            if (descripcion.includes('%')) {
-                descripcion = descripcion.replace(/%/g, porcentajeDescuento?.valor || '0');
-            }
-            if (descripcion.includes('{visita_tecnico}')) {
-                descripcion = descripcion.replace('{visita_tecnico}', visitaTecnico?.valor || '0');
+
+            // Reemplazar marcadores en la descripción
+            if (descripcion) {
+                if (descripcion.includes('%')) {
+                    descripcion = descripcion.replace(/%/g, porcentajeDescuento?.valor || '0');
+                }
+                if (descripcion.includes('{visita_tecnico}')) {
+                    descripcion = descripcion.replace('{visita_tecnico}', visitaTecnico?.valor || '0');
+                }
+                if (descripcion.includes('%ESPECIAL%')) {
+                    descripcion = descripcion.replace(/%ESPECIAL%/g, porcentajeDescuentoEspecial?.valor || '0');
+                }
             }
 
             return {
@@ -52,7 +66,8 @@ const obtenerBeneficios = async (req, res) => {
             beneficios: beneficiosConValores,
             valores: {
                 visita_tecnico: visitaTecnico?.valor || '0',
-                porcentaje_descuento: porcentajeDescuento?.valor || '10'
+                porcentaje_descuento: porcentajeDescuento?.valor || '10',
+                porcentaje_descuento_especial: porcentajeDescuentoEspecial?.valor || '15'
             }
         });
     } catch (error) {
