@@ -213,10 +213,11 @@ const obtenerPaquetesPorEstado = async (req, res) => {
 
 // Canjear un paquete
 const canjearPaquete = async (req, res) => {
-    // Iniciar transacción
-    const t = await sequelize.transaction();
-
+    let t;
+    
     try {
+        // Iniciar transacción
+        t = await sequelize.transaction();
         const { id_usuario, id_paquete, esPagoTransferencia = false, id_cuenta, numero_comprobante } = req.body;
 
         if (!id_paquete) {
@@ -234,6 +235,24 @@ const canjearPaquete = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: "El paquete no existe"
+            });
+        }
+
+        // Si el paquete no está activo, no se puede canjear
+        if (!paquete.estado) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                error: "Este paquete no está disponible actualmente"
+            });
+        }
+
+        // Verificar disponibilidad del paquete (si no es ilimitado)
+        if (paquete.cantidad !== null && paquete.cantidad <= 0) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                error: "No hay paquetes disponibles en este momento"
             });
         }
 
@@ -277,14 +296,20 @@ const canjearPaquete = async (req, res) => {
             });
         }
 
-        // Buscar si ya existe un registro (que debe estar en 'utilizado' o 'rechazado' dado el check anterior)
+        // Reducir la cantidad disponible (si no es ilimitado)
+        if (paquete.cantidad !== null) {
+            paquete.cantidad -= 1;
+            await paquete.save({ transaction: t });
+        }
+
+        // Buscar si ya existe un registro
         let paqueteUsuario = await PaqueteUsuario.findOne({
             where: { id_usuario, id_paquete },
             transaction: t
         });
 
         if (paqueteUsuario) {
-            // Si ya existe, lo actualizamos (resetear estado y fecha)
+            // Si ya existe, lo actualizamos
             paqueteUsuario.estado = esPagoTransferencia ? 'verificando_pago' : 'activo';
             paqueteUsuario.fecha_actualizacion = new Date();
             await paqueteUsuario.save({ transaction: t });
@@ -311,7 +336,18 @@ const canjearPaquete = async (req, res) => {
             }, { transaction: t });
         }
 
-        await t.commit();
+        // Obtener el saldo actualizado antes de hacer commit si es necesario
+        let saldoActual;
+        if (!esPagoTransferencia) {
+            saldoActual = (await Usuario.findByPk(id_usuario, { transaction: t })).credito;
+        }
+
+        // Hacer commit de la transacción
+        if (t) {
+            await t.commit();
+            t = null; // Asegurarnos de que no se use después
+        }
+        
         return res.status(201).json({
             success: true,
             message: esPagoTransferencia
@@ -319,12 +355,16 @@ const canjearPaquete = async (req, res) => {
                 : 'Paquete canjeado exitosamente',
             data: {
                 paquete: paqueteUsuario,
-                nuevoSaldo: esPagoTransferencia ? undefined : (await Usuario.findByPk(id_usuario)).credito,
+                nuevoSaldo: saldoActual,
                 requiereVerificacion: esPagoTransferencia
             }
         });
     } catch (error) {
-        await t.rollback();
+        // Hacer rollback solo si la transacción está activa
+        if (t && !t.finished) {
+            await t.rollback();
+        }
+        
         console.error('Error al canjear paquete:', error);
         return res.status(500).json({
             success: false,

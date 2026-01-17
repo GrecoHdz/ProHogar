@@ -19,6 +19,10 @@ const Paquete = sequelize.define("paquete", {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false
     },
+    cantidad: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
     estado: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
