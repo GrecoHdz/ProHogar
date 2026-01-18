@@ -4,6 +4,7 @@ const { body, param, validationResult, query } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { apiLimiter } = require('../middleware/rateLimiters');
 const { authLimiter } = require('../middleware/rateLimiters');
+const { uploadProfile } = require("../config/cloudinary");
 
 const {
     obtenerUsuarios,
@@ -15,6 +16,8 @@ const {
     obtenerUsuarioPorId,
     crearUsuario,
     actualizarUsuario,
+    actualizarImagenPerfil,
+    eliminarImagenPerfil,
     actualizarPassword,
     verificarRTN,
     eliminarUsuario,
@@ -58,6 +61,12 @@ router.get("/grafica/crecimiento-usuarios", [
     query('fechaActual').optional().isISO8601().withMessage('La fecha debe tener un formato válido (YYYY-MM-DD)')
 ], validarErrores, authMiddleware, apiLimiter, obtenerGraficaCrecimientoUsuarios);
 
+//Verificar RTN por ID de usuario
+router.get("/verificar-rtn/:id_usuario",
+    [
+        param("id_usuario").isString().withMessage("El ID del usuario debe ser una cadena de caracteres")
+    ],
+    validarErrores, authMiddleware, apiLimiter, verificarRTN);
 //Obtener todos los Administradores
 router.get("/administradores", validarErrores, authMiddleware, apiLimiter, obtenerAdministradores);
 
@@ -114,12 +123,20 @@ router.put("/cambio-clave/:id",
     ],
     validarErrores, authLimiter, actualizarPassword);
 
-//Verificar RTN por ID de usuario
-router.get("/verificar-rtn/:id_usuario",
-    [
-        param("id_usuario").isString().withMessage("El ID del usuario debe ser una cadena de caracteres")
-    ],
-    validarErrores, authMiddleware, apiLimiter, verificarRTN);
+// Actualizar imagen de perfil
+router.post(
+    '/imagen-perfil/:id',
+    authMiddleware,
+    uploadProfile.single('imagen'),
+    actualizarImagenPerfil
+);
+
+// Eliminar imagen de perfil
+router.delete(
+    '/imagen-perfil/:id',
+    authMiddleware,
+    eliminarImagenPerfil
+);
 
 //Eliminar Usuario
 router.delete("/:id",

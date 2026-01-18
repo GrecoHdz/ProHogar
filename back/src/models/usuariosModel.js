@@ -58,6 +58,14 @@ const Usuario = sequelize.define("Usuario", {
     reset_password_expires: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    imagen_url: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    imagen_public_id: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     timestamps: false,

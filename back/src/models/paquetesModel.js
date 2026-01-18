@@ -27,6 +27,14 @@ const Paquete = sequelize.define("paquete", {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: true
+    },
+    imagen_url: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    imagen_public_id: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     timestamps: false,

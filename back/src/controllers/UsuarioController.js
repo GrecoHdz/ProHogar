@@ -11,7 +11,7 @@ const { Op, fn, col, literal, Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
 const Referido = require('../models/referidosModel');
-
+const { cloudinary } = require('../config/cloudinary');
 
 // Obtener todos los usuarios con filtros, paginación y estadísticas
 const obtenerUsuarios = async (req, res) => {
@@ -569,6 +569,92 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
     }
 };
 
+// Obtener datos para Gráfico de crecimiento de usuarios
+const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+
+        // Establecer fechas por defecto (últimos 12 meses)
+        const endDate = fechaFin ? new Date(fechaFin) : new Date();
+        const startDate = fechaInicio ? new Date(fechaInicio) : new Date();
+        startDate.setMonth(startDate.getMonth() - 11);
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+
+        // Asegurar que el final del rango sea el último día del mes
+        const endOfMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+
+        // Generar etiquetas para los 12 meses
+        const labels = [];
+        const data = [];
+        const currentMonth = new Date(startDate);
+
+        while (currentMonth <= endDate) {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
+
+            labels.push(`${monthName} ${year}`);
+            data.push(0); // Inicializar contador en 0
+
+            // Mover al siguiente mes
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+        }
+
+        // Obtener el conteo de usuarios por mes
+        const usuariosPorMes = await Usuario.findAll({
+            where: {
+                fecha_registro: {
+                    [Op.between]: [startDate, endOfMonth]
+                }
+            },
+            attributes: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'year'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'month'],
+                [Sequelize.fn('COUNT', Sequelize.col('id_usuario')), 'total']
+            ],
+            group: [
+                Sequelize.fn('YEAR', Sequelize.col('fecha_registro')),
+                Sequelize.fn('MONTH', Sequelize.col('fecha_registro'))
+            ],
+            order: [
+                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'ASC'],
+                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'ASC']
+            ],
+            raw: true
+        });
+
+        // Mapear los resultados a los meses correspondientes
+        usuariosPorMes.forEach(item => {
+            const monthIndex = (item.year - startDate.getFullYear()) * 12 + (item.month - startDate.getMonth() - 1);
+            if (monthIndex >= 0 && monthIndex < data.length) {
+                data[monthIndex] = parseInt(item.total);
+            }
+        });
+
+        // Calcular total acumulado
+        const total = data.reduce((sum, count) => sum + count, 0);
+
+        res.json({
+            success: true,
+            data: {
+                labels: labels,
+                data: data,
+                total: total
+            }
+        });
+
+    } catch (error) {
+        console.error('Error al obtener estadísticas de crecimiento de usuarios:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener las estadísticas de crecimiento de usuarios',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Obtener todos los administradores
 const obtenerAdministradores = async (req, res) => {
     const { nombre, estado, id_ciudad, limit = 10, offset = 0 } = req.query;
@@ -758,6 +844,70 @@ const obtenerUsuarioPorIdentidad = async (req, res) => {
     }
 };
 
+//Función para verificar RTN por número de identidad
+const verificarRTN = async (req, res) => {
+    const { id_usuario } = req.params;
+
+    if (!id_usuario) {
+        return res.status(400).json({
+            success: false,
+            error: "Se requiere el ID del usuario"
+        });
+    }
+
+    try {
+        // Buscar el usuario por id_usuario
+        const usuario = await Usuario.findOne({
+            where: { id_usuario },
+            attributes: ['id_usuario', 'nombre', 'identidad']
+        });
+
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: "No se encontró ningún usuario con el ID proporcionado",
+                idBuscado: id_usuario
+            });
+        }
+
+        // Verificar si la identidad tiene más de 13 dígitos
+        const identidadSinGuiones = usuario.identidad.replace(/-/g, '');
+        const cantidadDigitos = identidadSinGuiones.length;
+
+        if (cantidadDigitos > 13) {
+            // Es un RTN
+            return res.json({
+                success: true,
+                message: "El número de identidad corresponde a un RTN",
+                data: {
+                    nombre: usuario.nombre,
+                    rtn: usuario.identidad,
+                    cantidad_digitos: cantidadDigitos
+                }
+            });
+        } else {
+            // No es un RTN
+            return res.json({
+                success: false,
+                message: "El número de identidad no corresponde a un RTN",
+                data: {
+                    nombre: usuario.nombre,
+                    identidad: usuario.identidad,
+                    cantidad_digitos: cantidadDigitos
+                }
+            });
+        }
+
+    } catch (error) {
+        console.error("Error al verificar RTN:", error);
+        res.status(500).json({
+            success: false,
+            error: "Error al verificar RTN",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Crear Usuario
 const crearUsuario = async (req, res) => {
     const {
@@ -904,87 +1054,120 @@ const crearUsuario = async (req, res) => {
     }
 };
 
-// Obtener datos para Gráfico de crecimiento de usuarios
-const obtenerGraficaCrecimientoUsuarios = async (req, res) => {
+// Controlador para actualizar la imagen de perfil
+const actualizarImagenPerfil = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin } = req.query;
+        const { id } = req.params;
+        const usuario = await Usuario.findByPk(id);
 
-        // Establecer fechas por defecto (últimos 12 meses)
-        const endDate = fechaFin ? new Date(fechaFin) : new Date();
-        const startDate = fechaInicio ? new Date(fechaInicio) : new Date();
-        startDate.setMonth(startDate.getMonth() - 11);
-        startDate.setDate(1);
-        startDate.setHours(0, 0, 0, 0);
-
-        // Asegurar que el final del rango sea el último día del mes
-        const endOfMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
-
-        // Generar etiquetas para los 12 meses
-        const labels = [];
-        const data = [];
-        const currentMonth = new Date(startDate);
-
-        while (currentMonth <= endDate) {
-            const year = currentMonth.getFullYear();
-            const month = currentMonth.getMonth();
-            const monthName = currentMonth.toLocaleString('es-ES', { month: 'short' });
-
-            labels.push(`${monthName} ${year}`);
-            data.push(0); // Inicializar contador en 0
-
-            // Mover al siguiente mes
-            currentMonth.setMonth(currentMonth.getMonth() + 1);
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
         }
 
-        // Obtener el conteo de usuarios por mes
-        const usuariosPorMes = await Usuario.findAll({
-            where: {
-                fecha_registro: {
-                    [Op.between]: [startDate, endOfMonth]
+        // Guardar el public_id de la imagen anterior si existe
+        const imagenAnteriorId = usuario.imagen_public_id;
+
+        // Si se subió una nueva imagen
+        if (req.file) {
+            // Actualizar con la nueva imagen
+            await usuario.update({
+                imagen_url: req.file.path,
+                imagen_public_id: req.file.filename
+            });
+
+            // Si existía una imagen anterior, eliminarla de Cloudinary
+            if (imagenAnteriorId) {
+                try {
+                    await cloudinary.uploader.destroy(imagenAnteriorId);
+                } catch (error) {
+                    console.error('Error al eliminar la imagen anterior:', error);
+                    // No detenemos el flujo si falla la eliminación
                 }
-            },
-            attributes: [
-                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'year'],
-                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'month'],
-                [Sequelize.fn('COUNT', Sequelize.col('id_usuario')), 'total']
-            ],
-            group: [
-                Sequelize.fn('YEAR', Sequelize.col('fecha_registro')),
-                Sequelize.fn('MONTH', Sequelize.col('fecha_registro'))
-            ],
-            order: [
-                [Sequelize.fn('YEAR', Sequelize.col('fecha_registro')), 'ASC'],
-                [Sequelize.fn('MONTH', Sequelize.col('fecha_registro')), 'ASC']
-            ],
-            raw: true
-        });
-
-        // Mapear los resultados a los meses correspondientes
-        usuariosPorMes.forEach(item => {
-            const monthIndex = (item.year - startDate.getFullYear()) * 12 + (item.month - startDate.getMonth() - 1);
-            if (monthIndex >= 0 && monthIndex < data.length) {
-                data[monthIndex] = parseInt(item.total);
             }
-        });
 
-        // Calcular total acumulado
-        const total = data.reduce((sum, count) => sum + count, 0);
+            return res.json({
+                success: true,
+                data: {
+                    imagen_url: req.file.path,
+                    mensaje: 'Imagen de perfil actualizada correctamente'
+                }
+            });
+        }
 
-        res.json({
-            success: true,
-            data: {
-                labels: labels,
-                data: data,
-                total: total
-            }
+        return res.status(400).json({
+            success: false,
+            error: 'No se proporcionó ninguna imagen'
         });
 
     } catch (error) {
-        console.error('Error al obtener estadísticas de crecimiento de usuarios:', error);
-        res.status(500).json({
+        console.error('Error al actualizar imagen de perfil:', error);
+        
+        // Si hubo un error y se subió una nueva imagen, la eliminamos
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (e) {
+                console.error('Error al limpiar imagen subida:', e);
+            }
+        }
+        
+        return res.status(500).json({
             success: false,
-            error: 'Error al obtener las estadísticas de crecimiento de usuarios',
+            error: 'Error al actualizar la imagen de perfil',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+// Controlador para eliminar la imagen de perfil
+const eliminarImagenPerfil = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const usuario = await Usuario.findByPk(id);
+
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
+        }
+
+        const imagenAnteriorId = usuario.imagen_public_id;
+
+        if (!imagenAnteriorId) {
+            return res.status(400).json({
+                success: false,
+                error: 'El usuario no tiene una imagen de perfil'
+            });
+        }
+
+        // Actualizar el usuario para eliminar la referencia a la imagen
+        await usuario.update({
+            imagen_url: null,
+            imagen_public_id: null
+        });
+
+        // Eliminar la imagen de Cloudinary
+        try {
+            await cloudinary.uploader.destroy(imagenAnteriorId);
+        } catch (error) {
+            console.error('Error al eliminar la imagen de Cloudinary:', error);
+            // No revertimos la actualización del usuario aunque falle la eliminación en Cloudinary
+        }
+
+        return res.json({
+            success: true,
+            mensaje: 'Imagen de perfil eliminada correctamente'
+        });
+
+    } catch (error) {
+        console.error('Error al eliminar imagen de perfil:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al eliminar la imagen de perfil',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -1095,7 +1278,7 @@ const actualizarUsuario = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-};
+}; 
 
 // Actualizar contraseña con verificación de contraseña actual
 const actualizarPassword = async (req, res) => {
@@ -1215,71 +1398,7 @@ const actualizarPassword = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
         });
     }
-};
-
-//Función para verificar RTN por número de identidad
-const verificarRTN = async (req, res) => {
-    const { id_usuario } = req.params;
-
-    if (!id_usuario) {
-        return res.status(400).json({
-            success: false,
-            error: "Se requiere el ID del usuario"
-        });
-    }
-
-    try {
-        // Buscar el usuario por id_usuario
-        const usuario = await Usuario.findOne({
-            where: { id_usuario },
-            attributes: ['id_usuario', 'nombre', 'identidad']
-        });
-
-        if (!usuario) {
-            return res.status(404).json({
-                success: false,
-                error: "No se encontró ningún usuario con el ID proporcionado",
-                idBuscado: id_usuario
-            });
-        }
-
-        // Verificar si la identidad tiene más de 13 dígitos
-        const identidadSinGuiones = usuario.identidad.replace(/-/g, '');
-        const cantidadDigitos = identidadSinGuiones.length;
-
-        if (cantidadDigitos > 13) {
-            // Es un RTN
-            return res.json({
-                success: true,
-                message: "El número de identidad corresponde a un RTN",
-                data: {
-                    nombre: usuario.nombre,
-                    rtn: usuario.identidad,
-                    cantidad_digitos: cantidadDigitos
-                }
-            });
-        } else {
-            // No es un RTN
-            return res.json({
-                success: false,
-                message: "El número de identidad no corresponde a un RTN",
-                data: {
-                    nombre: usuario.nombre,
-                    identidad: usuario.identidad,
-                    cantidad_digitos: cantidadDigitos
-                }
-            });
-        }
-
-    } catch (error) {
-        console.error("Error al verificar RTN:", error);
-        res.status(500).json({
-            success: false,
-            error: "Error al verificar RTN",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
+}; 
 
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
@@ -1327,6 +1446,8 @@ module.exports = {
     crearUsuario,
     actualizarUsuario,
     actualizarPassword,
+    actualizarImagenPerfil,
+    eliminarImagenPerfil,
     verificarRTN,
     eliminarUsuario
 };

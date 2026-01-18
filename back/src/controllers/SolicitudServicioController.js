@@ -706,7 +706,7 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             {
                 model: Usuario,
                 as: 'tecnico',
-                attributes: ['nombre']
+                attributes: ['nombre', 'imagen_url']
             }
             ],
             order: [['fecha_solicitud', 'DESC']],

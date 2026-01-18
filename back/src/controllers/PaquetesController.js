@@ -2,6 +2,7 @@ const Paquete = require("../models/paquetesModel");
 const PaqueteUsuario = require("../models/paquetesUsuariosModel");
 const Ciudad = require("../models/ciudadesModel");
 const { Op } = require('sequelize');
+const { cloudinary } = require('../config/cloudinary');
 
 // Obtener todos los paquetes
 const obtenerPaquetes = async (req, res) => {
@@ -175,6 +176,12 @@ const crearPaquete = async (req, res) => {
             estado: true
         };
 
+        // Si se subió una imagen, agregar la URL y el public_id
+        if (req.file) {
+            datosPaquete.imagen_url = req.file.path;
+            datosPaquete.imagen_public_id = req.file.filename;
+        }
+
         const paquete = await Paquete.create(datosPaquete);
 
         if (id_ciudades && Array.isArray(id_ciudades)) {
@@ -195,7 +202,15 @@ const crearPaquete = async (req, res) => {
             data: paqueteCompleto
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error al crear paquete:', error);
+        // Si hubo un error y se subió una imagen, la eliminamos
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (e) {
+                console.error('Error al limpiar imagen subida:', e);
+            }
+        }
         res.status(500).json({
             success: false,
             error: "Error al crear el paquete",
@@ -207,6 +222,12 @@ const crearPaquete = async (req, res) => {
 // Actualizar un paquete existente
 const actualizarPaquete = async (req, res) => {
     try {
+        console.log('=== Datos recibidos en el servidor ===');
+        console.log('Params:', req.params);
+        console.log('Body:', req.body);
+        console.log('File:', req.file);
+        console.log('Headers:', req.headers);
+        
         const { id } = req.params;
         const { nombre, descripcion, costo, estado, cantidad, id_ciudades } = req.body;
 
@@ -236,6 +257,9 @@ const actualizarPaquete = async (req, res) => {
             }
         }
 
+        // Guardar el public_id de la imagen anterior si existe
+        const imagenAnteriorId = paquete.imagen_public_id;
+
         // Actualizar solo los campos proporcionados
         const datosActualizados = {};
         if (nombre !== undefined) datosActualizados.nombre = nombre;
@@ -248,7 +272,24 @@ const actualizarPaquete = async (req, res) => {
             datosActualizados.cantidad = cantidad || null;
         }
 
+        // Si se subió una nueva imagen
+        if (req.file) {
+            // Actualizar con la nueva imagen
+            datosActualizados.imagen_url = req.file.path;
+            datosActualizados.imagen_public_id = req.file.filename;
+        }
+
         await paquete.update(datosActualizados);
+
+        // Si se subió una nueva imagen, eliminar la anterior
+        if (req.file && imagenAnteriorId) {
+            try {
+                await cloudinary.uploader.destroy(imagenAnteriorId);
+            } catch (error) {
+                console.error('Error al eliminar la imagen anterior:', error);
+                // No detenemos el flujo si falla la eliminación
+            }
+        }
 
         if (id_ciudades && Array.isArray(id_ciudades)) {
             await paquete.setCiudades(id_ciudades);
@@ -268,14 +309,22 @@ const actualizarPaquete = async (req, res) => {
             data: paqueteCompleto
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error al actualizar paquete:', error);
+        // Si hubo un error y se subió una nueva imagen, la eliminamos
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (e) {
+                console.error('Error al limpiar imagen subida:', e);
+            }
+        }
         res.status(500).json({
             success: false,
             error: "Error al actualizar el paquete",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-};
+}; 
 
 // Cambiar estado de un paquete (activar/desactivar)
 const desactivarPaquete = async (req, res) => {
@@ -321,6 +370,57 @@ const desactivarPaquete = async (req, res) => {
     }
 };
 
+// Controlador para eliminar la imagen de un paquete
+const eliminarImagenPerfil = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const paquete = await Paquete.findByPk(id);
+
+        if (!paquete) {
+            return res.status(404).json({
+                success: false,
+                error: 'Paquete no encontrado'
+            });
+        }
+
+        const imagenAnteriorId = paquete.imagen_public_id;
+
+        if (!imagenAnteriorId) {
+            return res.status(400).json({
+                success: false,
+                error: 'El paquete no tiene una imagen asociada'
+            });
+        }
+
+        // Actualizar el paquete para eliminar la referencia a la imagen
+        await paquete.update({
+            imagen_url: null,
+            imagen_public_id: null
+        });
+
+        // Eliminar la imagen de Cloudinary
+        try {
+            await cloudinary.uploader.destroy(imagenAnteriorId);
+        } catch (error) {
+            console.error('Error al eliminar la imagen de Cloudinary:', error);
+            // No revertimos la actualización del paquete aunque falle la eliminación en Cloudinary
+        }
+
+        return res.json({
+            success: true,
+            mensaje: 'Imagen del paquete eliminada correctamente'
+        });
+
+    } catch (error) {
+        console.error('Error al eliminar imagen del paquete:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al eliminar la imagen del paquete',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 // Eliminar permanentemente un paquete (solo para administradores)
 const eliminarPaquete = async (req, res) => {
     try {
@@ -355,5 +455,6 @@ module.exports = {
     crearPaquete,
     actualizarPaquete,
     desactivarPaquete,
-    eliminarPaquete
+    eliminarPaquete,
+    eliminarImagenPerfil
 };
