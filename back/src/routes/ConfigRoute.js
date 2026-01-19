@@ -48,7 +48,7 @@ router.post("/", [
 router.put("/:id", [
     param("id").isInt().withMessage("El ID debe ser un numero entero"),
     body("tipo_config").optional().isString().withMessage("El tipo_config debe ser una cadena de caracteres"),
-    body("valor").optional().isInt().withMessage("El valor debe ser un numero entero")
+    body("valor").optional()
 ],validarErrores, authMiddleware, actualizarConfig);
 
 //Eliminar configuracion
