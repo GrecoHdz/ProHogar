@@ -88,7 +88,7 @@ router.get("/identidad/:identidad",
     validarErrores, authMiddleware, apiLimiter, obtenerUsuarioPorIdentidad);
 
 //Crear Usuario
-router.post("/",
+router.post("/nuevo",
     [
         body("nombre").isString().withMessage("El nombre debe ser una cadena de caracteres"),
         body("identidad").isString().withMessage("La identidad debe ser una cadena de caracteres"),

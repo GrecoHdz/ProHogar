@@ -42,7 +42,7 @@ router.get("/referidor/:id_referido_usuario", [
 router.get("/top/usuarios", authMiddleware, getTopUsuariosConMasReferidos);
 
 //Crear referido
-router.post("/", [
+router.post("/nuevo", [
     body("id_referidor").isInt().withMessage("El ID debe ser un numero entero"),
     body("id_referido_usuario").isInt().withMessage("El ID debe ser un numero entero")
 ], validarErrores, createReferido);

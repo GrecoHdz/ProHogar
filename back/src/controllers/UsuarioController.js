@@ -978,6 +978,7 @@ const crearUsuario = async (req, res) => {
         // Hashear la contraseña
         const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
 
+        // Crear el usuario con estado 'deshabilitado' si es técnico
         const usuario = await Usuario.create({
             nombre,
             id_rol,
@@ -985,8 +986,9 @@ const crearUsuario = async (req, res) => {
             email,
             telefono,
             password_hash: hashedPassword,
-            id_ciudad
-        });
+            id_ciudad,
+            estado: es_tecnico ? 'deshabilitado' : 'activo'
+        }); 
 
         // No devolver la contraseña en la respuesta
         const usuarioSinPassword = usuario.toJSON();
