@@ -13,6 +13,56 @@ const saltRounds = 10; // Número de rondas de hashing
 const Referido = require('../models/referidosModel');
 const { cloudinary } = require('../config/cloudinary');
 
+// Verificar perfil de técnico
+const verificarPerfilTecnico = async (req, res) => {
+    try {
+        const { id_usuario } = req.params;
+
+        // Verificar si el usuario existe
+        const usuario = await Usuario.findByPk(id_usuario, {
+            attributes: ['id_usuario', 'imagen_url', 'id_rol'],
+            include: [
+                {
+                    model: Rol,
+                    as: 'rol',
+                    attributes: ['nombre_rol']
+                },
+                {
+                    model: TecnicoServicio,
+                    as: 'serviciosAsignados',
+                    attributes: ['id_servicio']
+                }
+            ]
+        });
+
+        if (!usuario) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+        }
+
+        // Verificar si es un técnico
+        if (usuario.rol.nombre_rol !== 'tecnico') {
+            return res.status(400).json({ mensaje: 'El usuario no es un técnico' });
+        }
+
+        // Verificar si tiene imagen de perfil
+        const tieneImagen = !!usuario.imagen_url;
+
+        // Verificar si tiene servicios asignados
+        const tieneServicios = usuario.serviciosAsignados && usuario.serviciosAsignados.length > 0;
+
+        res.json({
+            id_usuario: usuario.id_usuario,
+            tiene_imagen: tieneImagen,
+            tiene_servicios: tieneServicios,
+            perfil_completo: tieneImagen && tieneServicios
+        });
+
+    } catch (error) {
+        console.error('Error al verificar perfil de técnico:', error);
+        res.status(500).json({ mensaje: 'Error al verificar perfil de técnico', error: error.message });
+    }
+};
+
 // Obtener todos los usuarios con filtros, paginación y estadísticas
 const obtenerUsuarios = async (req, res) => {
     try {
@@ -1436,6 +1486,7 @@ const eliminarUsuario = async (req, res) => {
 };
 
 module.exports = {
+    verificarPerfilTecnico,
     obtenerGraficaCrecimientoUsuarios,
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,

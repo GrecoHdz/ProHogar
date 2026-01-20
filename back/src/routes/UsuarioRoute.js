@@ -18,6 +18,7 @@ const {
     actualizarUsuario,
     actualizarImagenPerfil,
     eliminarImagenPerfil,
+    verificarPerfilTecnico,
     actualizarPassword,
     verificarRTN,
     eliminarUsuario,
@@ -35,6 +36,16 @@ const validarErrores = (req, res, next) => {
 };
 //Obtener todos los Usuarios
 router.get("/", validarErrores, authMiddleware, apiLimiter, obtenerUsuarios);
+
+// Verificar perfil de técnico
+router.get("/verificar-perfil-tecnico/:id_usuario", 
+    [
+        param("id_usuario").isInt().withMessage("El ID del usuario debe ser un número entero")
+    ],
+    validarErrores, 
+    authMiddleware, 
+    verificarPerfilTecnico
+);
 
 //Obtener Usuario por ID
 router.get("/id/:id",
