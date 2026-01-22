@@ -243,6 +243,72 @@ const crearFactura = async (req, res) => {
     }
 };
 
+const enviarFacturaPorEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get the invoice with relations
+    const factura = await Factura.findByPk(id, {
+      include: [
+        {
+          model: FacturaRelacion,
+          as: 'relaciones'
+        }
+      ]
+    });
+
+    if (!factura) {
+      return res.status(404).json({
+        status: 'not_found',
+        message: 'Factura no encontrada'
+      });
+    }
+
+    // Get user email from the invoice
+    let userEmail = null;
+    if (factura.relaciones && factura.relaciones.length > 0) {
+      const relacion = factura.relaciones[0];
+      
+      // Depending on your relations, you might need to include the user model
+      // and adjust this query to get the user's email
+      const user = await Usuario.findOne({
+        where: { id_usuario: factura.id_usuario } // Adjust this based on your schema
+      });
+      
+      if (user && user.correo) {
+        userEmail = user.correo;
+      }
+    }
+
+    if (!userEmail) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No se pudo determinar el correo del destinatario'
+      });
+    }
+
+    // Generate PDF (you'll need to implement this)
+    const pdfBuffer = await generarPDFFactura(factura);
+
+    // Send email (you'll need to implement this)
+    await enviarEmailConFactura(userEmail, factura, pdfBuffer);
+
+    res.json({
+      status: 'success',
+      message: 'Factura enviada por correo electrónico'
+    });
+
+  } catch (error) {
+    console.error('Error al enviar factura por email:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error al enviar factura por correo electrónico',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+  
+
 const anularFactura = async (req, res) => {
     try {
         const [updated] = await Factura.update(
@@ -441,5 +507,6 @@ module.exports = {
     anularFactura,
     obtenerEstadoCorrelativo,
     obtenerPendientesFacturacion,
-    obtenerFechaActualServidor
+    obtenerFechaActualServidor,
+    enviarFacturaPorEmail 
 };

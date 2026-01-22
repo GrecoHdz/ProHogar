@@ -41,7 +41,7 @@ const PaqueteUsuario = sequelize.define("PaqueteUsuario", {
     indexes: [
         {
             name: 'idx_paquete_usuario',
-            fields: ['id_usuario', 'id_paquete']
+            fields: ['id_paquete']
         },
         {
             name: 'idx_paquete_estado',

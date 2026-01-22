@@ -32,83 +32,89 @@ const obtenerPaquetes = async (req, res) => {
     }
 };
 
-// Obtener todos los paquetes activos 
+// Obtener todos los paquetes activos  
 const obtenerPaquetesActivos = async (req, res) => {
-    try {
-        const { id_ciudad, id_usuario } = req.query;
-        
-        // Primero obtenemos los paquetes que ya tiene el usuario
-        let paquetesUsuario = [];
-        if (id_usuario) {
-            paquetesUsuario = await PaqueteUsuario.findAll({
-                where: { id_usuario },
-                attributes: ['id_paquete']
-            });
-        }
-        const idsPaquetesUsuario = paquetesUsuario.map(p => p.id_paquete);
+  try {
+    const { id_ciudad, id_usuario } = req.query;
 
-        const paquetesDelUsuario = idsPaquetesUsuario.length > 0
-            ? await Paquete.findAll({
-                where: { 
-                    id_paquete: { [Op.in]: idsPaquetesUsuario },
-                    estado: true
-                },
-                include: [{
-                    model: Ciudad,
-                    as: 'ciudades',
-                    through: { attributes: [] },
-                    where: id_ciudad ? { id_ciudad } : {},
-                    required: !!id_ciudad
-                }]
-            })
-            : [];
-
-        // Luego obtenemos los paquetes disponibles
-        const queryOptions = {
-            where: { 
-                estado: true,
-                [Op.and]: [
-                    // Paquetes que el usuario no tiene
-                    { id_paquete: { [Op.notIn]: idsPaquetesUsuario } },
-                    // Y que estén disponibles (cantidad > 0 o ilimitados)
-                    {
-                        [Op.or]: [
-                            { cantidad: { [Op.gt]: 0 } },
-                            { cantidad: null }
-                        ]
-                    }
-                ]
-            },
-            include: [{
-                model: Ciudad,
-                as: 'ciudades',
-                through: { attributes: [] },
-                where: id_ciudad ? { id_ciudad } : {},
-                required: !!id_ciudad
-            }]
-        };
-
-        const paquetesDisponibles = await Paquete.findAll(queryOptions);
-        
-        // Combinamos los paquetes del usuario con los disponibles
-        const todosLosPaquetes = [...paquetesDelUsuario, ...paquetesDisponibles];
-        
-        // Agregar información de disponibilidad a cada paquete
-        const paquetesConDisponibilidad = todosLosPaquetes.map(paquete => ({
-            ...paquete.toJSON(),
-            disponible: !idsPaquetesUsuario.includes(paquete.id_paquete) && 
-                       (paquete.cantidad === null || paquete.cantidad > 0)
-        }));
-
-        res.json(paquetesConDisponibilidad);
-    } catch (error) {
-        console.error('Error en obtenerPaquetesActivos:', error);
-        res.status(500).json({
-            success: false,
-            error: "Error al obtener los paquetes activos",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+    // 1. Paquetes que ya tiene el usuario
+    let paquetesUsuario = [];
+    if (id_usuario) {
+      paquetesUsuario = await PaqueteUsuario.findAll({
+        where: { id_usuario },
+        attributes: ['id_paquete']
+      });
     }
+
+    const idsPaquetesUsuario = paquetesUsuario.map(p => p.id_paquete);
+
+    // 2. Paquetes del usuario (EXCLUYE cantidad = 0)
+    const paquetesDelUsuario = idsPaquetesUsuario.length
+      ? await Paquete.findAll({
+          where: {
+            id_paquete: { [Op.in]: idsPaquetesUsuario },
+            estado: true,
+            [Op.or]: [
+              { cantidad: { [Op.gt]: 0 } },
+              { cantidad: null }
+            ]
+          },
+          include: [{
+            model: Ciudad,
+            as: 'ciudades',
+            through: { attributes: [] },
+            where: id_ciudad ? { id_ciudad } : {},
+            required: !!id_ciudad
+          }]
+        })
+      : [];
+
+    // 3. Paquetes disponibles (EXCLUYE cantidad = 0)
+    const paquetesDisponibles = await Paquete.findAll({
+      where: {
+        estado: true,
+        id_paquete: { [Op.notIn]: idsPaquetesUsuario },
+        [Op.or]: [
+          { cantidad: { [Op.gt]: 0 } },
+          { cantidad: null }
+        ]
+      },
+      include: [{
+        model: Ciudad,
+        as: 'ciudades',
+        through: { attributes: [] },
+        where: id_ciudad ? { id_ciudad } : {},
+        required: !!id_ciudad
+      }]
+    });
+
+    // 4. Unir resultados
+    const todosLosPaquetes = [
+      ...paquetesDelUsuario,
+      ...paquetesDisponibles
+    ];
+
+    // 5. Marcar disponibilidad (blindado contra cantidad = 0)
+    const paquetesConDisponibilidad = todosLosPaquetes.map(paquete => ({
+      ...paquete.toJSON(),
+      disponible:
+        !idsPaquetesUsuario.includes(paquete.id_paquete) &&
+        (paquete.cantidad === null || paquete.cantidad > 0)
+    }));
+
+    res.json(paquetesConDisponibilidad);
+
+  } catch (error) {
+    console.error('Error en obtenerPaquetesActivos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener los paquetes activos',
+      details:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined
+    });
+  }
 };
 
 // Obtener un paquete por ID
