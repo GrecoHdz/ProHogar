@@ -1143,7 +1143,13 @@ const getAllMovimientos = async (req, res) => {
                 fechaFilter.fecha = { [Op.between]: [startDate, endDate] };
             }
 
-            const [membresiasRaw, visitasRaw] = await Promise.all([
+            // Obtener el porcentaje de comisión para paquetes
+            const configComision = await Config.findOne({
+                where: { tipo_config: 'comision_por_paquete' }
+            });
+            const porcentajeComision = configComision ? parseFloat(configComision.valor) : 10;
+
+            const [membresiasRaw, visitasRaw, paquetesRaw] = await Promise.all([
                 Membresia.findAll({
                     where: {
                         estado: { [Op.in]: ['activa', 'vencida'] },
@@ -1184,6 +1190,20 @@ const getAllMovimientos = async (req, res) => {
                     ],
                     attributes: ['id_pagovisita', 'monto', 'fecha', 'estado', 'id_usuario', 'id_solicitud'],
                     order: [['fecha', 'DESC']]
+                }),
+                PagoPaquete.findAll({
+                    where: {
+                        estado: 'aprobado',
+                        ...fechaFilter
+                    },
+                    include: [{
+                        model: Usuario,
+                        as: 'usuario',
+                        required: false,
+                        attributes: ['nombre']
+                    }],
+                    attributes: ['id_pago_paquete', 'monto', 'fecha', 'estado', 'id_usuario', 'id_paquete_usuario'],
+                    order: [['fecha', 'DESC']]
                 })
             ]);
 
@@ -1217,7 +1237,24 @@ const getAllMovimientos = async (req, res) => {
                 };
             });
 
-            adicionales = [...membresiasFormateadas, ...visitasFormateadas];
+            // Formatear paquetes aplicando la comisión
+            const paquetesFormateados = paquetesRaw.map(p => {
+                const d = p.get({ plain: true });
+                const montoTotal = parseFloat(d.monto || 0);
+                const comision = (montoTotal * porcentajeComision) / 100;
+                return {
+                    id_movimiento: `paquete_${d.id_pago_paquete}`,
+                    id_solicitud: d.id_paquete_usuario,
+                    monto: comision.toFixed(2),
+                    fecha: d.fecha,
+                    estado: 'Completado',
+                    tipo: 'ingreso',
+                    nombre_usuario: d.usuario?.nombre || 'Usuario no encontrado',
+                    servicio: 'Compra de Paquete'
+                };
+            });
+
+            adicionales = [...membresiasFormateadas, ...visitasFormateadas, ...paquetesFormateados];
         }
 
         // 3. Combinar todos los movimientos
