@@ -5,6 +5,8 @@ const FacturaCorrelativo = require("../models/facturaCorrelativoModel");
 const Usuario = require("../models/usuariosModel");
 const Config = require("../models/configModel");
 const { sequelize } = require("../config/database");
+const { obtenerSiguienteCorrelativo, obtenerCorrelativoPorCAI } = require("./facturaCorrelativoController");
+const { sendReceiptEmail } = require("../utils/receiptMailer");
 
 
 const obtenerEstadoCorrelativo = async (req, res) => {
@@ -227,6 +229,54 @@ const crearFactura = async (req, res) => {
 
         await transaction.commit();
 
+        // Enviar correo si es factura con RTN
+        if (req.body.tipo_factura === 'CON_RTN' && (req.body.id_usuario || req.body.email)) {
+            try {
+                // Obtener datos del usuario para el correo
+                let userEmail = req.body.email;
+                if (!userEmail && req.body.id_usuario) {
+                    const user = await Usuario.findByPk(req.body.id_usuario, { attributes: ['email'] });
+                    userEmail = user?.email;
+                }
+
+                if (userEmail) {
+                    // Obtener configuración de la empresa
+                    const configs = await Config.findAll({
+                        where: {
+                            tipo_config: {
+                                [Op.in]: ['empresa_nombre', 'rtn', 'correo_empresa', 'numero_empresa']
+                            }
+                        }
+                    });
+
+                    const empresaConfig = {
+                        nombre: configs.find(c => c.tipo_config === 'empresa_nombre')?.valor || 'HogarSeguro',
+                        rtn: configs.find(c => c.tipo_config === 'rtn')?.valor || '',
+                        email: configs.find(c => c.tipo_config === 'correo_empresa')?.valor || '',
+                        telefono: configs.find(c => c.tipo_config === 'numero_empresa')?.valor || ''
+                    };
+
+                    // Obtener info del correlativo para el CAI
+                    const caiInfo = await obtenerCorrelativoPorCAI(correlativo.cai);
+                    empresaConfig.cai = correlativo.cai;
+                    empresaConfig.rango_autorizado = caiInfo.rango_autorizado;
+                    empresaConfig.fecha_limite = caiInfo.fecha_limite_emision;
+
+                    // Preparar datos para el correo
+                    const facturaParaEmail = {
+                        ...factura.get({ plain: true }),
+                        id_pagovisita: req.body.id_pagovisita,
+                        id_cotizacion: req.body.id_cotizacion,
+                        id_membresia: req.body.id_membresia
+                    };
+
+                    await sendReceiptEmail(userEmail, facturaParaEmail, empresaConfig);
+                }
+            } catch (emailError) {
+                console.error("❌ Error al enviar email de factura:", emailError);
+            }
+        }
+
         res.json({
             status: 'success',
             data: factura
@@ -244,70 +294,70 @@ const crearFactura = async (req, res) => {
 };
 
 const enviarFacturaPorEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Get the invoice with relations
-    const factura = await Factura.findByPk(id, {
-      include: [
-        {
-          model: FacturaRelacion,
-          as: 'relaciones'
+    try {
+        const { id } = req.params;
+
+        // Get the invoice with relations
+        const factura = await Factura.findByPk(id, {
+            include: [
+                {
+                    model: FacturaRelacion,
+                    as: 'relaciones'
+                }
+            ]
+        });
+
+        if (!factura) {
+            return res.status(404).json({
+                status: 'not_found',
+                message: 'Factura no encontrada'
+            });
         }
-      ]
-    });
 
-    if (!factura) {
-      return res.status(404).json({
-        status: 'not_found',
-        message: 'Factura no encontrada'
-      });
+        // Get user email from the invoice
+        let userEmail = null;
+        if (factura.relaciones && factura.relaciones.length > 0) {
+            const relacion = factura.relaciones[0];
+
+            // Depending on your relations, you might need to include the user model
+            // and adjust this query to get the user's email
+            const user = await Usuario.findOne({
+                where: { id_usuario: factura.id_usuario } // Adjust this based on your schema
+            });
+
+            if (user && user.correo) {
+                userEmail = user.correo;
+            }
+        }
+
+        if (!userEmail) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'No se pudo determinar el correo del destinatario'
+            });
+        }
+
+        // Generate PDF (you'll need to implement this)
+        const pdfBuffer = await generarPDFFactura(factura);
+
+        // Send email (you'll need to implement this)
+        await enviarEmailConFactura(userEmail, factura, pdfBuffer);
+
+        res.json({
+            status: 'success',
+            message: 'Factura enviada por correo electrónico'
+        });
+
+    } catch (error) {
+        console.error('Error al enviar factura por email:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Error al enviar factura por correo electrónico',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    // Get user email from the invoice
-    let userEmail = null;
-    if (factura.relaciones && factura.relaciones.length > 0) {
-      const relacion = factura.relaciones[0];
-      
-      // Depending on your relations, you might need to include the user model
-      // and adjust this query to get the user's email
-      const user = await Usuario.findOne({
-        where: { id_usuario: factura.id_usuario } // Adjust this based on your schema
-      });
-      
-      if (user && user.correo) {
-        userEmail = user.correo;
-      }
-    }
-
-    if (!userEmail) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No se pudo determinar el correo del destinatario'
-      });
-    }
-
-    // Generate PDF (you'll need to implement this)
-    const pdfBuffer = await generarPDFFactura(factura);
-
-    // Send email (you'll need to implement this)
-    await enviarEmailConFactura(userEmail, factura, pdfBuffer);
-
-    res.json({
-      status: 'success',
-      message: 'Factura enviada por correo electrónico'
-    });
-
-  } catch (error) {
-    console.error('Error al enviar factura por email:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error al enviar factura por correo electrónico',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
 };
-  
+
 
 const anularFactura = async (req, res) => {
     try {
@@ -508,5 +558,5 @@ module.exports = {
     obtenerEstadoCorrelativo,
     obtenerPendientesFacturacion,
     obtenerFechaActualServidor,
-    enviarFacturaPorEmail 
+    enviarFacturaPorEmail
 };

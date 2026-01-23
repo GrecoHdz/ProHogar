@@ -11,27 +11,14 @@ const RefreshToken = require('../models/refreshtokenModel');
 const Ciudad = require('../models/ciudadesModel');
 
 // Configuración del transporte de correo
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true para el puerto 465, false para otros puertos
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    // No fallar en certificados inválidos
-    rejectUnauthorized: false
-  }
-});
+const transporter = require('../config/mailer');
 
 // Generar un token de acceso
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { 
-      id: user.id_usuario, 
-      identidad: user.identidad, 
+    {
+      id: user.id_usuario,
+      identidad: user.identidad,
       rol: user.id_rol,
       estado: user.estado, // Incluir estado en el token
       role: (user.rol && user.rol.nombre_rol) || 'usuario' // Incluir el rol en el token
@@ -86,7 +73,7 @@ const login = async (req, res) => {
 
     if (!user) {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
-    } 
+    }
 
     // Verificar la contraseña hasheada
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
@@ -95,12 +82,12 @@ const login = async (req, res) => {
     }
 
     const t = await sequelize.transaction();
-    
+
     try {
       // Eliminar cualquier refresh token existente para este usuario
-      await RefreshToken.destroy({ 
+      await RefreshToken.destroy({
         where: { usuario_id: user.id_usuario },
-        transaction: t 
+        transaction: t
       });
 
       const accessToken = generateAccessToken(user);
@@ -148,7 +135,7 @@ const login = async (req, res) => {
       });
 
       await t.commit();
-      
+
       res.status(200).json({
         success: true,
         token: accessToken,
@@ -157,7 +144,7 @@ const login = async (req, res) => {
     } catch (error) {
       await t.rollback();
       console.error('Error en el login:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: 'Error en el servidor durante el inicio de sesión',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -165,7 +152,7 @@ const login = async (req, res) => {
     }
   } catch (error) {
     console.error('Error en el login:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Error en el servidor',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -179,19 +166,19 @@ const refreshToken = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
     const accessToken = req.cookies.token || req.headers.authorization?.split(' ')[1];
-    
+
     // Si no hay refresh token pero hay access token, intentar regenerar el refresh token
     if (!refreshToken && accessToken) {
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET, { ignoreExpiration: true });
-        
+
         // Buscar al usuario
         const user = await Usuario.findByPk(decoded.id, {
           include: [
             { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
             { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
           ]
-        }); 
+        });
 
         // Eliminar cualquier refresh token existente para este usuario
         await RefreshToken.destroy({
@@ -258,7 +245,7 @@ const refreshToken = async (req, res) => {
         });
       }
     }
-    
+
     if (!refreshToken) {
       clearAllAuthCookies(res);
       await t.rollback();
@@ -298,13 +285,13 @@ const refreshToken = async (req, res) => {
       await storedToken.destroy({ transaction: t });
       clearAllAuthCookies(res);
       await t.rollback();
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Sesión expirada. Por favor, inicie sesión nuevamente.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Sesión expirada. Por favor, inicie sesión nuevamente.'
       });
     }
 
-    const user = storedToken.usuario; 
+    const user = storedToken.usuario;
 
     const newAccessToken = generateAccessToken(user);
 
@@ -394,8 +381,8 @@ const getCurrentUser = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const user = await Usuario.findByPk(req.user.id_usuario, {
-      attributes: { 
-        exclude: ['password_hash', 'id_rol'] 
+      attributes: {
+        exclude: ['password_hash', 'id_rol']
       },
       include: [
         { model: Rol, as: 'rol', attributes: ['nombre_rol'] },
@@ -407,7 +394,7 @@ const getCurrentUser = async (req, res) => {
     if (!user) {
       await t.rollback();
       return res.status(404).json({ message: 'Usuario no encontrado' });
-    } 
+    }
 
     const userData = user.get({ plain: true });
     // Mantener solo el nombre_rol en el objeto rol
@@ -420,7 +407,7 @@ const getCurrentUser = async (req, res) => {
   } catch (error) {
     await t.rollback();
     console.error('Error al obtener usuario actual:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Error del servidor al obtener información del usuario',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -459,8 +446,8 @@ const forgotPassword = async (req, res) => {
     });
 
     // Crear el enlace de restablecimiento
-    const resetUrl = `${process.env.FRONTEND_URLL}/reset-password/${resetToken}`;
-    
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
     // Configurar el correo electrónico
     const mailOptions = {
       from: `"HogarSeguro" <${process.env.EMAIL_USER}>`,
@@ -491,7 +478,7 @@ const forgotPassword = async (req, res) => {
 
     // Enviar el correo electrónico
     await transporter.sendMail(mailOptions);
-    
+
     console.log('Correo de recuperación enviado a:', user.email);
 
     res.status(200).json({
@@ -608,12 +595,12 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { 
-  login, 
-  refreshToken, 
-  logout, 
-  getCurrentUser, 
-  forgotPassword, 
+module.exports = {
+  login,
+  refreshToken,
+  logout,
+  getCurrentUser,
+  forgotPassword,
   resetPassword,
-  verifyResetToken 
+  verifyResetToken
 };
