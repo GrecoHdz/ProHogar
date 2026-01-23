@@ -14,6 +14,7 @@ const PagoPaquete = sequelize.define("PagoPaquete", {
             model: 'usuario',
             key: 'id_usuario'
         },
+        onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
     },
     id_paquete_usuario: {
@@ -23,6 +24,7 @@ const PagoPaquete = sequelize.define("PagoPaquete", {
             model: 'paquetes_usuarios',
             key: 'id_paquete_usuario'
         },
+        onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
     },
     id_cuenta: {
@@ -32,6 +34,7 @@ const PagoPaquete = sequelize.define("PagoPaquete", {
             model: 'cuentas',
             key: 'id_cuenta'
         },
+        onUpdate: 'CASCADE',
         onDelete: 'RESTRICT'
     },
     monto: {

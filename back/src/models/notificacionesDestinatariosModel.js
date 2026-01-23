@@ -9,11 +9,23 @@ const NotificacionDestinatario = sequelize.define("NotificacionDestinatario", {
     },
     id_notificacion: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'notificaciones',
+            key: 'id_notificacion'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     leido: {
         type: DataTypes.BOOLEAN,

@@ -14,6 +14,7 @@ const PaqueteUsuario = sequelize.define("PaqueteUsuario", {
             model: 'usuario',
             key: 'id_usuario'
         },
+        onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
     },
     id_paquete: {
@@ -23,6 +24,7 @@ const PaqueteUsuario = sequelize.define("PaqueteUsuario", {
             model: 'paquetes',
             key: 'id_paquete'
         },
+        onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
     },
     fecha_actualizacion: {

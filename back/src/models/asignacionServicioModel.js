@@ -9,11 +9,23 @@ const AsignacionServicio = sequelize.define("AsignacionServicio", {
     },
     id_solicitud: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'solicitudservicio',
+            key: 'id_solicitud'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_tecnico: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     fecha_asignacion: {
         type: DataTypes.DATE,
@@ -26,6 +38,6 @@ const AsignacionServicio = sequelize.define("AsignacionServicio", {
 }, {
     timestamps: false,
     tableName: "asignacionservicio",
-}); 
+});
 
 module.exports = AsignacionServicio;

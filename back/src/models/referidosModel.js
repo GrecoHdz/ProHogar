@@ -9,11 +9,23 @@ const Referido = sequelize.define("Referido", {
     },
     id_referidor: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_referido_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     fecha_referido: {
         type: DataTypes.DATE,

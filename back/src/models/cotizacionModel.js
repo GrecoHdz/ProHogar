@@ -9,11 +9,23 @@ const Cotizacion = sequelize.define("Cotizacion", {
     },
     id_solicitud: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'solicitudservicio',
+            key: 'id_solicitud'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_cuenta: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+            model: 'cuentas',
+            key: 'id_cuenta'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
     num_comprobante: {
         type: DataTypes.STRING,
@@ -35,9 +47,9 @@ const Cotizacion = sequelize.define("Cotizacion", {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    comentario:{
-        type:DataTypes.STRING,
-        allowNull:false
+    comentario: {
+        type: DataTypes.STRING,
+        allowNull: false
     },
     fecha: {
         type: DataTypes.DATE,
@@ -49,22 +61,22 @@ const Cotizacion = sequelize.define("Cotizacion", {
     }
 }, {
     timestamps: false,
-    tableName: "cotizaciones", 
-    indexes: [  
+    tableName: "cotizaciones",
+    indexes: [
         {
-          name: 'idx_cotizacion_id_solicitud',
-          fields: ['id_solicitud']
+            name: 'idx_cotizacion_id_solicitud',
+            fields: ['id_solicitud']
         },
         {
-          name: 'idx_cotizacion_solicitud_idcotizacion',
-          fields: ['id_solicitud', 'id_cotizacion']
+            name: 'idx_cotizacion_solicitud_idcotizacion',
+            fields: ['id_solicitud', 'id_cotizacion']
         },
         {
-          name: 'idx_cotizacion_estado',
-          fields: ['estado']
+            name: 'idx_cotizacion_estado',
+            fields: ['estado']
         }
-      ]
-      
+    ]
+
 });
 
 module.exports = Cotizacion;

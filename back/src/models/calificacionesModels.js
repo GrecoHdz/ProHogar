@@ -9,15 +9,33 @@ const Calificacion = sequelize.define('Calificacion', {
     },
     id_solicitud: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'solicitudservicio',
+            key: 'id_solicitud'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_usuario_calificado: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_usuario_calificador: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     calificacion: {
         type: DataTypes.TINYINT,
@@ -37,14 +55,14 @@ const Calificacion = sequelize.define('Calificacion', {
     timestamps: false,
     indexes: [
         {
-          name: 'idx_calificaciones_usuario_fecha',
-          fields: ['id_usuario_calificado', 'fecha']
+            name: 'idx_calificaciones_usuario_fecha',
+            fields: ['id_usuario_calificado', 'fecha']
         },
         {
-          name: 'idx_calificaciones_solicitud',
-          fields: ['id_solicitud']
+            name: 'idx_calificaciones_solicitud',
+            fields: ['id_solicitud']
         }
-      ]
+    ]
 });
 
 module.exports = Calificacion;

@@ -10,11 +10,23 @@ const Soporte = sequelize.define("Soporte", {
     },
     id_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_solicitud: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+            model: 'solicitudservicio',
+            key: 'id_solicitud'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
     asunto: {
         type: DataTypes.STRING,

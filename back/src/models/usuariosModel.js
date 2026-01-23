@@ -9,11 +9,23 @@ const Usuario = sequelize.define("Usuario", {
     },
     id_ciudad: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'ciudad',
+            key: 'id_ciudad'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_rol: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'roles',
+            key: 'id_rol'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     nombre: {
         type: DataTypes.STRING,
@@ -47,7 +59,7 @@ const Usuario = sequelize.define("Usuario", {
         defaultValue: DataTypes.NOW
     },
     estado: {
-        type: DataTypes.ENUM('activo', 'inactivo','deshabilitado'),
+        type: DataTypes.ENUM('activo', 'inactivo', 'deshabilitado'),
         allowNull: false,
         defaultValue: 'activo'
     },

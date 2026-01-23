@@ -9,11 +9,23 @@ const TecnicoServicio = sequelize.define("tecnico_servicio", {
     },
     id_tecnico: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'servicios',
+            key: 'id_servicio'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     }
 }, {
     timestamps: false,

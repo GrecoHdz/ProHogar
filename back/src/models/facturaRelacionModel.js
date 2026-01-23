@@ -13,7 +13,9 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         references: {
             model: 'facturas',
             key: 'id_factura'
-        }
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
 
     },
     id_pagovisita: {
@@ -22,7 +24,9 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         references: {
             model: 'pagovisita',
             key: 'id_pagovisita'
-        }
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
     id_cotizacion: {
         type: DataTypes.INTEGER,
@@ -30,7 +34,9 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         references: {
             model: 'cotizaciones',
             key: 'id_cotizacion'
-        }
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
     id_membresia: {
         type: DataTypes.INTEGER,
@@ -38,7 +44,9 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         references: {
             model: 'pagomembresia',
             key: 'id_membresia'
-        }
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
     id_pago_paquete: {
         type: DataTypes.INTEGER,
@@ -46,7 +54,9 @@ const FacturaRelacion = sequelize.define("FacturaRelacion", {
         references: {
             model: 'pago_paquete',
             key: 'id_pago_paquete'
-        }
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     }
 }, {
     timestamps: false,

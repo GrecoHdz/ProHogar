@@ -13,7 +13,13 @@ const RefreshToken = sequelize.define('RefreshToken', {
     },
     usuario_id: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     expires_at: {
         type: DataTypes.DATE,
@@ -42,6 +48,6 @@ const RefreshToken = sequelize.define('RefreshToken', {
             fields: ['expires_at']
         }
     ]
-}); 
+});
 
 module.exports = RefreshToken;

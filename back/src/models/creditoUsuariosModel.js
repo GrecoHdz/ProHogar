@@ -10,12 +10,18 @@ const CreditoUsuario = sequelize.define("CreditoUsuario", {
     id_usuario: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        unique: true
+        unique: true,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     monto_credito: {
         type: DataTypes.DECIMAL(10, 2), // 10 dígitos en total, 2 decimales
         allowNull: false
-    }, 
+    },
     fecha: {
         type: DataTypes.DATE,
         allowNull: true,
@@ -23,18 +29,18 @@ const CreditoUsuario = sequelize.define("CreditoUsuario", {
     }
 }, {
     timestamps: false,
-    tableName: "credito", 
-    indexes: [ 
+    tableName: "credito",
+    indexes: [
         {
-          name: 'idx_credito_usuario',
-          fields: ['id_usuario']
-        }, 
+            name: 'idx_credito_usuario',
+            fields: ['id_usuario']
+        },
         {
-          name: 'idx_credito_fecha',
-          fields: ['fecha']
+            name: 'idx_credito_fecha',
+            fields: ['fecha']
         }
-      ]
-      
+    ]
+
 });
 
 module.exports = CreditoUsuario;

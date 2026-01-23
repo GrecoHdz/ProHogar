@@ -9,11 +9,23 @@ const ServicioCiudad = sequelize.define("servicio_ciudad", {
     },
     id_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'servicios',
+            key: 'id_servicio'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_ciudad: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'ciudad',
+            key: 'id_ciudad'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     }
 }, {
     timestamps: false,

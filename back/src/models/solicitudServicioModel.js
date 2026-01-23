@@ -9,46 +9,70 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
     },
     id_usuario: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'servicios',
+            key: 'id_servicio'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
-    id_ciudad:{
+    id_ciudad: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'ciudad',
+            key: 'id_ciudad'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_tecnico: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+            model: 'usuario',
+            key: 'id_usuario'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
     },
-    colonia:{
+    colonia: {
         type: DataTypes.STRING,
         allowNull: false
     },
-    direccion_precisa:{
+    direccion_precisa: {
         type: DataTypes.STRING,
         allowNull: false
     },
-    descripcion:{
+    descripcion: {
         type: DataTypes.TEXT,
         allowNull: false
     },
-    fecha_solicitud:{
+    fecha_solicitud: {
         type: DataTypes.DATE,
         allowNull: true,
         defaultValue: DataTypes.NOW
     },
-    estado:{
-        type: DataTypes.ENUM("pendiente_pagovisita", "pendiente_asignacion", "verificando_pagovisita","asignado", "pendiente_cotizacion","en_proceso", "pendiente_pagoservicio", "verificando_pagoservicio", "finalizado","calificado", "cancelado"),
+    estado: {
+        type: DataTypes.ENUM("pendiente_pagovisita", "pendiente_asignacion", "verificando_pagovisita", "asignado", "pendiente_cotizacion", "en_proceso", "pendiente_pagoservicio", "verificando_pagoservicio", "finalizado", "calificado", "cancelado"),
         allowNull: false
     },
-    pagar_visita:{
+    pagar_visita: {
         type: DataTypes.BOOLEAN,
         allowNull: false
     },
-    comentario:{
+    comentario: {
         type: DataTypes.TEXT,
         allowNull: true
     }
@@ -57,18 +81,18 @@ const SolicitudServicio = sequelize.define("solicitudservicio", {
     tableName: "solicitudservicio",
     indexes: [
         {
-          name: 'idx_solicitud_tecnico_estado',
-          fields: ['id_tecnico', 'estado']
+            name: 'idx_solicitud_tecnico_estado',
+            fields: ['id_tecnico', 'estado']
         },
         {
-          name: 'idx_solicitud_tecnico_fecha',
-          fields: ['id_tecnico', 'fecha_solicitud']
+            name: 'idx_solicitud_tecnico_fecha',
+            fields: ['id_tecnico', 'fecha_solicitud']
         },
         {
-          name: 'idx_solicitud_servicio',
-          fields: ['id_servicio']
+            name: 'idx_solicitud_servicio',
+            fields: ['id_servicio']
         }
-      ]
+    ]
 });
 
 module.exports = SolicitudServicio;

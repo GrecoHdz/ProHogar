@@ -9,11 +9,23 @@ const PaqueteCiudad = sequelize.define("paquete_ciudad", {
     },
     id_paquete: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'paquetes',
+            key: 'id_paquete'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     },
     id_ciudad: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        references: {
+            model: 'ciudad',
+            key: 'id_ciudad'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
     }
 }, {
     timestamps: false,
