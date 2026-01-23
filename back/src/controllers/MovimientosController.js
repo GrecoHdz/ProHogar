@@ -1068,7 +1068,7 @@ const getAllMovimientos = async (req, res) => {
                     model: Cotizacion,
                     as: 'cotizacion',
                     required: false,
-                    attributes: ['id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
+                    attributes: ['id_cotizacion', 'id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado'],
                     include: [{
                         model: SolicitudServicio,
                         as: 'solicitud',
@@ -1107,6 +1107,7 @@ const getAllMovimientos = async (req, res) => {
 
             const base = {
                 id_movimiento: data.id_movimiento,
+                id_pago: data.tipo === 'ingreso_referido' ? null : (data.cotizacion?.id_cotizacion || data.id_movimiento),
                 id_solicitud: data.cotizacion?.id_solicitud || null,
                 descripcion: data.descripcion || null,
                 monto: monto,
@@ -1212,6 +1213,7 @@ const getAllMovimientos = async (req, res) => {
                 const d = m.get({ plain: true });
                 return {
                     id_movimiento: `membresia_${d.id_membresia}`,
+                    id_pago: d.id_membresia,
                     id_solicitud: null,
                     monto: parseFloat(d.monto || 0).toFixed(2),
                     fecha: d.fecha,
@@ -1227,6 +1229,7 @@ const getAllMovimientos = async (req, res) => {
                 const d = v.get({ plain: true });
                 return {
                     id_movimiento: `visita_${d.id_pagovisita}`,
+                    id_pago: d.id_pagovisita,
                     id_solicitud: d.id_solicitud || d.solicitud?.id_solicitud || null,
                     monto: parseFloat(d.monto || 0).toFixed(2),
                     fecha: d.fecha,
@@ -1244,6 +1247,7 @@ const getAllMovimientos = async (req, res) => {
                 const comision = (montoTotal * porcentajeComision) / 100;
                 return {
                     id_movimiento: `paquete_${d.id_pago_paquete}`,
+                    id_pago: null,
                     id_solicitud: d.id_paquete_usuario,
                     monto: comision.toFixed(2),
                     fecha: d.fecha,
@@ -1284,10 +1288,17 @@ const getAllMovimientos = async (req, res) => {
         const movimientosPaginados = todosLosMovimientos.slice(offset, offset + limitNum);
 
         // 7. Formatear fechas para la respuesta final
-        const resultadoFinal = movimientosPaginados.map(m => ({
-            ...m,
-            fecha: (m.fecha instanceof Date ? m.fecha : new Date(m.fecha)).toISOString().split('T')[0]
-        }));
+        const resultadoFinal = movimientosPaginados.map(m => {
+            const d = m.fecha instanceof Date ? m.fecha : new Date(m.fecha);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+
+            return {
+                ...m,
+                fecha: `${year}-${month}-${day}`
+            };
+        });
 
         res.json({
             success: true,
