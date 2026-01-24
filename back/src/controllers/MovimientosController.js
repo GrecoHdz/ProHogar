@@ -1421,11 +1421,28 @@ const obtenerEstadisticasDashboard = async (req, res) => {
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
 
+        // Obtener total de retiros completados
+        const totalRetiros = await Movimiento.sum('monto', {
+            where: {
+                tipo: 'retiro',
+                estado: 'completado',
+                ...(fechaInicio || fechaFin ? {
+                    fecha: {
+                        ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                        ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                    }
+                } : {})
+            }
+        }) || 0;
+
         // Calcular el total sumando todas las fuentes de ingreso
-        const ingresosTotales = (totalCotizaciones || 0) +
+        const ingresosGross = (totalCotizaciones || 0) +
             (ingresosMembresias || 0) +
             (ingresosVisitas || 0) +
             (ingresosPaquetes || 0);
+
+        // Calcular ingresos netos restando los retiros
+        const ingresosTotales = ingresosGross - totalRetiros;
 
         // Verificar si hay servicios pendientes (sin filtro de fecha)
         const serviciosPendientes = await SolicitudServicio.count({
@@ -1452,12 +1469,14 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             totalServiciosPendientes: serviciosPendientes || 0,
             membresiasPendiente: membresiasPendientes > 0 ? 'si' : 'no',
             totalMembresiasPendientes: membresiasPendientes || 0,
-            ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2),
+            ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2), // Ingresos netos (después de retiros)
             desgloseIngresos: {
                 servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
                 membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 visitas: parseFloat(ingresosVisitas || 0).toFixed(2),
-                paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2)
+                paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
+                ingresosGross: parseFloat(ingresosGross || 0).toFixed(2), // Total de ingresos brutos
+                retiros: parseFloat(totalRetiros || 0).toFixed(2) // Total de retiros
             }
         };
 
