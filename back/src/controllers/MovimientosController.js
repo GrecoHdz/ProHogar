@@ -1525,8 +1525,8 @@ const getMovimientosPorUsuario = async (req, res) => {
         };
 
         // Filtros por tipo
-        const esRetiro = tipo === 'retiros';
-        const esIngreso = tipo === 'ingresos';
+        const esRetiro = tipo === 'retiros' || tipo === 'retiro';
+        const esIngreso = tipo === 'ingresos' || tipo === 'ingreso';
 
         if (esRetiro) where.tipo = 'retiro';
         if (esIngreso) where.tipo = 'ingreso';

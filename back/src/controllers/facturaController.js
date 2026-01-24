@@ -414,7 +414,9 @@ const obtenerPendientesFacturacion = async (req, res) => {
         // Consulta de Membresías pendientes
         const membresias = await Membresia.findAll({
             where: {
-                estado: 'activa',
+                estado: {
+                    [Op.in]: ['activa', 'vencida']
+                },
                 [Op.and]: [
                     Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Membresia.fecha')), year),
                     Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Membresia.fecha')), monthNum)
