@@ -47,6 +47,10 @@ const Cotizacion = sequelize.define("Cotizacion", {
         type: DataTypes.INTEGER,
         allowNull: true
     },
+    monto_comision_app: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+    },
     comentario: {
         type: DataTypes.STRING,
         allowNull: false

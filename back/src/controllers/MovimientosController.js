@@ -781,7 +781,7 @@ const obtenerReporteIngresos = async (req, res) => {
         const [
             ingresosMembresias,
             ingresosVisitas,
-            cotizaciones,
+            ingresosServicios, // Ahora es el total directo
             totalRetiros,
             totalComisiones,
             sumatoriaMontoPaquetes
@@ -812,8 +812,8 @@ const obtenerReporteIngresos = async (req, res) => {
                     } : {})
                 }
             }),
-            // Obtener cotizaciones confirmadas para calcular ingresos por servicios
-            Cotizacion.findAll({
+            // Obtener total ingresos por servicios
+            Cotizacion.sum('monto_comision_app', {
                 where: {
                     estado: 'confirmado',
                     ...(fechaInicio || fechaFin ? {
@@ -822,10 +822,8 @@ const obtenerReporteIngresos = async (req, res) => {
                             ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
                         }
                     } : {})
-                },
-                attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
-                raw: true
-            }),
+                }
+            }) || 0,
             // Obtener total de retiros
             Movimiento.sum('monto', {
                 where: {
@@ -868,12 +866,6 @@ const obtenerReporteIngresos = async (req, res) => {
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
 
-        // Calcular ingresos por servicios (cotizaciones)
-        const ingresosServicios = cotizaciones.reduce((total, cotizacion) => {
-            const descuento = cotizacion.descuento_membresia || 0;
-            const credito = cotizacion.credito_usado || 0;
-            return total + (cotizacion.monto_manodeobra - descuento - credito);
-        }, 0);
 
         // Calcular ingresos totales (solo sumamos ingresos, no restamos retiros ni comisiones aquí)
         const ingresosTotales = (ingresosServicios || 0) +
@@ -934,7 +926,7 @@ const obtenerReporteIngresos = async (req, res) => {
             }) || 0;
 
             // Obtener ingresos por servicios (cotizaciones)
-            const cotizacionesMes = await Cotizacion.findAll({
+            const ingresosServiciosMes = await Cotizacion.sum('monto_comision_app', {
                 where: {
                     estado: 'confirmado',
                     fecha: {
@@ -943,16 +935,8 @@ const obtenerReporteIngresos = async (req, res) => {
                             fechaFin
                         ]
                     }
-                },
-                attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
-                raw: true
-            });
-
-            const ingresosServiciosMes = cotizacionesMes.reduce((total, cotizacion) => {
-                const descuento = cotizacion.descuento_membresia || 0;
-                const credito = cotizacion.credito_usado || 0;
-                return total + (cotizacion.monto_manodeobra - descuento - credito);
-            }, 0);
+                }
+            }) || 0;
 
             // Obtener retiros del mes
             const retirosMes = await Movimiento.sum('monto', {
@@ -1380,17 +1364,9 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             } : {})
         };
 
-        const cotizaciones = await Cotizacion.findAll({
-            where: whereCotizacion,
-            attributes: ['monto_manodeobra', 'descuento_membresia', 'credito_usado'],
-            raw: true
-        });
-
-        const totalCotizaciones = cotizaciones.reduce((total, cotizacion) => {
-            const descuento = cotizacion.descuento_membresia || 0;
-            const credito = cotizacion.credito_usado || 0;
-            return total + (cotizacion.monto_manodeobra - descuento - credito);
-        }, 0);
+        const totalCotizaciones = await Cotizacion.sum('monto_comision_app', {
+            where: whereCotizacion
+        }) || 0;
 
         // Obtener el porcentaje de comisión para paquetes
         const configComision = await Config.findOne({
@@ -2096,7 +2072,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 id_movimiento: datos.id_movimiento,
                 monto: parseFloat(datos.monto).toFixed(2),
                 fecha: new Date(datos.fecha).toISOString().split('T')[0],
-                estado: (datos.estado || '').toLowerCase() === 'completado' ? 'Completado' : 'Pendiente',
+                estado: (datos.estado || '').toLowerCase() === 'completado' ? 'Completado' : (datos.estado || '').toLowerCase() === 'rechazado' ? 'Rechazado' : 'Pendiente',
                 tipo: datos.tipo,
                 descripcion: datos.descripcion || (datos.tipo === 'retiro' ? 'Retiro de fondos' : 'Ingreso por referido')
             };

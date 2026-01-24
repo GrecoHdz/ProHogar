@@ -55,7 +55,7 @@ const getAllCotizaciones = async (req, res) => {
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'confirmado' THEN 1 END)"), 'aprobados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'rechazado' THEN 1 END)"), 'rechazados'],
                     [Sequelize.literal("COUNT(CASE WHEN estado = 'pagado' THEN 1 END)"), 'pendientes'],
-                    [Sequelize.literal("SUM(CASE WHEN estado = 'confirmado' THEN (monto_manodeobra - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)) ELSE 0 END)"), 'total']
+                    [Sequelize.literal("SUM(CASE WHEN estado = 'confirmado' THEN COALESCE(monto_comision_app, 0) ELSE 0 END)"), 'total']
                 ],
                 where: whereCondition,
                 raw: true
@@ -116,6 +116,7 @@ const getAllCotizaciones = async (req, res) => {
             descuento_membresia: c.descuento_membresia || 0,
             credito_usado: c.credito_usado || 0,
             monto_total: c.monto_manodeobra - (c.descuento_membresia || 0) - (c.credito_usado || 0),
+            monto_comision_app: c.monto_comision_app, // Incluido para reportes
             comentario: c.comentario,
             fecha: c.fecha,
             estado: c.estado,

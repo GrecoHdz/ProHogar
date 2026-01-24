@@ -1,10 +1,11 @@
-const Cotizacion = require("../models/cotizacionModel");   
-const SolicitudServicio = require("../models/solicitudServicioModel");   
-const Movimiento = require("../models/movimientosModel");   
+const Cotizacion = require("../models/cotizacionModel");
+const SolicitudServicio = require("../models/solicitudServicioModel");
+const Movimiento = require("../models/movimientosModel");
 const CreditoUsuario = require("../models/creditoUsuariosModel");
 const Referido = require("../models/referidosModel");
 const Config = require("../models/configModel");
- 
+const Membresia = require("../models/membresiaModel");
+
 
 const processPayment = async (req, res) => {
   const t = await Cotizacion.sequelize.transaction();
@@ -19,9 +20,9 @@ const processPayment = async (req, res) => {
       descuento_membresia,
       id_usuario,
       monto_credito,
-      id_referidor, 
+      id_referidor,
       nombre,
-      comision_referido 
+      comision_referido
     } = req.body;
 
     // Validaciones básicas
@@ -72,66 +73,98 @@ const processPayment = async (req, res) => {
     let movimientoReferidoCreado = null;
     if (referido && referido.id_referidor) {
       try {
-        const configComision = await Config.findOne({
-          where: { tipo_config: 'porcentaje_referido' },
+        // Verificar progreso de membresía
+        const configGracia = await Config.findOne({
+          where: { tipo_config: 'reset_credito' },
           transaction: t
         });
 
-        const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
-        const comision_referido_calc = Math.round(((porcentaje_comision * (montoManoDeObra) / 100) * 100) / 100); // 2 decimales
+        const diasGracia = parseInt(configGracia?.valor || '5', 10);
+        const diasPorMes = 30 + diasGracia;
 
-        if (comision_referido_calc > 0) {
-          // Evitar duplicados: comprobar si ya existe un movimiento pendiente para la misma cotización
-          const existeMovimiento = await Movimiento.findOne({
-            where: {
-              id_usuario: referido.id_referidor,
-              id_referido: id_usuario,
-              id_cotizacion,
-              tipo: 'ingreso_referido',
-              monto: comision_referido_calc,
-              estado: 'pendiente'
-            },
+        const ultimaMembresia = await Membresia.findOne({
+          where: {
+            id_usuario,
+            estado: ['activa', 'vencida']
+          },
+          order: [['fecha', 'DESC']],
+          transaction: t
+        });
+
+        let tieneProgreso = false;
+        if (ultimaMembresia) {
+          const hoy = new Date();
+          const fechaMembresia = new Date(ultimaMembresia.fecha);
+          const diffTiempo = hoy - fechaMembresia;
+          const diffDias = Math.floor(diffTiempo / (1000 * 60 * 60 * 24));
+
+          if (diffDias <= diasPorMes) {
+            tieneProgreso = true;
+          }
+        }
+
+        if (tieneProgreso) {
+          const configComision = await Config.findOne({
+            where: { tipo_config: 'porcentaje_referido' },
             transaction: t
           });
 
-          if (!existeMovimiento) {
-            movimientoReferidoCreado = await Movimiento.create(
-              {
+          const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
+          const comision_referido_calc = Math.round(((porcentaje_comision * (montoManoDeObra) / 100) * 100) / 100); // 2 decimales
+
+          if (comision_referido_calc > 0) {
+            // Evitar duplicados: comprobar si ya existe un movimiento pendiente para la misma cotización
+            const existeMovimiento = await Movimiento.findOne({
+              where: {
                 id_usuario: referido.id_referidor,
-                id_cotizacion, // <-- agregado
                 id_referido: id_usuario,
+                id_cotizacion,
                 tipo: 'ingreso_referido',
                 monto: comision_referido_calc,
-                descripcion: `Comisión por referido - ${nombre || ''}`,
-                estado: 'pendiente',
-                fecha: new Date()
+                estado: 'pendiente'
               },
-              { transaction: t }
-            );
-
-            // Actualizar o crear crédito del referidor
-            const creditoReferidor = await CreditoUsuario.findOne({
-              where: { id_usuario: referido.id_referidor },
               transaction: t
             });
 
-            const creditoAnterior = creditoReferidor ? parseFloat(creditoReferidor.monto_credito) || 0 : 0;
-            const nuevoCreditoReferidor = Math.round((creditoAnterior + comision_referido_calc) * 100) / 100;
+            if (!existeMovimiento) {
+              movimientoReferidoCreado = await Movimiento.create(
+                {
+                  id_usuario: referido.id_referidor,
+                  id_cotizacion, // <-- agregado
+                  id_referido: id_usuario,
+                  tipo: 'ingreso_referido',
+                  monto: comision_referido_calc,
+                  descripcion: `Comisión por referido - ${nombre || ''}`,
+                  estado: 'pendiente',
+                  fecha: new Date()
+                },
+                { transaction: t }
+              );
 
-            await CreditoUsuario.upsert(
-              {
-                id_usuario: referido.id_referidor,
-                monto_credito: nuevoCreditoReferidor,
-                fecha: new Date()
-              },
-              { transaction: t }
-            );
+              // Actualizar o crear crédito del referidor
+              const creditoReferidor = await CreditoUsuario.findOne({
+                where: { id_usuario: referido.id_referidor },
+                transaction: t
+              });
 
+              const creditoAnterior = creditoReferidor ? parseFloat(creditoReferidor.monto_credito) || 0 : 0;
+              const nuevoCreditoReferidor = Math.round((creditoAnterior + comision_referido_calc) * 100) / 100;
+
+              await CreditoUsuario.upsert(
+                {
+                  id_usuario: referido.id_referidor,
+                  monto_credito: nuevoCreditoReferidor,
+                  fecha: new Date()
+                },
+                { transaction: t }
+              );
+
+            } else {
+              // No se muestra mensaje de log para mantener silencioso
+            }
           } else {
             // No se muestra mensaje de log para mantener silencioso
           }
-        } else {
-          // No se muestra mensaje de log para mantener silencioso
         }
       } catch (errComision) {
         // No se muestra mensaje de log para mantener silencioso
@@ -188,9 +221,9 @@ const processPayment = async (req, res) => {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-}; 
- 
-const denyPayment = async (req, res) => { 
+};
+
+const denyPayment = async (req, res) => {
 
   const t = await Cotizacion.sequelize.transaction();
 
@@ -213,7 +246,7 @@ const denyPayment = async (req, res) => {
 
     // 2️⃣ Revertir cotización
     await cotizacion.update(
-      { 
+      {
         descuento_membresia: null,
         credito_usado: null,
         estado: 'rechazado'
@@ -243,7 +276,7 @@ const denyPayment = async (req, res) => {
           fecha: new Date()
         },
         { transaction: t }
-      ); 
+      );
     }
 
     // 5️⃣ Revertir comisión de referido (si existía)
@@ -284,7 +317,7 @@ const denyPayment = async (req, res) => {
             },
             { transaction: t }
           );
- 
+
         }
 
         // Borrar movimiento de comisión
@@ -328,7 +361,7 @@ const denyPayment = async (req, res) => {
     });
   }
 };
- 
+
 const acceptPayment = async (req, res) => {
   const t = await Cotizacion.sequelize.transaction();
 
@@ -353,8 +386,25 @@ const acceptPayment = async (req, res) => {
       throw new Error(`Solo se pueden aceptar cotizaciones con estado 'pagado'. Estado actual: '${cotizacion.estado}'`);
     }
 
-    // 4️⃣ Actualizar estados principales
-    await cotizacion.update({ estado: 'confirmado' }, { transaction: t });
+    // 3.5️⃣ Calcular comisión de la app
+    const configApp = await Config.findOne({
+      where: { tipo_config: 'comision_por_servicio' },
+      transaction: t
+    });
+    const porcentajeApp = configApp ? parseFloat(configApp.valor) || 0 : 0;
+
+    const manoObra = parseFloat(cotizacion.monto_manodeobra) || 0;
+    const descMembresia = parseFloat(cotizacion.descuento_membresia) || 0;
+    const credUsado = parseFloat(cotizacion.credito_usado) || 0;
+
+    const baseCalculo = Math.max(0, manoObra - descMembresia - credUsado);
+    const montoComisionApp = Math.round(((baseCalculo * porcentajeApp) / 100) * 100) / 100;
+
+    // 4️⃣ Actualizar estados principales y guardar comisión
+    await cotizacion.update({
+      estado: 'confirmado',
+      monto_comision_app: montoComisionApp
+    }, { transaction: t });
     await solicitud.update({ estado: 'finalizado' }, { transaction: t });
 
     // 5️⃣ Actualizar movimiento del técnico (si existe) buscando por id_cotizacion
@@ -374,6 +424,38 @@ const acceptPayment = async (req, res) => {
     }
 
     // 6️⃣ Actualizar movimiento del referido (si existe) buscando por id_cotizacion
+
+    // Verificar si el usuario tiene progreso de membresía
+    const configGracia = await Config.findOne({
+      where: { tipo_config: 'reset_credito' },
+      transaction: t
+    });
+
+    const diasGracia = parseInt(configGracia?.valor || '5', 10);
+    const diasPorMes = 30 + diasGracia;
+
+    const ultimaMembresia = await Membresia.findOne({
+      where: {
+        id_usuario: solicitud.id_usuario,
+        estado: ['activa', 'vencida']
+      },
+      order: [['fecha', 'DESC']],
+      transaction: t
+    });
+
+    let tieneProgreso = false;
+    if (ultimaMembresia) {
+      const hoy = new Date();
+      /* Asegurar que se comparen fechas sin horas si es necesario, pero diff básico funciona */
+      const fechaMembresia = new Date(ultimaMembresia.fecha);
+      const diffTiempo = hoy - fechaMembresia;
+      const diffDias = Math.floor(diffTiempo / (1000 * 60 * 60 * 24));
+
+      if (diffDias <= diasPorMes) {
+        tieneProgreso = true;
+      }
+    }
+
     const movimientoReferido = await Movimiento.findOne({
       where: {
         id_cotizacion,
@@ -385,7 +467,11 @@ const acceptPayment = async (req, res) => {
     });
 
     if (movimientoReferido) {
-      await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
+      if (tieneProgreso) {
+        await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
+      } else {
+        await movimientoReferido.destroy({ transaction: t });
+      }
     } else {
       // No se muestra mensaje de log para mantener silencioso
     }
@@ -401,7 +487,8 @@ const acceptPayment = async (req, res) => {
         nuevo_estado_cotizacion: 'confirmado',
         nuevo_estado_solicitud: 'finalizado',
         movimiento_tecnico: movimientoTecnico ? 'completado' : 'no encontrado',
-        movimiento_referido: movimientoReferido ? 'completado' : 'no encontrado'
+        movimiento_referido: movimientoReferido ? 'completado' : 'no encontrado',
+        id_referidor: movimientoReferido ? movimientoReferido.id_usuario : null
       }
     });
   } catch (error) {
