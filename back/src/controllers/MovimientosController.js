@@ -881,8 +881,8 @@ const obtenerReporteIngresos = async (req, res) => {
             (ingresosVisitas || 0) +
             (ingresosPaquetes || 0);
 
-        // Calcular ganancia neta (ingresos - retiros - comisiones)
-        const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
+        // Calcular ganancia neta (ingresos - retiros)
+        const gananciaNeta = ingresosTotales - (totalRetiros || 0);
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
