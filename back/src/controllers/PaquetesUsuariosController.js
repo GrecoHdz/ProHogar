@@ -8,6 +8,7 @@ const Config = require("../models/configModel");
 const FacturaRelacion = require("../models/facturaRelacionModel");
 const Factura = require("../models/facturaModel");
 const { Op, Sequelize } = require("sequelize");
+const Ciudad = require("../models/ciudadesModel");
 
 // Obtener todos los paquetes de un usuario
 const obtenerPaquetesUsuario = async (req, res) => {
@@ -94,7 +95,12 @@ const obtenerPaquetesPorEstado = async (req, res) => {
             },
             {
                 model: Usuario,
-                attributes: ['id_usuario', 'nombre', 'telefono', 'email']
+                attributes: ['id_usuario', 'nombre', 'telefono', 'email', 'id_ciudad'],
+                include: [{
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['nombre_ciudad']
+                }]
             }
         ];
 
