@@ -146,7 +146,7 @@ const getTransacciones = async (req, res) => {
 
             return {
                 id_movimiento: data.id_movimiento,
-                descripcion: data.descripcion || 'Transacción',
+                descripcion: data.descripcion || 'Ingreso por Servicio',
                 monto: parseFloat(data.monto),
                 tipo: data.tipo,
                 fecha: data.fecha,
