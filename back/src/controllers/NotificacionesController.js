@@ -4,6 +4,7 @@ const Notificacion = require("../models/notificacionesModel");
 const NotificacionDestinatario = require("../models/notificacionesDestinatariosModel");
 const Usuario = require("../models/usuariosModel"); // opcional si manejas roles
 const Rol = require("../models/rolesModel");
+const Ciudad = require("../models/ciudadesModel");
 
 // ============================================================
 // 1️⃣ Obtener todas las notificaciones del sistema
@@ -174,8 +175,15 @@ const crearNotificacion = async (req, res) => {
 // 4️⃣ Enviar notificación (a usuario, rol o global)
 // ============================================================
 const enviarNotificacion = async (req, res) => {
-  let { id_notificacion, titulo, id_usuario, nombre_rol, global } = req.body;
+  console.log('📤 Solicitud recibida:', {
+    body: req.body,
+    params: req.params,
+    query: req.query
+  });
+
+  let { id_notificacion, titulo, id_usuario, nombre_rol, global, id_ciudad } = req.body;
   const t = await sequelize.transaction();
+  let ciudad = null; // Declarar la variable en el ámbito de la función
 
   try {
     let notificacion = null;
@@ -214,7 +222,7 @@ const enviarNotificacion = async (req, res) => {
     let destinatarios = [];
 
     // 📍 3️⃣ Enviar a un usuario específico
-    if (id_usuario && !global && !nombre_rol) {
+    if (id_usuario && !global && !nombre_rol && !id_ciudad) {
       destinatarios.push({
         id_notificacion,
         id_usuario,
@@ -223,8 +231,77 @@ const enviarNotificacion = async (req, res) => {
         fecha_leido: null
       });
     }
-    // 📍 4️⃣ Enviar a todos los usuarios de un rol
-    else if (nombre_rol && !global) {
+    // 🌆 4️⃣ Enviar a todos los usuarios de una ciudad con o sin filtro de rol
+    else if (id_ciudad && !global) {
+      // Verificar que la ciudad existe
+      ciudad = await Ciudad.findByPk(id_ciudad, {
+        attributes: ['id_ciudad', 'nombre_ciudad'],
+        raw: true
+      });
+
+      if (!ciudad) {
+        await t.rollback();
+        return res.status(404).json({
+          success: false,
+          message: `No se encontró la ciudad con ID ${id_ciudad}`
+        });
+      }
+
+      // Construir el objeto de condiciones para la consulta
+      const whereClause = { id_ciudad };
+      
+      // Si se especificó un rol, agregarlo a las condiciones
+      if (nombre_rol) {
+        const rol = await Rol.findOne({
+          where: { nombre_rol },
+          attributes: ['id_rol'],
+          raw: true
+        });
+
+        if (!rol) {
+          await t.rollback();
+          return res.status(404).json({
+            success: false,
+            message: `No se encontró el rol '${nombre_rol}'`
+          });
+        }
+        
+        whereClause.id_rol = rol.id_rol;
+      }
+
+      // Obtener los usuarios que cumplan con los filtros
+      const usuarios = await Usuario.findAll({
+        where: whereClause,
+        attributes: ['id_usuario']
+      });
+
+      if (usuarios.length === 0) {
+        await t.rollback();
+        const mensaje = nombre_rol 
+          ? `No hay usuarios con el rol '${nombre_rol}' en la ciudad '${ciudad.nombre_ciudad}'`
+          : `No hay usuarios registrados en la ciudad '${ciudad.nombre_ciudad}'`;
+        
+        return res.status(404).json({
+          success: false,
+          message: mensaje
+        });
+      }
+
+      destinatarios = usuarios.map(u => ({
+        id_notificacion,
+        id_usuario: u.id_usuario,
+        leido: false,
+        fecha_creacion: new Date(),
+        fecha_leido: null
+      }));
+
+      // Actualizar el tipo de envío para incluir ambos filtros si es necesario
+      let tipoEnvio = nombre_rol 
+        ? `Ciudad: ${ciudad.nombre_ciudad}, Rol: ${nombre_rol}`
+        : `Ciudad: ${ciudad.nombre_ciudad}`;
+    }
+    // 📍 5️⃣ Enviar a todos los usuarios de un rol (solo si no se especificó ciudad)
+    else if (nombre_rol && !global && !id_ciudad) {
       const rolUsuario = await Rol.findOne({
         where: { nombre_rol },
         attributes: ['id_rol'],
@@ -244,6 +321,14 @@ const enviarNotificacion = async (req, res) => {
         attributes: ['id_usuario']
       });
 
+      if (usuarios.length === 0) {
+        await t.rollback();
+        return res.status(404).json({
+          success: false,
+          message: `No hay usuarios con el rol '${nombre_rol}'`
+        });
+      }
+
       destinatarios = usuarios.map(u => ({
         id_notificacion,
         id_usuario: u.id_usuario,
@@ -251,8 +336,10 @@ const enviarNotificacion = async (req, res) => {
         fecha_creacion: new Date(),
         fecha_leido: null
       }));
+
+      let tipoEnvio = `Rol: ${nombre_rol}`;
     }
-    // 🌍 5️⃣ Enviar como notificación global (a TODOS los usuarios)
+    // 🌍 6️⃣ Enviar como notificación global (a TODOS los usuarios)
     else if (global) {
       const todosUsuarios = await Usuario.findAll({
         attributes: ['id_usuario']
@@ -279,7 +366,7 @@ const enviarNotificacion = async (req, res) => {
       await t.rollback();
       return res.status(400).json({
         success: false,
-        message: "Debes especificar id_usuario, nombre_rol o global=true. También puedes usar 'titulo' en lugar de id_notificacion."
+        message: "Debes especificar id_usuario, id_ciudad, nombre_rol o global=true. También puedes usar 'titulo' en lugar de id_notificacion."
       });
     }
 
@@ -290,24 +377,54 @@ const enviarNotificacion = async (req, res) => {
 
     await t.commit();
 
-    res.json({
+    console.log('📊 Notificación enviada:', {
+      id_notificacion,
+      titulo: notificacion.titulo,
+      cantidad_destinatarios: destinatarios.length,
+      tipo_envio: global ? 'Global' : 
+        (nombre_rol ? `Rol: ${nombre_rol}` : 
+        (id_ciudad ? `Ciudad: ${ciudad?.nombre_ciudad || id_ciudad}` : 'Usuario individual'))
+    });
+
+    const respuesta = {
       success: true,
       message: "Notificación enviada correctamente",
       data: {
         id_notificacion,
         titulo: notificacion.titulo,
         cantidad_destinatarios: destinatarios.length,
-        tipo_envio: global ? 'Global' : (nombre_rol ? `Rol: ${nombre_rol}` : 'Usuario individual')
+        tipo_envio: global ? 'Global' : 
+          (nombre_rol ? `Rol: ${nombre_rol}` : 
+          (id_ciudad ? `Ciudad: ${ciudad?.nombre_ciudad || id_ciudad}` : 'Usuario individual'))
       }
-    });
+    };
+
+    console.log('📤 Enviando respuesta:', JSON.stringify(respuesta, null, 2));
+    res.json(respuesta);
   } catch (error) {
-    await t.rollback();
-    console.error("Error al enviar notificación:", error);
-    res.status(500).json({
+    if (t && !t.finished) {
+      await t.rollback();
+    }
+
+    console.error('❌ Error al enviar notificación:', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+
+    const errorResponse = {
       success: false,
       message: "Error al enviar notificación",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+      error: error.message,
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        details: error.details || error.original?.message
+      })
+    };
+
+    console.log('📤 Enviando respuesta de error:', JSON.stringify(errorResponse, null, 2));
+    res.status(500).json(errorResponse);
   }
 };
 

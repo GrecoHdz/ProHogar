@@ -94,6 +94,10 @@ router.post(
       .optional()
       .isBoolean()
       .withMessage("El campo global debe ser true o false"),
+    body("id_ciudad")
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage("El ID de ciudad debe ser un número entero positivo"),
   ],
   validarErrores,
   enviarNotificacion
