@@ -147,8 +147,6 @@ const crearRelacionFactura = async (req, res) => {
             });
         }
 
-        console.log('Creando relación manual:', { id_factura, id_pago_paquete });
-
         const existe = await FacturaRelacion.findOne({
             where: { id_factura }
         });

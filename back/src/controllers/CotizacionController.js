@@ -136,8 +136,6 @@ const getAllCotizaciones = async (req, res) => {
             estadisticas: monthlyStats
         };
 
-        console.log('📦 getAllCotizaciones response:', JSON.stringify(response, null, 2));
-
         res.json(response);
 
     } catch (error) {
@@ -266,8 +264,6 @@ const getCotizacionPorId = async (req, res) => {
             hasMore: false,
             estadisticas
         };
-
-        console.log('📦 getCotizacionPorId response:', JSON.stringify(response, null, 2));
 
         return res.json(response);
 

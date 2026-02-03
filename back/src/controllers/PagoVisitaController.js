@@ -430,7 +430,6 @@ const crearPago = async (req, res) => {
 
         // Si existe un pago previo, eliminarlo
         if (pagoExistente) {
-            console.log(`♻️ [DEBUG] Eliminando pago existente para la solicitud ${id_solicitud}:`, pagoExistente.id_pagovisita);
             await pagoExistente.destroy({ transaction: t });
         }
 
@@ -491,8 +490,6 @@ const confirmarPagoVisita = async (req, res) => {
     try {
         const { id_solicitud } = req.body;
 
-        console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/confirmar:', req.body);
-
         // 1️⃣ Buscar el pago de visita por id_solicitud
         const pagoVisita = await PagoVisita.findOne({
             where: { id_solicitud },
@@ -522,8 +519,6 @@ const confirmarPagoVisita = async (req, res) => {
             }
         );
 
-        console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} confirmado y actualizado a 'pendiente_asignacion'.`);
-
         // ✅ Confirmar transacción
         await t.commit();
 
@@ -549,8 +544,6 @@ const denegarPagoVisita = async (req, res) => {
 
     try {
         const { id_solicitud } = req.body;
-
-        console.log('🛰️ [DEBUG] Datos recibidos en /pagovisita/denegar:', req.body);
 
         // 1️⃣ Buscar el pago de visita por id_solicitud
         const pagoVisita = await PagoVisita.findOne({
@@ -580,8 +573,6 @@ const denegarPagoVisita = async (req, res) => {
                 transaction: t
             }
         );
-
-        console.log(`✅ [DEBUG] Pago de visita para la solicitud ${id_solicitud} denegado y actualizado a 'pendiente_pagovisita'.`);
 
         // ✅ Confirmar transacción
         await t.commit();

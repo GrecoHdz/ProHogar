@@ -198,19 +198,13 @@ const crearFactura = async (req, res) => {
             facturaData.nombre_cliente = 'CONSUMIDOR FINAL';
         }
 
-        console.log('--- Creando Factura ---');
-        console.log('Body recibido:', JSON.stringify(req.body, null, 2));
-
         const factura = await Factura.create(facturaData, { transaction });
-        console.log('Factura creada ID:', factura.id_factura);
 
         // Extraer IDs de relación explícitamente
         const id_pagovisita = req.body.id_pagovisita || null;
         const id_cotizacion = req.body.id_cotizacion || null;
         const id_membresia = req.body.id_membresia || null;
         const id_pago_paquete = req.body.id_pago_paquete || null;
-
-        console.log('IDs para relación:', { id_pagovisita, id_cotizacion, id_membresia, id_pago_paquete });
 
         const relacion = await FacturaRelacion.create({
             id_factura: factura.id_factura,
@@ -219,8 +213,6 @@ const crearFactura = async (req, res) => {
             id_membresia,
             id_pago_paquete
         }, { transaction });
-
-        console.log('Relación creada ID:', relacion.id);
 
         await FacturaCorrelativo.update(
             { correlativo_actual: nuevoCorrelativo },

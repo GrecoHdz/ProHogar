@@ -34,7 +34,6 @@ const getCreditoPorUsuario = async (req, res) => {
   
       // Si el usuario no tiene registro de crédito, devolver monto 0 sin error
       if (!credito) {
-        console.log(`ℹ️ [INFO] Usuario ${id_usuario} no tiene crédito registrado. Retornando 0.`);
         return res.json({
           success: true,
           data: {

@@ -227,12 +227,7 @@ const crearPaquete = async (req, res) => {
 
 // Actualizar un paquete existente
 const actualizarPaquete = async (req, res) => {
-    try {
-        console.log('=== Datos recibidos en el servidor ===');
-        console.log('Params:', req.params);
-        console.log('Body:', req.body);
-        console.log('File:', req.file);
-        console.log('Headers:', req.headers);
+        try {
         
         const { id } = req.params;
         const { nombre, descripcion, costo, estado, cantidad, id_ciudades } = req.body;

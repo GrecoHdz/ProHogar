@@ -175,11 +175,6 @@ const crearNotificacion = async (req, res) => {
 // 4️⃣ Enviar notificación (a usuario, rol o global)
 // ============================================================
 const enviarNotificacion = async (req, res) => {
-  console.log('📤 Solicitud recibida:', {
-    body: req.body,
-    params: req.params,
-    query: req.query
-  });
 
   let { id_notificacion, titulo, id_usuario, nombre_rol, global, id_ciudad } = req.body;
   const t = await sequelize.transaction();
@@ -377,15 +372,6 @@ const enviarNotificacion = async (req, res) => {
 
     await t.commit();
 
-    console.log('📊 Notificación enviada:', {
-      id_notificacion,
-      titulo: notificacion.titulo,
-      cantidad_destinatarios: destinatarios.length,
-      tipo_envio: global ? 'Global' : 
-        (nombre_rol ? `Rol: ${nombre_rol}` : 
-        (id_ciudad ? `Ciudad: ${ciudad?.nombre_ciudad || id_ciudad}` : 'Usuario individual'))
-    });
-
     const respuesta = {
       success: true,
       message: "Notificación enviada correctamente",
@@ -399,7 +385,6 @@ const enviarNotificacion = async (req, res) => {
       }
     };
 
-    console.log('📤 Enviando respuesta:', JSON.stringify(respuesta, null, 2));
     res.json(respuesta);
   } catch (error) {
     if (t && !t.finished) {
@@ -423,7 +408,6 @@ const enviarNotificacion = async (req, res) => {
       })
     };
 
-    console.log('📤 Enviando respuesta de error:', JSON.stringify(errorResponse, null, 2));
     res.status(500).json(errorResponse);
   }
 };

@@ -428,7 +428,6 @@ const forgotPassword = async (req, res) => {
     // Por seguridad, siempre devolvemos éxito aunque el correo no exista
     // Esto evita que se puedan enumerar correos electrónicos
     if (!user) {
-      console.log(`Intento de recuperación para correo no registrado: ${email}`);
       return res.status(200).json({
         success: true,
         message: 'Si el correo existe, se ha enviado un enlace de restablecimiento.'
@@ -478,8 +477,6 @@ const forgotPassword = async (req, res) => {
 
     // Enviar el correo electrónico
     await transporter.sendMail(mailOptions);
-
-    console.log('Correo de recuperación enviado a:', user.email);
 
     res.status(200).json({
       success: true,
