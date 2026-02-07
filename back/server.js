@@ -63,11 +63,12 @@ const corsOptions = {
     // Permitir solicitudes sin 'origin' (como aplicaciones móviles o curl)
     if (!origin) return callback(null, true);
 
-    // Lista blanca de orígenes permitidos
+     // Lista blanca de orígenes permitidos
     const allowedOrigins = [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      process.env.FRONTEND_URL
+      'http://localhost:5173',      // Vite dev (frontend local)
+      'http://localhost:3000',      // Posible puerto alternativo
+      'http://127.0.0.1:5173',
+      process.env.FRONTEND_URL      // Vercel en producción
     ].filter(Boolean); // Elimina valores undefined
 
     if (allowedOrigins.includes(origin) || !origin) {
