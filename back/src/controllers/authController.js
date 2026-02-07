@@ -449,14 +449,14 @@ const forgotPassword = async (req, res) => {
 
     // Configurar el correo electrónico
     const mailOptions = {
-      from: `"HogarSeguro" <${process.env.EMAIL_USER}>`,
+      from: `"MiSeguro" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: 'Restablece tu contraseña de HogarSeguro',
+      subject: 'Restablece tu contraseña de MiSeguro',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #10B981;">Restablece tu contraseña</h2>
           <p>Hola ${user.nombre},</p>
-          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de HogarSeguro.</p>
+          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de MiSeguro.</p>
           <p>Por favor, haz clic en el siguiente enlace para crear una nueva contraseña:</p>
           <p>
             <a href="${resetUrl}" 

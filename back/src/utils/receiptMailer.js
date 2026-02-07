@@ -34,11 +34,11 @@ const sendReceiptEmail = async (userEmail, facturaData, empresaConfig) => {
 
     let concepto = "Pago de Servicio Profesional";
     if (id_membresia) {
-        concepto = "Servicio de acceso y uso de plataforma tecnológica HogarSeguro, correspondiente a membresía de beneficios y gestión de servicios.";
+        concepto = "Servicio de acceso y uso de plataforma tecnológica MiSeguro, correspondiente a membresía de beneficios y gestión de servicios.";
     } else if (id_pagovisita) {
-        concepto = "Servicio de intermediación tecnológica, coordinación y gestión de visita técnica para evaluación y diagnóstico de servicio solicitado a través de la plataforma HogarSeguro.";
+        concepto = "Servicio de intermediación tecnológica, coordinación y gestión de visita técnica para evaluación y diagnóstico de servicio solicitado a través de la plataforma MiSeguro.";
     } else if (id_cotizacion) {
-        concepto = "Servicio de intermediación tecnológica, coordinación y gestión de pagos por servicios técnicos prestados por técnicos independientes a través de la plataforma HogarSeguro.";
+        concepto = "Servicio de intermediación tecnológica, coordinación y gestión de pagos por servicios técnicos prestados por técnicos independientes a través de la plataforma MiSeguro.";
     }
 
     const htmlContent = `

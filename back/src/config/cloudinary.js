@@ -15,7 +15,7 @@ cloudinary.config({
 const profileStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'HogarSeguro/usuarios/perfiles',
+    folder: 'MiSeguro/usuarios/perfiles',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [{
       width: 800,
@@ -38,7 +38,7 @@ const profileStorage = new CloudinaryStorage({
 const packageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'HogarSeguro/paquetes',
+    folder: 'MiSeguro/paquetes',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [{
       width: 1200,

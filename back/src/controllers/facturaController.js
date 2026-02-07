@@ -242,7 +242,7 @@ const crearFactura = async (req, res) => {
                     });
 
                     const empresaConfig = {
-                        nombre: configs.find(c => c.tipo_config === 'empresa_nombre')?.valor || 'HogarSeguro',
+                        nombre: configs.find(c => c.tipo_config === 'empresa_nombre')?.valor || 'MiSeguro',
                         rtn: configs.find(c => c.tipo_config === 'rtn')?.valor || '',
                         email: configs.find(c => c.tipo_config === 'correo_empresa')?.valor || '',
                         telefono: configs.find(c => c.tipo_config === 'numero_empresa')?.valor || ''
@@ -262,7 +262,8 @@ const crearFactura = async (req, res) => {
                         id_membresia: req.body.id_membresia
                     };
 
-                    await sendReceiptEmail(userEmail, facturaParaEmail, empresaConfig);
+                    //Enviar correo de Recibo manualmente escaneado para que tenga validez
+                    //await sendReceiptEmail(userEmail, facturaParaEmail, empresaConfig);
                 }
             } catch (emailError) {
                 console.error("❌ Error al enviar email de factura:", emailError);
