@@ -59,22 +59,7 @@ app.use(cookieParser());
 console.log("CORS origin:", process.env.FRONTEND_URL);
 // Configuración de CORS
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Permitir solicitudes sin 'origin' (como aplicaciones móviles o curl)
-    if (!origin) return callback(null, true);
-
-     // Lista blanca de orígenes permitidos
-    const allowedOrigins = [
-     'https://front-six-lemon.vercel.app',
-      process.env.FRONTEND_URL      // Vercel en producción
-    ].filter(Boolean); // Elimina valores undefined
-
-    if (allowedOrigins.includes(origin) || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('No permitido por CORS'));
-    }
-  },
+  origin: true,
   credentials: true,
   optionsSuccessStatus: 200,
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'Pragma'],
