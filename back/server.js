@@ -59,7 +59,28 @@ app.use(cookieParser());
 console.log("CORS origin:", process.env.FRONTEND_URL);
 // Configuración de CORS
 const corsOptions = {
-  origin: true,
+  origin: function (origin, callback) {
+    // Permitir solicitudes sin origin (Postman, apps móviles)
+    if (!origin) return callback(null, true);
+
+    // Lista de orígenes permitidos
+    const allowedOrigins = [
+      'https://front-six-lemon.vercel.app',  // URL principal
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL
+    ];
+
+    // Permitir todas las URLs de Vercel de tu proyecto
+    const isVercelPreview = origin && origin.includes('miseguros-projects-00c1e523.vercel.app');
+    
+    if (allowedOrigins.includes(origin) || isVercelPreview) {
+      callback(null, true);
+    } else {
+      console.log('❌ Origen bloqueado por CORS:', origin);
+      callback(new Error('No permitido por CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'Pragma'],
