@@ -65,9 +65,9 @@ const corsOptions = {
 
      // Lista blanca de orígenes permitidos
     const allowedOrigins = [
-      'http://localhost:5173',      // Vite dev (frontend local)
-      'http://localhost:3000',      // Posible puerto alternativo
-      'http://127.0.0.1:5173',
+      'https://front-six-lemon.vercel.app/:3000',      // Vite dev (frontend local)
+      'https://front-git-master-miseguros-projects-00c1e523.vercel.app/:3000',      // Posible puerto alternativo
+      'https://front-eemg9giao-miseguros-projects-00c1e523.vercel.app/:3000',
       process.env.FRONTEND_URL      // Vercel en producción
     ].filter(Boolean); // Elimina valores undefined
 
