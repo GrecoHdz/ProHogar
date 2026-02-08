@@ -54,6 +54,7 @@ const clearAllAuthCookies = (res) => {
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/',
+    partitioned: process.env.NODE_ENV === 'production',
   };
 
   res.clearCookie('refreshToken', cookieOptions);
@@ -114,6 +115,7 @@ const login = async (req, res) => {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
+        partitioned: process.env.NODE_ENV === 'production',
       });
 
       // Cookie accesible desde JS con el access token
@@ -123,6 +125,7 @@ const login = async (req, res) => {
         sameSite: 'lax',
         maxAge: 15 * 60 * 1000,
         path: '/',
+        partitioned: process.env.NODE_ENV === 'production',
       });
 
       // Cookie con datos del usuario
@@ -132,6 +135,7 @@ const login = async (req, res) => {
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
+        partitioned: process.env.NODE_ENV === 'production',
       });
 
       await t.commit();
@@ -322,6 +326,7 @@ const refreshToken = async (req, res) => {
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
+      partitioned: process.env.NODE_ENV === 'production',
     });
 
     res.cookie('token', newAccessToken, {
@@ -330,6 +335,7 @@ const refreshToken = async (req, res) => {
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
       maxAge: 15 * 60 * 1000,
       path: '/',
+      partitioned: process.env.NODE_ENV === 'production',
     });
 
     res.cookie('user', JSON.stringify(userForCookie), {
@@ -338,6 +344,7 @@ const refreshToken = async (req, res) => {
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
+      partitioned: process.env.NODE_ENV === 'production',
     });
 
     await t.commit();
