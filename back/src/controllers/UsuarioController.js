@@ -171,7 +171,7 @@ const obtenerUsuarios = async (req, res) => {
                         where: { estado: 'activa' }
                     }
                 ],
-                group: ['usuario.id_usuario'],
+                group: ['Usuario.id_usuario'],
                 order: [['fecha_registro', 'DESC']],
                 limit,
                 offset,
