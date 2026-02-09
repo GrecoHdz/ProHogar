@@ -40,13 +40,12 @@ setupAssociations();
 
 // Configuración de cookies
 const cookieConfig = {
-  httpOnly: true, // Evita acceso desde JavaScript (seguridad)
-  secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Crítico para cross-site
-  partitioned: process.env.NODE_ENV === 'production', // Para Chrome/Edge moderno
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production', // En producción, solo enviar sobre HTTPS
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Para desarrollo local
+  partitioned: process.env.NODE_ENV === 'production',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-  path: '/', // Disponible en todas las rutas
-  domain: undefined, // No especificar dominio (más seguro)
+  path: '/',
 };
 //Middleware para configurar la configuración de cookies en todas las rutas
 app.use((req, res, next) => {
