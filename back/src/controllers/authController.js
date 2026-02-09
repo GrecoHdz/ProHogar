@@ -20,8 +20,8 @@ const generateAccessToken = (user) => {
       id: user.id_usuario,
       identidad: user.identidad,
       rol: user.id_rol,
-      estado: user.estado, // Incluir estado en el token
-      role: (user.rol && user.rol.nombre_rol) || 'usuario' // Incluir el rol en el token
+      estado: user.estado,
+      role: (user.rol && user.rol.nombre_rol) || 'usuario'
     },
     process.env.JWT_SECRET,
     { expiresIn: '15m' }
@@ -76,7 +76,6 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
     }
 
-    // Verificar la contraseña hasheada
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
@@ -85,7 +84,6 @@ const login = async (req, res) => {
     const t = await sequelize.transaction();
 
     try {
-      // Eliminar cualquier refresh token existente para este usuario
       await RefreshToken.destroy({
         where: { usuario_id: user.id_usuario },
         transaction: t
@@ -94,13 +92,9 @@ const login = async (req, res) => {
       const accessToken = generateAccessToken(user);
       const refreshToken = await generateRefreshToken(user, t);
 
-      // Crear objeto de usuario limpio
       const userData = user.get({ plain: true });
       delete userData.password_hash;
 
-      userData.role = user.rol && user.rol.nombre_rol;
-
-      // Crear objeto con solo los datos necesarios para el frontend
       const userForCookie = {
         id_usuario: userData.id_usuario,
         nombre: userData.nombre,
@@ -108,7 +102,7 @@ const login = async (req, res) => {
         id_ciudad: userData.id_ciudad || 1
       };
 
-      // Cookie HTTP-Only para el refresh token
+      // ✅ RefreshToken - HTTP-Only (segura, cross-domain)
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -118,21 +112,21 @@ const login = async (req, res) => {
         partitioned: process.env.NODE_ENV === 'production',
       });
 
-      // Cookie accesible desde JS con el access token
+      // ✅ Access Token - Accesible desde JS (cross-domain)
       res.cookie('token', accessToken, {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 15 * 60 * 1000,
         path: '/',
         partitioned: process.env.NODE_ENV === 'production',
       });
 
-      // Cookie con datos del usuario
+      // ✅ User data - Accesible desde JS (cross-domain)
       res.cookie('user', JSON.stringify(userForCookie), {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
         partitioned: process.env.NODE_ENV === 'production',
@@ -176,7 +170,6 @@ const refreshToken = async (req, res) => {
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET, { ignoreExpiration: true });
 
-        // Buscar al usuario
         const user = await Usuario.findByPk(decoded.id, {
           include: [
             { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
@@ -184,20 +177,16 @@ const refreshToken = async (req, res) => {
           ]
         });
 
-        // Eliminar cualquier refresh token existente para este usuario
         await RefreshToken.destroy({
           where: { usuario_id: user.id_usuario },
           transaction: t
         });
 
-        // Generar nuevos tokens
         const newAccessToken = generateAccessToken(user);
         const newRefreshToken = await generateRefreshToken(user, t);
 
-        // Preparar datos del usuario
         const userData = user.get({ plain: true });
         delete userData.password_hash;
-        userData.role = user.rol?.nombre_rol?.toLowerCase() || 'usuario';
 
         const userForCookie = {
           id_usuario: userData.id_usuario,
@@ -206,29 +195,32 @@ const refreshToken = async (req, res) => {
           id_ciudad: userData.id_ciudad || 1
         };
 
-        // Establecer cookies
-        const cookieOptions = {
+        // ✅ Todas las cookies con sameSite: 'none' en producción
+        res.cookie('refreshToken', newRefreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
           path: '/',
-        };
-
-        res.cookie('refreshToken', newRefreshToken, {
-          ...cookieOptions,
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+          partitioned: process.env.NODE_ENV === 'production',
         });
 
         res.cookie('token', newAccessToken, {
-          ...cookieOptions,
           httpOnly: false,
-          maxAge: 15 * 60 * 1000, // 15 minutos
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 15 * 60 * 1000,
+          path: '/',
+          partitioned: process.env.NODE_ENV === 'production',
         });
 
         res.cookie('user', JSON.stringify(userForCookie), {
-          ...cookieOptions,
           httpOnly: false,
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          path: '/',
+          partitioned: process.env.NODE_ENV === 'production',
         });
 
         await t.commit();
@@ -284,7 +276,7 @@ const refreshToken = async (req, res) => {
       });
     }
 
-    // 🔹 VERIFICAR EXPIRACIÓN DEL REFRESH TOKEN
+    // Verificar expiración del refresh token
     if (new Date() > storedToken.expires_at) {
       await storedToken.destroy({ transaction: t });
       clearAllAuthCookies(res);
@@ -296,7 +288,6 @@ const refreshToken = async (req, res) => {
     }
 
     const user = storedToken.usuario;
-
     const newAccessToken = generateAccessToken(user);
 
     // Destruir el refresh token antiguo y crear uno nuevo
@@ -319,11 +310,10 @@ const refreshToken = async (req, res) => {
       estado: userData.estado
     };
 
-    // Establecer todas las cookies
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
       partitioned: process.env.NODE_ENV === 'production',
@@ -332,7 +322,7 @@ const refreshToken = async (req, res) => {
     res.cookie('token', newAccessToken, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
       maxAge: 15 * 60 * 1000,
       path: '/',
       partitioned: process.env.NODE_ENV === 'production',
@@ -341,7 +331,7 @@ const refreshToken = async (req, res) => {
     res.cookie('user', JSON.stringify(userForCookie), {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
       partitioned: process.env.NODE_ENV === 'production',
@@ -404,7 +394,6 @@ const getCurrentUser = async (req, res) => {
     }
 
     const userData = user.get({ plain: true });
-    // Mantener solo el nombre_rol en el objeto rol
     if (userData.rol) {
       userData.rol = { nombre_rol: user.rol.nombre_rol };
     }
@@ -426,14 +415,11 @@ const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
   try {
-    // Buscar el usuario por email
     const user = await Usuario.findOne({
       where: { email },
       attributes: ['id_usuario', 'nombre', 'email']
     });
 
-    // Por seguridad, siempre devolvemos éxito aunque el correo no exista
-    // Esto evita que se puedan enumerar correos electrónicos
     if (!user) {
       return res.status(200).json({
         success: true,
@@ -441,20 +427,16 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generar token de restablecimiento
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora de expiración
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
 
-    // Guardar el token en la base de datos
     await user.update({
       reset_password_token: resetToken,
       reset_password_expires: resetTokenExpiry
     });
 
-    // Crear el enlace de restablecimiento
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // Configurar el correo electrónico
     const mailOptions = {
       from: `"MiSeguro" <${process.env.EMAIL_USER}>`,
       to: user.email,
@@ -482,13 +464,11 @@ const forgotPassword = async (req, res) => {
       `
     };
 
-    // Enviar el correo electrónico
     await transporter.sendMail(mailOptions);
 
     res.status(200).json({
       success: true,
       message: 'Se ha enviado un enlace de restablecimiento a tu correo electrónico',
-      // En producción, no envíes el token en la respuesta
       resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined
     });
 
@@ -514,7 +494,6 @@ const verifyResetToken = async (req, res) => {
   }
 
   try {
-    // Buscar usuario por token
     const user = await Usuario.findOne({
       where: {
         reset_password_token: token
@@ -529,7 +508,6 @@ const verifyResetToken = async (req, res) => {
       });
     }
 
-    // Verificar si el token ha expirado
     const now = new Date();
     if (user.reset_password_expires < now) {
       return res.status(200).json({
@@ -558,7 +536,6 @@ const resetPassword = async (req, res) => {
   const { password } = req.body;
 
   try {
-    // Buscar usuario por token y verificar que no haya expirado
     const user = await Usuario.findOne({
       where: {
         reset_password_token: token,
@@ -573,11 +550,9 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Hashear la nueva contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Actualizar la contraseña y limpiar el token
     await user.update({
       password_hash: hashedPassword,
       reset_password_token: null,
