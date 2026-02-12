@@ -2,6 +2,7 @@ const Movimiento = require("../models/movimientosModel");
 const Cotizacion = require("../models/cotizacionModel");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Servicio = require("../models/serviciosModel");
+//const CreditoUsuario = require("../models/creditoUsuariosModel");
 const { Op, Sequelize } = require('sequelize');
 const sequelize = require('../config/database');
 const Membresia = require('../models/membresiaModel');
@@ -1954,6 +1955,11 @@ const getEstadisticasGenerales = async (req, res) => {
             order: [['fecha', 'DESC']]
         });
 
+        // 🔹 Obtener crédito del usuario
+        //const creditoUsuario = await CreditoUsuario.findOne({
+        //    where: { id_usuario: id_tecnico }
+        //});
+
         // 🔹 Calcular balance disponible
         const movimientos = await Movimiento.findAll({
             where: { id_usuario: id_tecnico, estado: 'completado' },
@@ -1965,6 +1971,11 @@ const getEstadisticasGenerales = async (req, res) => {
             if (mov.tipo === 'ingreso') balance += parseFloat(mov.monto);
             if (mov.tipo === 'retiro') balance -= parseFloat(mov.monto);
         });
+
+        // Sumar el crédito del usuario al balance total
+        //if (creditoUsuario) {
+        //    balance += parseFloat(creditoUsuario.monto_credito);
+        //}
 
         res.json({
             totalServicios,

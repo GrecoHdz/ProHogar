@@ -692,6 +692,9 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     try {
         const idUsuario = req.params.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 3;
+        const offset = (page - 1) * limit;
 
         // Obtener todas las solicitudes con los datos del servicio
         const solicitudes = await SolicitudServicio.findAll({
@@ -711,7 +714,9 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             ],
             order: [['fecha_solicitud', 'DESC']],
             raw: true,
-            nest: true
+            nest: true,
+            limit: limit,
+            offset: offset
         });
 
         // Formatear la respuesta para incluir el servicio con id y nombre
@@ -750,11 +755,16 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             }
         });
 
+        const hasMore = (offset + limit) < totalSolicitudes;
+
         res.json({
             solicitudes: solicitudesFormateadas,
             total: totalSolicitudes,
             finalizadas,
             pendientes,
+            page,
+            totalPages: Math.ceil(totalSolicitudes / limit),
+            hasMore
         });
     } catch (error) {
         console.error(error);

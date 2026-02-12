@@ -361,6 +361,7 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
                 "telefono",
                 "estado",
                 "fecha_registro",
+                "imagen_url",
                 [
                     sequelize.literal(`(
                         SELECT COUNT(*) 
