@@ -2009,6 +2009,110 @@ const getEstadisticasGenerales = async (req, res) => {
     }
 };
 
+//Obtener Estadisticas Generales del tecnico admin
+const getEstadisticasGeneralesadmin = async (req, res) => {
+    try {
+        const { id_tecnico } = req.params;
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
+        const last3Months = new Date();
+        last3Months.setMonth(last3Months.getMonth() - 2);
+
+        // Obtener total de servicios
+        const totalServicios = await Movimiento.count({
+            where: {
+                id_usuario: id_tecnico,
+                estado: 'completado'
+            }
+        });
+
+        // Obtener servicios de los últimos 3 meses
+        const serviciosUltimos3Meses = await Movimiento.count({
+            where: {
+                id_usuario: id_tecnico,
+                estado: 'completado',
+                fecha: {
+                    [Op.gte]: last3Months
+                }
+            }
+        });
+
+        // Obtener servicios del mes actual
+        const serviciosMesActual = await Movimiento.count({
+            where: {
+                id_usuario: id_tecnico,
+                estado: 'completado',
+                [Op.and]: [
+                    Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha')), currentMonth),
+                    Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha')), currentYear)
+                ]
+            }
+        });
+
+        // 🔹 Último ingreso
+        const ultimoIngreso = await Movimiento.findOne({
+            where: { tipo: 'ingreso', estado: 'completado', id_usuario: id_tecnico },
+            order: [['fecha', 'DESC']]
+        });
+
+        // 🔹 Último retiro
+        const ultimoRetiro = await Movimiento.findOne({
+            where: { tipo: 'retiro', estado: 'completado', id_usuario: id_tecnico },
+            order: [['fecha', 'DESC']]
+        });
+
+        // 🔹 Obtener crédito del usuario
+        //const creditoUsuario = await CreditoUsuario.findOne({
+        //    where: { id_usuario: id_tecnico }
+        //});
+
+        // 🔹 Calcular balance disponible
+        const movimientos = await Movimiento.findAll({
+            where: {
+                id_usuario: id_tecnico,
+                estado: { [Op.in]: ['completado', 'pendiente'] }
+            },
+            attributes: ['tipo', 'monto', 'estado']
+        });
+
+        let balance = 0;
+        movimientos.forEach(mov => {
+            const monto = parseFloat(mov.monto) || 0;
+            // Solo sumamos ingresos completados
+            if (mov.tipo === 'ingreso' && (mov.estado || '').toLowerCase() === 'completado') {
+                balance += monto;
+            }
+            // Restamos retiros que no estén rechazados (completados, pendientes o procesando)
+            else if (mov.tipo === 'retiro') {
+                balance -= monto;
+            }
+        });
+
+        // Sumar el crédito del usuario al balance total
+        //if (creditoUsuario) {
+        //    balance += parseFloat(creditoUsuario.monto_credito);
+        //}
+
+        res.json({
+            totalServicios,
+            serviciosUltimos3Meses,
+            serviciosMesActual,
+            ultimoIngreso: ultimoIngreso ? Number(parseFloat(ultimoIngreso.monto).toFixed(2)) : null,
+            ultimoRetiro: ultimoRetiro ? Number(parseFloat(ultimoRetiro.monto).toFixed(2)) : null,
+            balanceDisponible: Number(balance.toFixed(2))
+        });
+
+    } catch (error) {
+        console.error('Error en getEstadisticasGenerales:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener estadísticas generales',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Obtener ingresos totales por referido
 const getIngresosTotalesReferidos = async (req, res) => {
     try {
@@ -2020,17 +2124,17 @@ const getIngresosTotalesReferidos = async (req, res) => {
         }) || 0;
 
         // Obtener la suma de todos los retiros no rechazados (completados, pendientes, procesando)
-        const retirosTotales = await Movimiento.sum('monto', {
+        const retirosTotales = await Movimiento.sum('total_retirado', {
             where: {
                 id_usuario,
-                tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
-                estado: { [Op.in]: ['completado', 'pendiente', 'procesando'] }
+                tipo: 'retiro_referido',
+                estado: { [Op.in]: ['completado', 'pendiente'] }
             }
         }) || 0;
 
-        // Obtener la suma de retiros completados
-        const retirosCompletados = await Movimiento.sum('monto', {
-            where: { id_usuario, tipo: { [Op.in]: ['retiro', 'retiro_referido'] }, estado: 'completado' }
+        // Obtener la suma de retiros
+        const retirosCompletados = await Movimiento.sum('total_retirado', {
+            where: { id_usuario, tipo: 'retiro_referido', estado: 'completado' }
         }) || 0;
 
         // Calcular saldo disponible
@@ -2051,6 +2155,7 @@ const getIngresosTotalesReferidos = async (req, res) => {
         });
     }
 };
+
 
 // Obtener historial de ingresos y/o retiros de referidos de un usuario, con límite, filtro por mes y tipo y resumen
 const getIngresosyRetirosdeReferidos = async (req, res) => {
@@ -2089,7 +2194,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
         // Filtrar por tipo si se especifica
         if (tipo) {
             if (tipo === 'retiro') {
-                where.tipo = { [Op.in]: ['retiro', 'retiro_referido'] };
+                where.tipo = 'retiro_referido';
             } else if (['retiro_referido', 'ingreso_referido'].includes(tipo)) {
                 where.tipo = tipo;
             }
@@ -2125,7 +2230,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 fecha: new Date(datos.fecha).toISOString().split('T')[0],
                 estado: (datos.estado || '').toLowerCase() === 'completado' ? 'Completado' : (datos.estado || '').toLowerCase() === 'rechazado' ? 'Rechazado' : 'Pendiente',
                 tipo: datos.tipo,
-                descripcion: datos.descripcion || (datos.tipo === 'retiro' || datos.tipo === 'retiro_referido' ? 'Retiro de fondos' : 'Ingreso por referido')
+                descripcion: datos.descripcion || (datos.tipo === 'retiro_referido' ? 'Retiro de fondos' : 'Ingreso por referido')
             };
         });
 
@@ -2136,7 +2241,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 const esCompletado = mov.estado.toLowerCase() === 'completado';
 
                 if (mov.tipo === 'ingreso_referido' && esCompletado) acc.ingresosReferido += monto;
-                if ((mov.tipo === 'retiro' || mov.tipo === 'retiro_referido') && esCompletado) acc.retiros += monto;
+                if (mov.tipo === 'retiro_referido' && esCompletado) acc.retiros += monto;
 
                 return acc;
             },
@@ -2294,6 +2399,7 @@ module.exports = {
     getTopUsuariosCredito,
     getServiciosPorTipo,
     getEstadisticasGenerales,
+    getEstadisticasGeneralesadmin,
     getIngresosTotalesReferidos,
     getIngresosyRetirosdeReferidos,
     getTransacciones,

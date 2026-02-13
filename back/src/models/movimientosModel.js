@@ -45,6 +45,10 @@ const Movimiento = sequelize.define('Movimiento', {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false
     },
+    total_retirado: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true
+    },
     descripcion: {
         type: DataTypes.STRING(255),
         allowNull: true

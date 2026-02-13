@@ -15,6 +15,7 @@ const {
     getServiciosPorMes,
     getServiciosPorTipo,
     getEstadisticasGenerales,
+    getEstadisticasGeneralesadmin,
     getIngresosTotalesReferidos,
     getTopUsuariosCredito,
     getIngresosyRetirosdeReferidos,
@@ -100,6 +101,11 @@ router.get("/estadisticas/:id_tecnico", [
     param("id_tecnico").isInt().withMessage("El id_tecnico debe ser un numero entero")
 ], validarErrores, getEstadisticasGenerales);
 
+//Obtener ingresos totales de referidos admin
+router.get("/estadisticas/admin/:id_usuario", [
+    param("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero")
+], validarErrores, getEstadisticasGeneralesadmin);
+
 //Obtener ingresos totales de referidos
 router.get("/ingresos/referidos/:id_usuario", [
     param("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero")
@@ -117,6 +123,7 @@ router.post("/", [
     body("id_referido").optional().isInt().withMessage("El id_referido debe ser un numero entero"),
     body("tipo").isIn(["ingreso", "retiro", "ingreso_referido", "retiro_referido"]).withMessage("El tipo debe ser 'ingreso', 'retiro', 'ingreso_referido' o 'retiro_referido'"),
     body("monto").isFloat({ min: 0 }).withMessage("El monto debe ser un número válido (entero o decimal) y mayor o igual a 0"),
+    body("total_retirado").optional().isFloat({ min: 0 }).withMessage("El total_retirado debe ser un número válido (entero o decimal) y mayor o igual a 0"),
     body("descripcion").optional().isString().withMessage("La descripción debe ser un texto"),
     body("estado").optional().isIn(["pendiente", "completado", "rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")
 ], validarErrores, crearMovimiento);
