@@ -115,7 +115,7 @@ router.post("/", [
     body("id_usuario").isInt().withMessage("El id_usuario debe ser un numero entero"),
     body("id_cotizacion").optional().isInt().withMessage("El id_cotizacion debe ser un numero entero"),
     body("id_referido").optional().isInt().withMessage("El id_referido debe ser un numero entero"),
-    body("tipo").isIn(["ingreso", "retiro", "ingreso_referido"]).withMessage("El tipo debe ser 'ingreso' o 'retiro'"),
+    body("tipo").isIn(["ingreso", "retiro", "ingreso_referido", "retiro_referido"]).withMessage("El tipo debe ser 'ingreso', 'retiro', 'ingreso_referido' o 'retiro_referido'"),
     body("monto").isFloat({ min: 0 }).withMessage("El monto debe ser un número válido (entero o decimal) y mayor o igual a 0"),
     body("descripcion").optional().isString().withMessage("La descripción debe ser un texto"),
     body("estado").optional().isIn(["pendiente", "completado", "rechazado"]).withMessage("El estado debe ser 'pendiente', 'completado'")

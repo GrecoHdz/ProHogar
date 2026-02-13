@@ -9,6 +9,7 @@ const { uploadProfile } = require("../config/cloudinary");
 const {
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,
+    obtenerTecnicosYAdminsPorCiudad,
     obtenerUsuariosPorCiudad,
     obtenerAdministradores,
     obtenerUsuarioPorNombre,
@@ -38,12 +39,12 @@ const validarErrores = (req, res, next) => {
 router.get("/", validarErrores, authMiddleware, apiLimiter, obtenerUsuarios);
 
 // Verificar perfil de técnico
-router.get("/verificar-perfil-tecnico/:id_usuario", 
+router.get("/verificar-perfil-tecnico/:id_usuario",
     [
         param("id_usuario").isInt().withMessage("El ID del usuario debe ser un número entero")
     ],
-    validarErrores, 
-    authMiddleware, 
+    validarErrores,
+    authMiddleware,
     verificarPerfilTecnico
 );
 
@@ -60,6 +61,17 @@ router.get("/tecnicos", [
     query("id_servicio").optional().isInt().withMessage("El ID del servicio debe ser un número entero")
 ],
     validarErrores, authMiddleware, apiLimiter, obtenerTecnicosPorCiudad);
+
+//Obtener todos los Técnicos y Administradores por ciudad
+router.get("/tecnicos-admins", [
+    query("id_ciudad").optional().isInt().withMessage("El ID de la ciudad debe ser un número entero"),
+    query("id_servicio").optional().isInt().withMessage("El ID del servicio debe ser un número entero"),
+    query("nombre").optional().isString().withMessage("El nombre debe ser una cadena de caracteres"),
+    query("estado").optional().isString().withMessage("El estado debe ser una cadena de caracteres"),
+    query("limit").optional().isInt().withMessage("El límite debe ser un número entero"),
+    query("offset").optional().isInt().withMessage("El offset debe ser un número entero")
+],
+    validarErrores, authMiddleware, apiLimiter, obtenerTecnicosYAdminsPorCiudad);
 
 //Obtener todos los Usuarios por ciudad
 router.get("/usuarios", [

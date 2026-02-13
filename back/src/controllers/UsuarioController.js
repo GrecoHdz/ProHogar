@@ -789,6 +789,262 @@ const obtenerAdministradores = async (req, res) => {
     }
 };
 
+// Obtener todos los técnicos y administradores de una ciudad (con filtros y paginación)
+const obtenerTecnicosYAdminsPorCiudad = async (req, res) => {
+    try {
+        // Obtener parámetros de paginación y búsqueda
+        let limit = parseInt(req.query.limit) || 10;
+        limit = Math.min(limit, 100); // Máximo 100 por rendimiento
+        const offset = parseInt(req.query.offset) || 0;
+        const { id_ciudad, id_servicio, nombre, estado } = req.query;
+
+        // Obtener los IDs de los roles de técnico, administrador y super admin
+        const [rolTecnico, rolAdmin, rolSA] = await Promise.all([
+            Rol.findOne({
+                where: { nombre_rol: 'Tecnico' },
+                attributes: ['id_rol'],
+                raw: true
+            }),
+            Rol.findOne({
+                where: { nombre_rol: 'Admin' },
+                attributes: ['id_rol'],
+                raw: true
+            }),
+            Rol.findOne({
+                where: { nombre_rol: 'sa' },
+                attributes: ['id_rol'],
+                raw: true
+            })
+        ]);
+
+        if (!rolTecnico || !rolAdmin) {
+            return res.status(404).json({
+                success: false,
+                error: 'No se encontraron los roles de Técnico o Administrador'
+            });
+        }
+
+        // Construir array de roles a incluir
+        const rolesIds = [rolTecnico.id_rol, rolAdmin.id_rol];
+        if (rolSA) {
+            rolesIds.push(rolSA.id_rol);
+        }
+
+        // Construir condiciones de búsqueda
+        const whereCondition = {
+            id_rol: { [Op.in]: rolesIds }
+        };
+
+        // Aplicar filtros
+        if (id_ciudad) whereCondition.id_ciudad = id_ciudad;
+        if (estado) whereCondition.estado = estado;
+        if (nombre) {
+            whereCondition.nombre = { [Op.like]: `%${nombre}%` };
+        }
+
+        // Construir el include dinámicamente
+        const includeConditions = [
+            {
+                model: Rol,
+                as: 'rol',
+                attributes: []
+            }
+        ];
+
+        // Agregar filtro por servicio solo si se proporciona id_servicio
+        // (solo aplica para técnicos)
+        if (id_servicio) {
+            includeConditions.push({
+                model: TecnicoServicio,
+                as: 'serviciosAsignados',
+                where: { id_servicio: id_servicio },
+                attributes: [],
+                required: false // LEFT JOIN para no excluir admins
+            });
+        }
+
+        // Obtener total de registros
+        const total = await Usuario.count({
+            where: whereCondition,
+            include: includeConditions,
+            distinct: true
+        });
+
+        // 🔎 Consultar usuarios filtrados con paginación
+        const usuarios = await Usuario.findAll({
+            attributes: [
+                "id_usuario",
+                "nombre",
+                "identidad",
+                "email",
+                "telefono",
+                "estado",
+                "fecha_registro",
+                "imagen_url",
+                "id_rol",
+                [
+                    sequelize.literal(`(
+                        SELECT COUNT(*) 
+                        FROM solicitudservicio 
+                        WHERE solicitudservicio.id_tecnico = Usuario.id_usuario
+                    )`),
+                    'total_servicios_atendidos'
+                ]
+            ],
+            where: whereCondition,
+            include: [
+                {
+                    model: Ciudad,
+                    as: "ciudad",
+                    attributes: ["id_ciudad", "nombre_ciudad"]
+                },
+                {
+                    model: Rol,
+                    as: "rol",
+                    attributes: ["id_rol", "nombre_rol"]
+                },
+                ...(id_servicio ? [{
+                    model: TecnicoServicio,
+                    as: 'serviciosAsignados',
+                    where: { id_servicio: id_servicio },
+                    attributes: [],
+                    required: false
+                }] : [])
+            ],
+            limit: limit,
+            offset: offset,
+            order: [
+                [sequelize.literal(`CASE WHEN Usuario.id_rol = ${rolTecnico.id_rol} THEN 0 ELSE 1 END`), 'ASC'], // Técnicos primero
+                ["nombre", "ASC"]
+            ],
+            subQuery: false
+        });
+
+        if (!usuarios.length) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0,
+                hasMore: false,
+                limit,
+                offset: 0
+            });
+        }
+
+        // Obtener IDs de los usuarios
+        const usuariosIds = usuarios.map(u => u.id_usuario);
+
+        // 📊 Obtener datos adicionales en paralelo
+        const [calificaciones, creditos] = await Promise.all([
+            Calificaciones.findAll({
+                attributes: [
+                    "id_usuario_calificado",
+                    [fn("AVG", col("calificacion")), "promedio"]
+                ],
+                where: {
+                    id_usuario_calificado: { [Op.in]: usuariosIds }
+                },
+                group: ["id_usuario_calificado"]
+            }),
+            CreditoUsuario.findAll({
+                where: {
+                    id_usuario: { [Op.in]: usuariosIds }
+                },
+                attributes: ['id_usuario', 'monto_credito']
+            })
+        ]);
+
+        // Crear mapas de datos
+        const mapaPromedios = {};
+        calificaciones.forEach(c => {
+            mapaPromedios[c.id_usuario_calificado] = parseFloat(c.get("promedio")) || 0;
+        });
+
+        const mapaCreditos = {};
+        creditos.forEach(c => {
+            mapaCreditos[c.id_usuario] = parseFloat(c.monto_credito) || 0;
+        });
+
+        // 💰 Calcular saldo total real por usuario (ingresos - retiros + crédito)
+        const saldosTotales = {};
+        await Promise.all(
+            usuariosIds.map(async (id_usuario) => {
+                const [ingresos, retiros] = await Promise.all([
+                    Movimiento.sum('monto', {
+                        where: {
+                            id_usuario,
+                            estado: 'completado',
+                            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+                        }
+                    }),
+                    Movimiento.sum('monto', {
+                        where: {
+                            id_usuario,
+                            estado: 'completado',
+                            tipo: 'retiro'
+                        }
+                    })
+                ]);
+
+                const saldoMovimientos = (ingresos || 0) - (retiros || 0);
+                const saldoCredito = mapaCreditos[id_usuario] || 0;
+                saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
+            })
+        );
+
+        // 🧮 Armar respuesta final
+        const usuariosConDatos = usuarios.map(u => {
+            const data = u.toJSON();
+            const { id_ciudad, ...rest } = data;
+            const esTecnico = data.rol.id_rol === rolTecnico.id_rol;
+
+            return {
+                ...rest,
+                ciudad: { id_ciudad, ...data.ciudad },
+                promedio_calificacion: esTecnico ? (mapaPromedios[data.id_usuario] ?? 0) : null,
+                saldo_total: saldosTotales[data.id_usuario] ?? 0,
+                total_servicios_atendidos: esTecnico ? (parseInt(data.total_servicios_atendidos) || 0) : null,
+                tipo_usuario: esTecnico ? 'Tecnico' : 'Admin'
+            };
+        });
+
+        // Calcular información de paginación
+        const page = Math.floor(offset / limit) + 1;
+        const totalPages = Math.ceil(total / limit);
+        const hasMore = offset + limit < total;
+
+        // Calcular estadísticas adicionales
+        const totalTecnicos = usuariosConDatos.filter(u => u.tipo_usuario === 'Tecnico').length;
+        const totalAdmins = usuariosConDatos.filter(u => u.tipo_usuario === 'Admin').length;
+
+        return res.status(200).json({
+            success: true,
+            data: usuariosConDatos,
+            total,
+            page,
+            totalPages,
+            hasMore,
+            limit,
+            offset,
+            estadisticas: {
+                total_tecnicos: totalTecnicos,
+                total_admins: totalAdmins,
+                total_usuarios: usuariosConDatos.length
+            }
+        });
+
+    } catch (error) {
+        console.error("Error al obtener técnicos y administradores:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al obtener técnicos y administradores",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+}
+
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
     const { id } = req.params;
@@ -1039,7 +1295,7 @@ const crearUsuario = async (req, res) => {
             password_hash: hashedPassword,
             id_ciudad,
             estado: es_tecnico ? 'deshabilitado' : 'activo'
-        }); 
+        });
 
         // No devolver la contraseña en la respuesta
         const usuarioSinPassword = usuario.toJSON();
@@ -1157,7 +1413,7 @@ const actualizarImagenPerfil = async (req, res) => {
 
     } catch (error) {
         console.error('Error al actualizar imagen de perfil:', error);
-        
+
         // Si hubo un error y se subió una nueva imagen, la eliminamos
         if (req.file && req.file.filename) {
             try {
@@ -1166,7 +1422,7 @@ const actualizarImagenPerfil = async (req, res) => {
                 console.error('Error al limpiar imagen subida:', e);
             }
         }
-        
+
         return res.status(500).json({
             success: false,
             error: 'Error al actualizar la imagen de perfil',
@@ -1331,7 +1587,7 @@ const actualizarUsuario = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-}; 
+};
 
 // Actualizar contraseña con verificación de contraseña actual
 const actualizarPassword = async (req, res) => {
@@ -1451,7 +1707,7 @@ const actualizarPassword = async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
         });
     }
-}; 
+};
 
 //Eliminar Usuario
 const eliminarUsuario = async (req, res) => {
@@ -1491,6 +1747,7 @@ module.exports = {
     obtenerGraficaCrecimientoUsuarios,
     obtenerUsuarios,
     obtenerTecnicosPorCiudad,
+    obtenerTecnicosYAdminsPorCiudad,
     obtenerUsuariosPorCiudad,
     obtenerAdministradores,
     obtenerEstadisticasUsuarios,

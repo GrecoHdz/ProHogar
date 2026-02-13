@@ -106,7 +106,7 @@ const getTransacciones = async (req, res) => {
             where: {
                 id_usuario,
                 estado: 'completado',
-                tipo: 'retiro'
+                tipo: { [Op.in]: ['retiro', 'retiro_referido'] }
             }
         });
 
@@ -249,7 +249,7 @@ const getTopUsuariosCredito = async (req, res) => {
                 [Sequelize.literal(`
                     SUM(CASE 
                         WHEN Movimiento.tipo IN ('ingreso', 'ingreso_referido') AND Movimiento.estado = 'completado' THEN Movimiento.monto 
-                        WHEN Movimiento.tipo = 'retiro' AND Movimiento.estado = 'completado' THEN -Movimiento.monto 
+                        WHEN Movimiento.tipo IN ('retiro', 'retiro_referido') AND Movimiento.estado = 'completado' THEN -Movimiento.monto 
                         ELSE 0 
                     END)
                 `), 'saldo_total']
@@ -348,7 +348,7 @@ const obtenerRetiros = async (req, res) => {
         const metodoPago = req.query.metodo_pago;
 
         // Construir condiciones de búsqueda
-        const whereCondition = { tipo: 'retiro' }; // Solo retiros
+        const whereCondition = { tipo: { [Op.in]: ['retiro', 'retiro_referido'] } }; // Solo retiros
         const andConditions = [];
 
         // Filtro por término de búsqueda
@@ -481,7 +481,7 @@ const obtenerRetiros = async (req, res) => {
         const movimientosFormateados = await Promise.all(movimientos.map(async movimiento => {
             const datosMovimiento = movimiento.get({ plain: true });
             const esIngreso = datosMovimiento.tipo === 'ingreso';
-            const esRetiro = datosMovimiento.tipo === 'retiro';
+            const esRetiro = datosMovimiento.tipo === 'retiro' || datosMovimiento.tipo === 'retiro_referido';
             const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
 
             // Calcular el monto según el tipo de movimiento
@@ -562,7 +562,7 @@ const obtenerRetiros = async (req, res) => {
         const allMovimientosFormateados = await Promise.all(allMovimientos.map(async movimiento => {
             const datosMovimiento = movimiento;
             const esIngreso = datosMovimiento.tipo === 'ingreso';
-            const esRetiro = datosMovimiento.tipo === 'retiro';
+            const esRetiro = datosMovimiento.tipo === 'retiro' || datosMovimiento.tipo === 'retiro_referido';
             const estadoNormalizado = (datosMovimiento.estado || '').toLowerCase();
 
             // Calcular el monto según el tipo de movimiento
@@ -614,6 +614,9 @@ const obtenerRetiros = async (req, res) => {
             if (mov.tipo === 'retiro' && estado === 'completado') {
                 acc.retiros += monto;
             }
+            if (mov.tipo === 'retiro_referido' && estado === 'completado') {
+                acc.retiros += monto;
+            }
 
             return acc;
         }, { retiros: 0 });
@@ -662,7 +665,7 @@ const obtenerRetiroPorId = async (req, res) => {
         const { id } = req.params;
 
         const whereCondition = {
-            tipo: 'retiro',
+            tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
             id_movimiento: id
         };
 
@@ -828,7 +831,7 @@ const obtenerReporteIngresos = async (req, res) => {
             // Obtener total de retiros
             Movimiento.sum('monto', {
                 where: {
-                    tipo: 'retiro',
+                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                     estado: 'completado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
@@ -942,7 +945,7 @@ const obtenerReporteIngresos = async (req, res) => {
             // Obtener retiros del mes
             const retirosMes = await Movimiento.sum('monto', {
                 where: {
-                    tipo: 'retiro',
+                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                     estado: 'completado',
                     fecha: {
                         [Op.between]: [
@@ -1023,7 +1026,7 @@ const getAllMovimientos = async (req, res) => {
         const where = {};
 
         // Filtrar por tipo de movimiento
-        if (tipo === 'retiros') where.tipo = 'retiro';
+        if (tipo === 'retiros') where.tipo = { [Op.in]: ['retiro', 'retiro_referido'] };
         if (tipo === 'ingresos') where.tipo = 'ingreso';
 
         // Filtrar por mes y año si se proporciona fecha en formato YYYY-MM
@@ -1074,7 +1077,7 @@ const getAllMovimientos = async (req, res) => {
         const movimientosTablaFormateados = allMovimientosRaw.map(movimiento => {
             const data = movimiento.get({ plain: true });
             const esIngreso = data.tipo === 'ingreso';
-            const esRetiro = data.tipo === 'retiro';
+            const esRetiro = data.tipo === 'retiro' || data.tipo === 'retiro_referido';
             const estadoNormalizado = (data.estado || '').toLowerCase();
 
             // Calcular el monto según el tipo de movimiento
@@ -1260,7 +1263,7 @@ const getAllMovimientos = async (req, res) => {
             if (estado === 'completado') {
                 if (mov.tipo === 'ingreso') {
                     acc.ingresos += monto;
-                } else if (mov.tipo === 'retiro') {
+                } else if (mov.tipo === 'retiro' || mov.tipo === 'retiro_referido') {
                     acc.retiros += monto;
                 }
             }
@@ -1425,7 +1428,7 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         // Obtener total de retiros completados
         const totalRetiros = await Movimiento.sum('monto', {
             where: {
-                tipo: 'retiro',
+                tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                 estado: 'completado',
                 ...(fechaInicio || fechaFin ? {
                     fecha: {
@@ -2008,12 +2011,12 @@ const getIngresosTotalesReferidos = async (req, res) => {
 
         // Obtener la suma de todos los retiros
         const retirosTotales = await Movimiento.sum('monto', {
-            where: { id_usuario, tipo: 'retiro' }
+            where: { id_usuario, tipo: { [Op.in]: ['retiro', 'retiro_referido'] } }
         }) || 0;
 
         // Obtener la suma de retiros completados
         const retirosCompletados = await Movimiento.sum('monto', {
-            where: { id_usuario, tipo: 'retiro', estado: 'completado' }
+            where: { id_usuario, tipo: { [Op.in]: ['retiro', 'retiro_referido'] }, estado: 'completado' }
         }) || 0;
 
         // Calcular saldo disponible
@@ -2070,8 +2073,12 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
         };
 
         // Filtrar por tipo si se especifica
-        if (tipo && ['retiro', 'ingreso_referido'].includes(tipo)) {
-            where.tipo = tipo;
+        if (tipo) {
+            if (tipo === 'retiro') {
+                where.tipo = { [Op.in]: ['retiro', 'retiro_referido'] };
+            } else if (['retiro_referido', 'ingreso_referido'].includes(tipo)) {
+                where.tipo = tipo;
+            }
         }
 
         // Obtener total de registros para la paginación
@@ -2104,7 +2111,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 fecha: new Date(datos.fecha).toISOString().split('T')[0],
                 estado: (datos.estado || '').toLowerCase() === 'completado' ? 'Completado' : (datos.estado || '').toLowerCase() === 'rechazado' ? 'Rechazado' : 'Pendiente',
                 tipo: datos.tipo,
-                descripcion: datos.descripcion || (datos.tipo === 'retiro' ? 'Retiro de fondos' : 'Ingreso por referido')
+                descripcion: datos.descripcion || (datos.tipo === 'retiro' || datos.tipo === 'retiro_referido' ? 'Retiro de fondos' : 'Ingreso por referido')
             };
         });
 
@@ -2115,7 +2122,7 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 const esCompletado = mov.estado.toLowerCase() === 'completado';
 
                 if (mov.tipo === 'ingreso_referido' && esCompletado) acc.ingresosReferido += monto;
-                if (mov.tipo === 'retiro' && esCompletado) acc.retiros += monto;
+                if ((mov.tipo === 'retiro' || mov.tipo === 'retiro_referido') && esCompletado) acc.retiros += monto;
 
                 return acc;
             },
