@@ -1954,7 +1954,7 @@ const getEstadisticasGenerales = async (req, res) => {
 
         // 🔹 Último retiro
         const ultimoRetiro = await Movimiento.findOne({
-            where: { tipo: 'retiro', estado: 'completado', id_usuario: id_tecnico },
+            where: { tipo: 'retiro' || 'retiro_referido', estado: 'completado', id_usuario: id_tecnico },
             order: [['fecha', 'DESC']]
         });
 
@@ -1965,14 +1965,24 @@ const getEstadisticasGenerales = async (req, res) => {
 
         // 🔹 Calcular balance disponible
         const movimientos = await Movimiento.findAll({
-            where: { id_usuario: id_tecnico, estado: 'completado' },
-            attributes: ['tipo', 'monto']
+            where: {
+                id_usuario: id_tecnico,
+                estado: { [Op.in]: ['completado', 'pendiente'] }
+            },
+            attributes: ['tipo', 'monto', 'estado']
         });
 
         let balance = 0;
         movimientos.forEach(mov => {
-            if (mov.tipo === 'ingreso') balance += parseFloat(mov.monto);
-            if (mov.tipo === 'retiro') balance -= parseFloat(mov.monto);
+            const monto = parseFloat(mov.monto) || 0;
+            // Solo sumamos ingresos completados
+            if (mov.tipo === 'ingreso' && (mov.estado || '').toLowerCase() === 'completado') {
+                balance += monto;
+            }
+            // Restamos retiros que no estén rechazados (completados, pendientes o procesando)
+            else if (mov.tipo === 'retiro') {
+                balance -= monto;
+            }
         });
 
         // Sumar el crédito del usuario al balance total
@@ -2009,9 +2019,13 @@ const getIngresosTotalesReferidos = async (req, res) => {
             where: { id_usuario, tipo: 'ingreso_referido', estado: 'completado' }
         }) || 0;
 
-        // Obtener la suma de todos los retiros
+        // Obtener la suma de todos los retiros no rechazados (completados, pendientes, procesando)
         const retirosTotales = await Movimiento.sum('monto', {
-            where: { id_usuario, tipo: { [Op.in]: ['retiro', 'retiro_referido'] } }
+            where: {
+                id_usuario,
+                tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
+                estado: { [Op.in]: ['completado', 'pendiente', 'procesando'] }
+            }
         }) || 0;
 
         // Obtener la suma de retiros completados
