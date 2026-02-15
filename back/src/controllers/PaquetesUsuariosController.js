@@ -281,7 +281,7 @@ const canjearPaquete = async (req, res) => {
             await t.rollback();
             return res.status(400).json({
                 success: false,
-                error: "Ya tienes este paquete activo, en uso o en proceso de verificación"
+                error: "Tu pago anterior para este paquete aún está siendo verificado"
             });
         }
 
