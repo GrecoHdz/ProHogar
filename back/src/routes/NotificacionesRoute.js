@@ -2,8 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { body, param, validationResult } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
-const { apiLimiter } = require('../middleware/rateLimiters'); 
-const { 
+const { apiLimiter } = require('../middleware/rateLimiters');
+const {
   obtenerTodas,
   obtenerPorUsuario,
   crearNotificacion,
@@ -12,7 +12,9 @@ const {
   marcarNotificacionIndividual,
   eliminarNotificacion,
   eliminarLeidas,
-  obtenerCreadasManualmente
+  obtenerCreadasManualmente,
+  guardarSuscripcionPush,
+  obtenerVapidKey
 } = require("../controllers/NotificacionesController");
 
 // ============================================================
@@ -43,7 +45,7 @@ router.get(
   ],
   validarErrores,
   authMiddleware,
-  apiLimiter,  
+  apiLimiter,
   obtenerPorUsuario
 );
 
@@ -66,30 +68,30 @@ router.post(
   ],
   validarErrores,
   authMiddleware,
-  apiLimiter, 
+  apiLimiter,
   crearNotificacion
 );
- 
+
 // 4️⃣ Enviar notificación (ID, rol, global o automática por título)
 router.post(
   "/enviar",
-  [ 
+  [
     body("id_notificacion")
       .optional()
       .isInt({ min: 1 })
-      .withMessage("El ID de notificación debe ser un número entero positivo"), 
+      .withMessage("El ID de notificación debe ser un número entero positivo"),
     body("titulo")
       .optional()
       .isString()
-      .withMessage("El título debe ser una cadena válida"), 
+      .withMessage("El título debe ser una cadena válida"),
     body("id_usuario")
       .optional()
       .isInt({ min: 1 })
-      .withMessage("El ID de usuario debe ser un número válido"), 
+      .withMessage("El ID de usuario debe ser un número válido"),
     body("nombre_rol")
       .optional()
       .isString()
-      .withMessage("El nombre del rol debe ser un texto válido"), 
+      .withMessage("El nombre del rol debe ser un texto válido"),
     body("global")
       .optional()
       .isBoolean()
@@ -112,9 +114,9 @@ router.put(
       .isInt({ min: 1 })
       .withMessage("El ID de usuario debe ser un número entero positivo"),
   ],
-  validarErrores, 
+  validarErrores,
   authMiddleware,
-  apiLimiter, 
+  apiLimiter,
   marcarComoLeida
 );
 
@@ -126,9 +128,9 @@ router.put(
       .isInt({ min: 1 })
       .withMessage("El ID de destinatario de la notificación debe ser un número entero positivo"),
   ],
-  validarErrores, 
+  validarErrores,
   authMiddleware,
-  apiLimiter, 
+  apiLimiter,
   marcarNotificacionIndividual
 );
 
@@ -141,9 +143,9 @@ router.delete(
       .isInt({ min: 1 })
       .withMessage("El ID debe ser un número entero positivo"),
   ],
-  validarErrores, 
+  validarErrores,
   authMiddleware,
-  apiLimiter, 
+  apiLimiter,
   eliminarNotificacion
 );
 
@@ -151,7 +153,11 @@ router.delete(
 router.delete("/eliminar/leidas", authMiddleware, apiLimiter, eliminarLeidas);
 
 // 8️⃣ Obtener notificaciones creadas manualmente
-router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente); 
+router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente);
+
+// 9️⃣ Rutas Web Push (Browser Notifications)
+router.get("/vapid-key", obtenerVapidKey);
+router.post("/suscripcion", authMiddleware, guardarSuscripcionPush);
 
 
 module.exports = router;

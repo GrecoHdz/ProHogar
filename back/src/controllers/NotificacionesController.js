@@ -5,6 +5,74 @@ const NotificacionDestinatario = require("../models/notificacionesDestinatariosM
 const Usuario = require("../models/usuariosModel"); // opcional si manejas roles
 const Rol = require("../models/rolesModel");
 const Ciudad = require("../models/ciudadesModel");
+const webpush = require("web-push");
+const SuscripcionNotificacion = require("../models/suscripcionesNotificacionesModel");
+
+// Configurar Web Push
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || 'mailto:contactomisegurohn@gmail.com',
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+    console.log('✅ Web Push configurado correctamente');
+  } catch (error) {
+    console.error('❌ Error configurando Web Push:', error.message);
+  }
+}
+
+// Helper para enviar notificaciones push
+const enviarPushHelper = async (destinatarios, titulo, cuerpo, data = {}) => {
+  try {
+    const userIds = destinatarios.map(d => d.id_usuario);
+
+    // Obtener suscripciones de los usuarios afectados
+    const subscriptions = await SuscripcionNotificacion.findAll({
+      where: {
+        id_usuario: { [Op.in]: userIds }
+      }
+    });
+
+    if (subscriptions.length === 0) return;
+
+    console.log(`📤 Enviando push a ${subscriptions.length} suscripciones...`);
+
+    const notifications = subscriptions.map(sub => {
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: {
+          auth: sub.keys_auth,
+          p256dh: sub.keys_p256dh
+        }
+      };
+
+      const payload = JSON.stringify({
+        title: titulo,
+        body: cuerpo,
+        icon: '/pwa-512x512.png', // Ajustar ruta del icono según corresponda
+        data: {
+          url: data.url || '/', // URL por defecto si no se proporciona
+          ...data
+        }
+      });
+
+      return webpush.sendNotification(pushSubscription, payload)
+        .catch(err => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            // La suscripción ya no es válida, eliminarla
+            console.log(`🗑️ Eliminando suscripción inválida para usuario ${sub.id_usuario}`);
+            return SuscripcionNotificacion.destroy({ where: { id_suscripcion: sub.id_suscripcion } });
+          }
+          console.error('❌ Error enviando push:', err.message);
+        });
+    });
+
+    await Promise.allSettled(notifications);
+  } catch (error) {
+    console.error('❌ Error general en enviarPushHelper:', error);
+  }
+};
 
 // ============================================================
 // 1️⃣ Obtener todas las notificaciones del sistema
@@ -244,7 +312,7 @@ const enviarNotificacion = async (req, res) => {
 
       // Construir el objeto de condiciones para la consulta
       const whereClause = { id_ciudad };
-      
+
       // Si se especificó un rol, agregarlo a las condiciones
       if (nombre_rol) {
         const rol = await Rol.findOne({
@@ -260,7 +328,7 @@ const enviarNotificacion = async (req, res) => {
             message: `No se encontró el rol '${nombre_rol}'`
           });
         }
-        
+
         whereClause.id_rol = rol.id_rol;
       }
 
@@ -272,10 +340,10 @@ const enviarNotificacion = async (req, res) => {
 
       if (usuarios.length === 0) {
         await t.rollback();
-        const mensaje = nombre_rol 
+        const mensaje = nombre_rol
           ? `No hay usuarios con el rol '${nombre_rol}' en la ciudad '${ciudad.nombre_ciudad}'`
           : `No hay usuarios registrados en la ciudad '${ciudad.nombre_ciudad}'`;
-        
+
         return res.status(404).json({
           success: false,
           message: mensaje
@@ -291,7 +359,7 @@ const enviarNotificacion = async (req, res) => {
       }));
 
       // Actualizar el tipo de envío para incluir ambos filtros si es necesario
-      let tipoEnvio = nombre_rol 
+      let tipoEnvio = nombre_rol
         ? `Ciudad: ${ciudad.nombre_ciudad}, Rol: ${nombre_rol}`
         : `Ciudad: ${ciudad.nombre_ciudad}`;
     }
@@ -370,6 +438,18 @@ const enviarNotificacion = async (req, res) => {
       transaction: t
     });
 
+    // 🚀 Enviar Push Notifications (async, no bloquear respuesta)
+    // Se ejecuta DESPUÉS de confirmar que se guardaron en DB
+    enviarPushHelper(
+      destinatarios,
+      notificacion.titulo,
+      notificacion.tipo ? `Tienes una nueva notificación` : 'Tienes una nueva notificación',
+      {
+        id_notificacion: notificacion.id_notificacion,
+        tipo: notificacion.tipo
+      }
+    ).catch(e => console.error('Error enviando push async:', e));
+
     await t.commit();
 
     const respuesta = {
@@ -379,9 +459,9 @@ const enviarNotificacion = async (req, res) => {
         id_notificacion,
         titulo: notificacion.titulo,
         cantidad_destinatarios: destinatarios.length,
-        tipo_envio: global ? 'Global' : 
-          (nombre_rol ? `Rol: ${nombre_rol}` : 
-          (id_ciudad ? `Ciudad: ${ciudad?.nombre_ciudad || id_ciudad}` : 'Usuario individual'))
+        tipo_envio: global ? 'Global' :
+          (nombre_rol ? `Rol: ${nombre_rol}` :
+            (id_ciudad ? `Ciudad: ${ciudad?.nombre_ciudad || id_ciudad}` : 'Usuario individual'))
       }
     };
 
@@ -442,7 +522,7 @@ const obtenerCreadasManualmente = async (req, res) => {
 // ============================================================
 // 6️⃣ Marcar todas las notificaciones de un usuario como leídas
 // ============================================================
-const marcarComoLeida = async (req, res) => { 
+const marcarComoLeida = async (req, res) => {
 
   const { id_usuario } = req.body;
 
@@ -450,7 +530,7 @@ const marcarComoLeida = async (req, res) => {
     const errorResponse = {
       success: false,
       message: "Se requiere el ID de usuario"
-    }; 
+    };
     return res.status(400).json(errorResponse);
   }
 
@@ -472,7 +552,7 @@ const marcarComoLeida = async (req, res) => {
       success: true,
       message: `Se marcaron ${updatedCount} notificaciones como leídas`,
       updatedCount
-    }; 
+    };
     return res.json(successResponse);
   } catch (error) {
     console.error("Error al marcar notificaciones como leídas:", error);
@@ -480,7 +560,7 @@ const marcarComoLeida = async (req, res) => {
       success: false,
       message: "Error al actualizar notificaciones",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }; 
+    };
     res.status(500).json(errorResponse);
   }
 };
@@ -488,7 +568,7 @@ const marcarComoLeida = async (req, res) => {
 // ============================================================
 // Marcar una notificación individual como leída
 // ============================================================
-const marcarNotificacionIndividual = async (req, res) => { 
+const marcarNotificacionIndividual = async (req, res) => {
 
   const { id_destinatario_notificacion } = req.body;
 
@@ -496,7 +576,7 @@ const marcarNotificacionIndividual = async (req, res) => {
     const errorResponse = {
       success: false,
       message: "Se requiere el ID del destinatario de la notificación"
-    }; 
+    };
     return res.status(400).json(errorResponse);
   }
 
@@ -522,7 +602,7 @@ const marcarNotificacionIndividual = async (req, res) => {
           : "Notificación marcada como leída",
       updatedCount
     };
- 
+
     return res.json(successResponse);
 
   } catch (error) {
@@ -531,7 +611,7 @@ const marcarNotificacionIndividual = async (req, res) => {
       success: false,
       message: "Error al actualizar la notificación",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }; 
+    };
     return res.status(500).json(errorResponse);
   }
 };
@@ -597,6 +677,69 @@ const eliminarLeidas = async (req, res) => {
 };
 
 // ============================================================
+// 9️⃣ Guardar Suscripción Push (Browser)
+// ============================================================
+const guardarSuscripcionPush = async (req, res) => {
+  const { endpoint, keys, user_agent, expirationTime, id_usuario } = req.body;
+
+  // Validación básica
+  if (!endpoint || !keys || !keys.auth || !keys.p256dh || !id_usuario) {
+    return res.status(400).json({
+      success: false,
+      message: "Faltan datos requeridos (endpoint, keys, id_usuario)"
+    });
+  }
+
+  try {
+    // Verificar si ya existe la suscripción para este endpoint
+    const [subscription, created] = await SuscripcionNotificacion.findOrCreate({
+      where: { endpoint },
+      defaults: {
+        id_usuario,
+        keys_auth: keys.auth,
+        keys_p256dh: keys.p256dh,
+        user_agent,
+        expiration_time: expirationTime ? new Date(expirationTime) : null
+      }
+    });
+
+    if (!created) {
+      // Actualizar si ya existe (por ejemplo, si cambió el usuario o las llaves)
+      subscription.id_usuario = id_usuario;
+      subscription.keys_auth = keys.auth;
+      subscription.keys_p256dh = keys.p256dh;
+      if (user_agent) subscription.user_agent = user_agent;
+      if (expirationTime) subscription.expiration_time = new Date(expirationTime);
+      subscription.fecha_creacion = new Date(); // Actualizar fecha para mantener "frescura"
+      await subscription.save();
+    }
+
+    res.json({
+      success: true,
+      message: created ? "Suscripción creada" : "Suscripción actualizada",
+      data: subscription
+    });
+  } catch (error) {
+    console.error("Error al guardar suscripción push:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al guardar suscripción",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================================
+// 🔟 Obtener Key Pública VAPID
+// ============================================================
+const obtenerVapidKey = (req, res) => {
+  res.json({
+    success: true,
+    key: process.env.VAPID_PUBLIC_KEY
+  });
+};
+
+// ============================================================
 // EXPORTS
 // ============================================================
 module.exports = {
@@ -608,5 +751,7 @@ module.exports = {
   marcarComoLeida,
   marcarNotificacionIndividual,
   eliminarNotificacion,
-  eliminarLeidas
+  eliminarLeidas,
+  guardarSuscripcionPush,
+  obtenerVapidKey
 };
