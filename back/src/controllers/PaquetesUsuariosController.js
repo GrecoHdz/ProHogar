@@ -9,6 +9,11 @@ const FacturaRelacion = require("../models/facturaRelacionModel");
 const Factura = require("../models/facturaModel");
 const { Op, Sequelize } = require("sequelize");
 const Ciudad = require("../models/ciudadesModel");
+const Referido = require("../models/referidosModel");
+const Movimiento = require("../models/movimientosModel");
+const CreditoUsuario = require("../models/creditoUsuariosModel");
+const Membresia = require("../models/membresiaModel");
+const Rol = require("../models/rolesModel");
 
 // Obtener todos los paquetes de un usuario
 const obtenerPaquetesUsuario = async (req, res) => {
@@ -220,7 +225,7 @@ const obtenerPaquetesPorEstado = async (req, res) => {
 // Canjear un paquete
 const canjearPaquete = async (req, res) => {
     let t;
-    
+
     try {
         // Iniciar transacción
         t = await sequelize.transaction();
@@ -342,6 +347,95 @@ const canjearPaquete = async (req, res) => {
             }, { transaction: t });
         }
 
+        // --- LÓGICA DE COMISIÓN POR REFERIDO ---
+        try {
+            const referido = await Referido.findOne({
+                where: { id_referido_usuario: id_usuario },
+                transaction: t
+            });
+
+            if (referido && referido.id_referidor) {
+                // 1. Obtener información del referidor de forma anticipada
+                const referidor = await Usuario.findByPk(referido.id_referidor, {
+                    include: [{ model: Rol, as: 'rol', required: true }],
+                    transaction: t
+                });
+
+                const rolReferidor = referidor?.rol?.nombre_rol?.toLowerCase() || 'desconocido';
+                const esUsuario = rolReferidor === 'usuario';
+                let tieneProgreso = true;
+
+                // 2. Verificar membresía si es rol 'usuario'
+                if (esUsuario) {
+                    const configGracia = await Config.findOne({ where: { tipo_config: 'reset_credito' }, transaction: t });
+                    const diasGracia = parseInt(configGracia?.valor || '5', 10);
+                    const diasPorMes = 30 + diasGracia;
+
+                    const ultimaMembresia = await Membresia.findOne({
+                        where: { id_usuario: referido.id_referidor, estado: ['activa', 'vencida'] },
+                        order: [['fecha', 'DESC']],
+                        transaction: t
+                    });
+
+                    if (ultimaMembresia) {
+                        const hoy = new Date();
+                        const fechaMembresia = new Date(ultimaMembresia.fecha);
+                        const diffDias = Math.floor((hoy - fechaMembresia) / (1000 * 60 * 60 * 24));
+                        if (diffDias > diasPorMes) tieneProgreso = false;
+                    } else {
+                        tieneProgreso = false;
+                    }
+                }
+
+                // 3. Calcular comisión
+                const configComision = await Config.findOne({
+                    where: { tipo_config: 'porcentaje_referido_paquete' },
+                    transaction: t
+                });
+
+                const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
+                const comision_referido_calc = Math.round(((porcentaje_comision * parseFloat(paquete.costo) / 100) * 100) / 100);
+
+                // 4. Determinar si se registra (Para transferencia siempre se registra pendiente, para crédito depende de membresía)
+                const seDebeRegistrar = comision_referido_calc > 0 && tieneProgreso;
+
+                if (seDebeRegistrar) {
+                    // Crear movimiento de ingreso por referido
+                    const movimientoReferido = await Movimiento.create({
+                        id_usuario: referido.id_referidor,
+                        id_paquete_usuario: paqueteUsuario.id_paquete_usuario,
+                        id_referido: id_usuario,
+                        tipo: 'ingreso_referido',
+                        monto: comision_referido_calc,
+                        descripcion: `Comisión por referido (Paquete) - ${paquete.nombre}`,
+                        estado: 'pendiente',
+                        fecha: new Date()
+                    }, { transaction: t });
+
+                    // Si es crédito, completar de una vez
+                    if (!esPagoTransferencia) {
+                        await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
+
+                        const creditoReferidor = await CreditoUsuario.findOne({
+                            where: { id_usuario: referido.id_referidor },
+                            transaction: t
+                        });
+                        const creditoAnterior = creditoReferidor ? parseFloat(creditoReferidor.monto_credito) || 0 : 0;
+                        const nuevoCreditoReferidor = Math.round((creditoAnterior + comision_referido_calc) * 100) / 100;
+
+                        await CreditoUsuario.upsert({
+                            id_usuario: referido.id_referidor,
+                            monto_credito: nuevoCreditoReferidor,
+                            fecha: new Date()
+                        }, { transaction: t });
+                    }
+                }
+            }
+        } catch (errReferido) {
+            console.error('[canjearPaquete] Error procesando comisión referido:', errReferido);
+        }
+        // --- FIN LÓGICA DE COMISIÓN ---
+
         // Obtener el saldo actualizado antes de hacer commit si es necesario
         let saldoActual;
         if (!esPagoTransferencia) {
@@ -353,7 +447,7 @@ const canjearPaquete = async (req, res) => {
             await t.commit();
             t = null; // Asegurarnos de que no se use después
         }
-        
+
         return res.status(201).json({
             success: true,
             message: esPagoTransferencia
@@ -370,7 +464,7 @@ const canjearPaquete = async (req, res) => {
         if (t && !t.finished) {
             await t.rollback();
         }
-        
+
         console.error('Error al canjear paquete:', error);
         return res.status(500).json({
             success: false,
@@ -489,6 +583,20 @@ const rechazarPagoPaquete = async (req, res) => {
             // Actualizar estado del paquete a rechazado
             paqueteUsuario.estado = 'rechazado';
             await paqueteUsuario.save({ transaction: t });
+
+            // --- LÓGICA DE COMISIÓN POR REFERIDO (RECHAZAR) ---
+            try {
+                await Movimiento.destroy({
+                    where: {
+                        id_paquete_usuario: paqueteUsuario.id_paquete_usuario,
+                        tipo: 'ingreso_referido',
+                        estado: 'pendiente'
+                    },
+                    transaction: t
+                });
+            } catch (errReferido) {
+                console.error('[rechazarPagoPaquete] Error eliminando comisión referido:', errReferido);
+            }
         } else {
             console.warn(`Inconsistencia: Pago ${id} existe pero PaqueteUsuario ${pago.id_paquete_usuario} no.`);
         }
@@ -546,6 +654,71 @@ const aprobarPagoPaquete = async (req, res) => {
             // Actualizar estado del paquete a activo
             paqueteUsuario.estado = 'activo';
             await paqueteUsuario.save({ transaction: t });
+
+            // --- LÓGICA DE COMISIÓN POR REFERIDO (APROBAR) ---
+            try {
+                const movimientoReferido = await Movimiento.findOne({
+                    where: {
+                        id_paquete_usuario: paqueteUsuario.id_paquete_usuario,
+                        tipo: 'ingreso_referido',
+                        estado: 'pendiente'
+                    },
+                    transaction: t
+                });
+
+                if (movimientoReferido) {
+                    const referidor = await Usuario.findByPk(movimientoReferido.id_usuario, {
+                        include: [{ model: Rol, as: 'rol', required: true }],
+                        transaction: t
+                    });
+
+                    const rolReferidor = referidor?.rol?.nombre_rol?.toLowerCase() || 'desconocido';
+                    const esUsuario = rolReferidor === 'usuario';
+                    let tieneProgreso = true;
+
+                    if (esUsuario) {
+                        const configGracia = await Config.findOne({ where: { tipo_config: 'reset_credito' }, transaction: t });
+                        const diasGracia = parseInt(configGracia?.valor || '5', 10);
+                        const diasPorMes = 30 + diasGracia;
+
+                        const ultimaMembresia = await Membresia.findOne({
+                            where: { id_usuario: movimientoReferido.id_usuario, estado: ['activa', 'vencida'] },
+                            order: [['fecha', 'DESC']],
+                            transaction: t
+                        });
+
+                        if (ultimaMembresia) {
+                            const hoy = new Date();
+                            const fechaMembresia = new Date(ultimaMembresia.fecha);
+                            const diffDias = Math.floor((hoy - fechaMembresia) / (1000 * 60 * 60 * 24));
+                            if (diffDias > diasPorMes) tieneProgreso = false;
+                        } else {
+                            tieneProgreso = false;
+                        }
+                    }
+
+                    if (tieneProgreso) {
+                        await movimientoReferido.update({ estado: 'completado' }, { transaction: t });
+
+                        const creditoReferidor = await CreditoUsuario.findOne({
+                            where: { id_usuario: movimientoReferido.id_usuario },
+                            transaction: t
+                        });
+                        const creditoAnterior = creditoReferidor ? parseFloat(creditoReferidor.monto_credito) || 0 : 0;
+                        const nuevoCreditoReferidor = Math.round((creditoAnterior + parseFloat(movimientoReferido.monto)) * 100) / 100;
+
+                        await CreditoUsuario.upsert({
+                            id_usuario: movimientoReferido.id_usuario,
+                            monto_credito: nuevoCreditoReferidor,
+                            fecha: new Date()
+                        }, { transaction: t });
+                    } else {
+                        await movimientoReferido.destroy({ transaction: t });
+                    }
+                }
+            } catch (errReferido) {
+                console.error('[aprobarPagoPaquete] Error en comisión referido:', errReferido);
+            }
         } else {
             console.warn(`Inconsistencia: Pago ${id} existe pero PaqueteUsuario ${pago.id_paquete_usuario} no.`);
         }
