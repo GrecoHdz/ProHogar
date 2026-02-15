@@ -640,9 +640,14 @@ const obtenerRetiros = async (req, res) => {
         };
 
         res.json({
+            success: true,
             movimientos: movimientosFormateados,
+            total,
+            totalPages,
+            page: Math.floor(offset / limit) + 1,
+            hasMore: offset + limit < total,
             estadisticas: monthlyStats,
-            paginacion: {
+            pagination: {
                 total,
                 totalPages,
                 limit,
@@ -710,7 +715,7 @@ const obtenerRetiroPorId = async (req, res) => {
                     rechazados: 0,
                     total: 0
                 },
-                paginacion: {
+                pagination: {
                     total: 0,
                     totalPages: 0,
                     limit: 10,
