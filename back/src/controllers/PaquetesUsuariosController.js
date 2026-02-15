@@ -14,6 +14,9 @@ const Movimiento = require("../models/movimientosModel");
 const CreditoUsuario = require("../models/creditoUsuariosModel");
 const Membresia = require("../models/membresiaModel");
 const Rol = require("../models/rolesModel");
+const Notificacion = require("../models/notificacionesModel");
+const NotificacionDestinatario = require("../models/notificacionesDestinatariosModel");
+
 
 // Obtener todos los paquetes de un usuario
 const obtenerPaquetesUsuario = async (req, res) => {
@@ -428,6 +431,30 @@ const canjearPaquete = async (req, res) => {
                             monto_credito: nuevoCreditoReferidor,
                             fecha: new Date()
                         }, { transaction: t });
+
+                        // Enviar notificación al referidor (Pago con Saldo)
+                        try {
+                            const [notificacion] = await Notificacion.findOrCreate({
+                                where: { titulo: 'Comisión por Referido Recibida' },
+                                defaults: {
+                                    tipo: 'referidos',
+                                    creado_por: 'Sistema',
+                                    fecha_creacion: new Date()
+                                },
+                                transaction: t
+                            });
+
+                            if (notificacion) {
+                                await NotificacionDestinatario.create({
+                                    id_notificacion: notificacion.id_notificacion,
+                                    id_usuario: referido.id_referidor,
+                                    leido: false,
+                                    fecha_creacion: new Date()
+                                }, { transaction: t });
+                            }
+                        } catch (notiErr) {
+                            console.error('[canjearPaquete] Error enviando notificación:', notiErr);
+                        }
                     }
                 }
             }
@@ -712,6 +739,30 @@ const aprobarPagoPaquete = async (req, res) => {
                             monto_credito: nuevoCreditoReferidor,
                             fecha: new Date()
                         }, { transaction: t });
+
+                        // Enviar notificación al referidor (Pago por Transferencia Aprobado)
+                        try {
+                            const [notificacion] = await Notificacion.findOrCreate({
+                                where: { titulo: 'Comisión por Referido Recibida' },
+                                defaults: {
+                                    tipo: 'referidos',
+                                    creado_por: 'Sistema',
+                                    fecha_creacion: new Date()
+                                },
+                                transaction: t
+                            });
+
+                            if (notificacion) {
+                                await NotificacionDestinatario.create({
+                                    id_notificacion: notificacion.id_notificacion,
+                                    id_usuario: movimientoReferido.id_usuario,
+                                    leido: false,
+                                    fecha_creacion: new Date()
+                                }, { transaction: t });
+                            }
+                        } catch (notiErr) {
+                            console.error('[aprobarPagoPaquete] Error enviando notificación:', notiErr);
+                        }
                     } else {
                         await movimientoReferido.destroy({ transaction: t });
                     }
