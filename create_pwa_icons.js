@@ -9,7 +9,6 @@ try {
     if (fs.existsSync(src)) {
         fs.copyFileSync(src, dest1);
         fs.copyFileSync(src, dest2);
-        console.log('✅ PWA icons created from favicon.ico');
     } else {
         console.error('❌ favicon.ico not found!');
     }

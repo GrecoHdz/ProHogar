@@ -16,7 +16,6 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       process.env.VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     );
-    console.log('✅ Web Push configurado correctamente');
   } catch (error) {
     console.error('❌ Error configurando Web Push:', error.message);
   }
@@ -35,8 +34,6 @@ const enviarPushHelper = async (destinatarios, titulo, cuerpo, data = {}) => {
     });
 
     if (subscriptions.length === 0) return;
-
-    console.log(`📤 Enviando push a ${subscriptions.length} suscripciones...`);
 
     const notifications = subscriptions.map(sub => {
       const pushSubscription = {
@@ -61,10 +58,8 @@ const enviarPushHelper = async (destinatarios, titulo, cuerpo, data = {}) => {
         .catch(err => {
           if (err.statusCode === 410 || err.statusCode === 404) {
             // La suscripción ya no es válida, eliminarla
-            console.log(`🗑️ Eliminando suscripción inválida para usuario ${sub.id_usuario}`);
             return SuscripcionNotificacion.destroy({ where: { id_suscripcion: sub.id_suscripcion } });
           }
-          console.error('❌ Error enviando push:', err.message);
         });
     });
 
@@ -691,6 +686,15 @@ const guardarSuscripcionPush = async (req, res) => {
   }
 
   try {
+    // Al ser "solo uno por usuario", eliminamos cualquier otra suscripción que tenga este usuario
+    // excepto la que estamos tratando ahora (si es que ya existía)
+    await SuscripcionNotificacion.destroy({
+      where: {
+        id_usuario,
+        endpoint: { [Op.ne]: endpoint }
+      }
+    });
+
     // Verificar si ya existe la suscripción para este endpoint
     const [subscription, created] = await SuscripcionNotificacion.findOrCreate({
       where: { endpoint },
@@ -716,7 +720,7 @@ const guardarSuscripcionPush = async (req, res) => {
 
     res.json({
       success: true,
-      message: created ? "Suscripción creada" : "Suscripción actualizada",
+      message: created ? "Suscripción creada y centralizada" : "Suscripción actualizada",
       data: subscription
     });
   } catch (error) {
@@ -725,6 +729,40 @@ const guardarSuscripcionPush = async (req, res) => {
       success: false,
       message: "Error al guardar suscripción",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================================
+// 9️⃣.1 Eliminar Suscripción Push
+// ============================================================
+const eliminarSuscripcionPush = async (req, res) => {
+  const id_usuario = (req.body && req.body.id_usuario) ||
+    (req.query && req.query.id_usuario) ||
+    (req.user && req.user.id_usuario);
+
+  if (!id_usuario) {
+    return res.status(400).json({
+      success: false,
+      message: "Falta id_usuario"
+    });
+  }
+
+  try {
+    const deletedCount = await SuscripcionNotificacion.destroy({
+      where: { id_usuario }
+    });
+
+    res.json({
+      success: true,
+      message: "Suscripciones eliminadas",
+      deletedCount
+    });
+  } catch (error) {
+    console.error("Error al eliminar suscripción push:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al eliminar suscripción"
     });
   }
 };
@@ -753,5 +791,7 @@ module.exports = {
   eliminarNotificacion,
   eliminarLeidas,
   guardarSuscripcionPush,
+  eliminarSuscripcionPush,
   obtenerVapidKey
+
 };

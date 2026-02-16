@@ -14,6 +14,7 @@ const {
   eliminarLeidas,
   obtenerCreadasManualmente,
   guardarSuscripcionPush,
+  eliminarSuscripcionPush,
   obtenerVapidKey
 } = require("../controllers/NotificacionesController");
 
@@ -133,7 +134,16 @@ router.put(
   apiLimiter,
   marcarNotificacionIndividual
 );
+// 7️⃣ Eliminar todas las notificaciones leídas
+router.delete("/eliminar/leidas", authMiddleware, apiLimiter, eliminarLeidas);
 
+// 8️⃣ Obtener notificaciones creadas manualmente
+router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente);
+
+// 9️⃣ Rutas Web Push (Browser Notifications)
+router.get("/vapid-key", obtenerVapidKey);
+router.post("/suscripcion", authMiddleware, guardarSuscripcionPush);
+router.delete("/suscripcion", authMiddleware, eliminarSuscripcionPush);
 
 // 6️⃣ Eliminar una notificación
 router.delete(
@@ -148,16 +158,5 @@ router.delete(
   apiLimiter,
   eliminarNotificacion
 );
-
-// 7️⃣ Eliminar todas las notificaciones leídas
-router.delete("/eliminar/leidas", authMiddleware, apiLimiter, eliminarLeidas);
-
-// 8️⃣ Obtener notificaciones creadas manualmente
-router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente);
-
-// 9️⃣ Rutas Web Push (Browser Notifications)
-router.get("/vapid-key", obtenerVapidKey);
-router.post("/suscripcion", authMiddleware, guardarSuscripcionPush);
-
 
 module.exports = router;
