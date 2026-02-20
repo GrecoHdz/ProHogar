@@ -689,18 +689,34 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
 };
 
 //Obtener todas las solicitudes de servicios por usuario con el nombre del servicio
+//Obtener todas las solicitudes de servicios por usuario con el nombre del servicio
 const obtenerSolicitudServicioPorUsuario = async (req, res) => {
     try {
         const idUsuario = req.params.id;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 3;
         const offset = (page - 1) * limit;
+        const statusFilter = req.query.status; // 'active' o 'finished'
 
-        // Obtener todas las solicitudes con los datos del servicio
-        const solicitudes = await SolicitudServicio.findAll({
-            where: {
-                id_usuario: idUsuario
-            },
+        // Construir condición where base
+        let whereCondition = {
+            id_usuario: idUsuario
+        };
+
+        // Aplicar filtro de estado si existe
+        if (statusFilter === 'finished') {
+            whereCondition.estado = {
+                [Op.in]: ['finalizado', 'calificado']
+            };
+        } else if (statusFilter === 'active') {
+            whereCondition.estado = {
+                [Op.notIn]: ['finalizado', 'calificado']
+            };
+        }
+
+        // Obtener solicitudes filtradas
+        const solicitudes = await SolicitudServicio.findAndCountAll({
+            where: whereCondition,
             include: [{
                 model: Servicio,
                 as: 'servicio',
@@ -719,8 +735,8 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             offset: offset
         });
 
-        // Formatear la respuesta para incluir el servicio con id y nombre
-        const solicitudesFormateadas = solicitudes.map(({ id_servicio, servicio, ...solicitud }) => ({
+        // Formatear la respuesta
+        const solicitudesFormateadas = solicitudes.rows.map(({ id_servicio, servicio, ...solicitud }) => ({
             ...solicitud,
             servicio: {
                 id_servicio,
@@ -728,34 +744,28 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             }
         }));
 
-        // Contar las solicitudes totales
-        const totalSolicitudes = await SolicitudServicio.count({
-            where: {
-                id_usuario: idUsuario
-            }
-        });
-
-        // Contar solicitudes finalizadas (completadas)
-        const finalizadas = await SolicitudServicio.count({
-            where: {
-                id_usuario: idUsuario,
-                estado: 'finalizado'
-            }
-        });
-
-        // Contar solicitudes pendientes (cualquier estado que no sea finalizado o cancelado)
-        const pendientes = await SolicitudServicio.count({
-            where: {
-                id_usuario: idUsuario,
-                [Op.and]: [
-                    { estado: { [Op.ne]: 'finalizado' } },
-                    { estado: { [Op.ne]: 'calificado' } },
-                    { estado: { [Op.ne]: 'cancelado' } }
-                ]
-            }
-        });
-
-        const hasMore = (offset + limit) < totalSolicitudes;
+        // Conteos globales (sin importar el filtro actual para mostrar en badges)
+        const [totalSolicitudes, finalizadas, pendientes] = await Promise.all([
+            SolicitudServicio.count({
+                where: { id_usuario: idUsuario }
+            }),
+            SolicitudServicio.count({
+                where: {
+                    id_usuario: idUsuario,
+                    estado: 'finalizado'
+                }
+            }),
+            SolicitudServicio.count({
+                where: {
+                    id_usuario: idUsuario,
+                    [Op.and]: [
+                        { estado: { [Op.ne]: 'finalizado' } },
+                        { estado: { [Op.ne]: 'calificado' } },
+                        { estado: { [Op.ne]: 'cancelado' } }
+                    ]
+                }
+            })
+        ]);
 
         res.json({
             solicitudes: solicitudesFormateadas,
@@ -763,8 +773,8 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             finalizadas,
             pendientes,
             page,
-            totalPages: Math.ceil(totalSolicitudes / limit),
-            hasMore
+            totalPages: Math.ceil(solicitudes.count / limit),
+            hasMore: (offset + limit) < solicitudes.count
         });
     } catch (error) {
         console.error(error);
@@ -783,13 +793,25 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             limit = 10,
             offset = 0,
             fechaInicio,
-            fechaFin
+            fechaFin,
+            tab // Nuevo parámetro para filtrar por pestaña
         } = req.query;
 
         // Crear objeto de condiciones base
         const whereClause = {
             id_tecnico: id_tecnico
         };
+
+        // Filtro por pestaña (Activos vs Finalizados)
+        if (tab === 'active') {
+            whereClause.estado = {
+                [Op.notIn]: ['finalizado', 'calificado', 'cancelado', 'pendiente_asignacion']
+            };
+        } else if (tab === 'finished') {
+            whereClause.estado = {
+                [Op.in]: ['finalizado', 'calificado']
+            };
+        }
 
         // Agregar filtro de fechas si están presentes
         if (fechaInicio || fechaFin) {
@@ -823,14 +845,12 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             offset: parseInt(offset)
         });
 
-        // Contar total de solicitudes para este técnico con los mismos filtros
-        const countWhereClause = { ...whereClause };
-
+        // Contar solicitudes totales (con los filtros de pestaña aplicados)
         const totalSolicitudes = await SolicitudServicio.count({
-            where: countWhereClause
+            where: whereClause
         });
 
-        // Formatear la respuesta para incluir el objeto servicio y excluir id_usuario
+        // Formatear la respuesta
         const solicitudesFormateadas = solicitudes.map(solicitud => {
             const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
             return {
@@ -839,27 +859,20 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             };
         });
 
-        // Contar solicitudes finalizadas (completadas) y pendientes de pago
-        const finalizadas = await SolicitudServicio.count({
+        // Contadores globales (siempre devuelven el total sin el filtro de 'tab' actual)
+        const countBaseWhere = { id_tecnico: id_tecnico };
+
+        const finalizadasCount = await SolicitudServicio.count({
             where: {
-                ...whereClause,
-                [Op.or]: [
-                    { estado: 'finalizado' },
-                    { estado: 'pendiente_pagoservicio' }
-                ]
+                ...countBaseWhere,
+                estado: { [Op.in]: ['finalizado', 'calificado'] }
             }
         });
 
-        // Contar solicitudes activas (ni finalizadas ni canceladas)
-        const activas = await SolicitudServicio.count({
+        const activasCount = await SolicitudServicio.count({
             where: {
-                ...whereClause,
-                [Op.and]: [
-                    { estado: { [Op.ne]: 'finalizado' } },
-                    { estado: { [Op.ne]: 'cancelado' } },
-                    { estado: { [Op.ne]: 'pendiente_pagoservicio' } },
-                    { estado: { [Op.ne]: 'pendiente_asignacion' } }
-                ]
+                ...countBaseWhere,
+                estado: { [Op.notIn]: ['finalizado', 'calificado', 'cancelado', 'pendiente_asignacion'] }
             }
         });
 
@@ -870,9 +883,9 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             solicitudes: solicitudesFormateadas,
             total: totalSolicitudes,
             hasMore: hasMore,
-            offset: parseInt(offset) + solicitudes.length, // Nuevo offset para la próxima carga
-            finalizadas,
-            activas,
+            offset: parseInt(offset) + solicitudes.length,
+            finalizadas: finalizadasCount,
+            activas: activasCount,
         });
     } catch (error) {
         console.error('Error al obtener las solicitudes del técnico:', error);

@@ -437,8 +437,8 @@ const enviarNotificacion = async (req, res) => {
     // Se ejecuta DESPUÉS de confirmar que se guardaron en DB
     enviarPushHelper(
       destinatarios,
-      notificacion.titulo,
       notificacion.tipo ? `Tienes una nueva notificación` : 'Tienes una nueva notificación',
+      notificacion.titulo,
       {
         id_notificacion: notificacion.id_notificacion,
         tipo: notificacion.tipo

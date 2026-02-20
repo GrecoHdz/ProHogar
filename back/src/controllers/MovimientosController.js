@@ -301,25 +301,55 @@ const getTopUsuariosCredito = async (req, res) => {
 // Obtener movimientos de tipo ingreso de un mes especifico
 const getMovimientosIngresoMes = async (req, res) => {
     try {
-        const { mes } = req.query; // Formato esperado: 'YYYY-MM'
+        const { mes, month } = req.query; // Formato esperado: 'YYYY-MM'
+        const filtroMes = month || mes;
 
         const where = { tipo: 'ingreso' };
 
-        if (mes && /^\d{4}-\d{2}$/.test(mes)) {
-            const [year, month] = mes.split('-').map(Number);
+        if (filtroMes && /^\d{4}-\d{2}$/.test(filtroMes)) {
+            const [year, monthVal] = filtroMes.split('-').map(Number);
             where[Op.and] = [
-                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha')), year),
-                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha')), month)
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('Movimiento.fecha')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('Movimiento.fecha')), monthVal)
             ];
         } else {
-            // Si no hay mes, podemos optar por el mes actual o todos (el usuario pidió un mes específico)
-            // Por consistencia, si no hay mes, no filtramos por fecha pero el usuario usualmente lo enviará.
+            // Si no hay mes, devuelve todo el historial (comportamiento actual)
         }
 
-        const movimientos = await Movimiento.findAll({
+        const movimientosRaw = await Movimiento.findAll({
             where,
-            attributes: ['id_movimiento', 'id_cotizacion', 'monto', 'tipo', 'fecha', 'estado'],
-            raw: true
+            include: [
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    attributes: ['nombre']
+                },
+                {
+                    model: Cotizacion,
+                    as: 'cotizacion',
+                    attributes: ['id_cotizacion', 'id_solicitud'],
+                    include: [{
+                        model: SolicitudServicio,
+                        as: 'solicitud',
+                        attributes: ['id_solicitud'],
+                        include: [{
+                            model: Servicio,
+                            as: 'servicio',
+                            attributes: ['nombre']
+                        }]
+                    }]
+                }
+            ],
+            order: [['fecha', 'DESC']]
+        });
+
+        const movimientos = movimientosRaw.map(m => {
+            const data = m.get({ plain: true });
+            return {
+                ...data,
+                nombre_servicio: data.cotizacion?.solicitud?.servicio?.nombre || null,
+                nombre_usuario: data.usuario?.nombre || 'Técnico'
+            };
         });
 
         res.json({
@@ -348,7 +378,7 @@ const obtenerRetiros = async (req, res) => {
         const metodoPago = req.query.metodo_pago;
 
         // Construir condiciones de búsqueda
-        const whereCondition = { tipo: { [Op.in]: ['retiro', 'retiro_referido'] } }; // Solo retiros
+        const whereCondition = { tipo: { [Op.in]: ['retiro', 'retiro_referido', 'retiro_referidos'] } }; // Solo retiros y sus variantes
         const andConditions = [];
 
         // Filtro por término de búsqueda
@@ -583,7 +613,7 @@ const obtenerRetiros = async (req, res) => {
                 id_solicitud: datosMovimiento.cotizacion?.id_solicitud || null,
                 monto: monto,
                 fecha: new Date(datosMovimiento.fecha).toISOString().split('T')[0],
-                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                estado: estadoNormalizado === 'completado' ? 'Completado' : (estadoNormalizado === 'rechazado' ? 'Rechazado' : 'Pendiente'),
                 tipo: datosMovimiento.tipo,
                 descripcion: datosMovimiento.descripcion,
                 nombre_usuario: datosMovimiento.usuario ?
@@ -790,7 +820,8 @@ const obtenerReporteIngresos = async (req, res) => {
         const [
             ingresosMembresias,
             ingresosVisitas,
-            ingresosServicios, // Ahora es el total directo
+            ingresosServicios, // Comisión de la app (para categoría)
+            efectivoServiciosData, // Efectivo real recibido de servicios
             totalRetiros,
             totalComisiones,
             sumatoriaMontoPaquetes
@@ -833,10 +864,26 @@ const obtenerReporteIngresos = async (req, res) => {
                     } : {})
                 }
             }) || 0,
-            // Obtener total de retiros
+            // Obtener EFECTIVO REAL recibido por servicios (para saldo bancario)
+            Cotizacion.findAll({
+                attributes: [
+                    [Sequelize.fn('SUM', Sequelize.literal('COALESCE(monto_manodeobra, 0) - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)')), 'total']
+                ],
+                where: {
+                    estado: 'confirmado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                },
+                raw: true
+            }),
+            // Obtener el total que se le debe a los TÉCNICOS (Ingresos generados por ellos)
             Movimiento.sum('monto', {
                 where: {
-                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
+                    tipo: 'ingreso',
                     estado: 'completado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
@@ -846,7 +893,7 @@ const obtenerReporteIngresos = async (req, res) => {
                     } : {})
                 }
             }),
-            // Obtener total de comisiones por referidos
+            // Obtener total de comisiones por referidos (LO QUE LA APP DEBE)
             Movimiento.sum('monto', {
                 where: {
                     tipo: 'ingreso_referido',
@@ -874,16 +921,16 @@ const obtenerReporteIngresos = async (req, res) => {
         ]);
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
+        const efectivoServicios = parseFloat(efectivoServiciosData[0]?.total || 0);
 
-
-        // Calcular ingresos totales (solo sumamos ingresos, no restamos retiros ni comisiones aquí)
-        const ingresosTotales = (ingresosServicios || 0) +
+        // Calcular saldo bancario real (Efectivo que entró - Efectivo que salió)
+        const ingresosTotales = efectivoServicios +
             (ingresosMembresias || 0) +
             (ingresosVisitas || 0) +
-            (ingresosPaquetes || 0);
+            (parseFloat(sumatoriaMontoPaquetes || 0)); // Monto total de paquetes
 
-        // Calcular ganancia neta (ingresos - retiros)
-        const gananciaNeta = ingresosTotales - (totalRetiros || 0);
+        // Calcular ganancia neta REAL (Saldo Bruto - Retiros Técnicos - Comisiones Referidos)
+        const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -934,23 +981,18 @@ const obtenerReporteIngresos = async (req, res) => {
                 }
             }) || 0;
 
-            // Obtener ingresos por servicios (cotizaciones)
-            const ingresosServiciosMes = await Cotizacion.sum('monto_comision_app', {
-                where: {
-                    estado: 'confirmado',
-                    fecha: {
-                        [Op.between]: [
-                            fechaInicio,
-                            fechaFin
-                        ]
-                    }
-                }
-            }) || 0;
+            // Obtener efectivo real recibido por servicios del mes
+            const efectivoServiciosMesData = await Cotizacion.findAll({
+                attributes: [[Sequelize.fn('SUM', Sequelize.literal('COALESCE(monto_manodeobra, 0) - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)')), 'total']],
+                where: { estado: 'confirmado', fecha: { [Op.between]: [fechaInicio, fechaFin] } },
+                raw: true
+            });
+            const efectivoServiciosMes = parseFloat(efectivoServiciosMesData[0]?.total || 0);
 
-            // Obtener retiros del mes
-            const retirosMes = await Movimiento.sum('monto', {
+            // Obtener lo que se le "debió" a técnicos y referidores en ese mes (Deudas generadas)
+            const deudasMes = await Movimiento.sum('monto', {
                 where: {
-                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
+                    tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] },
                     estado: 'completado',
                     fecha: {
                         [Op.between]: [
@@ -974,10 +1016,8 @@ const obtenerReporteIngresos = async (req, res) => {
                 }
             }) || 0;
 
-            const ingresosPaquetesMes = (parseFloat(sumatoriaPaquetesMes) * porcentajeComision) / 100;
-
-            const ingresosTotalesMes = (ingresosServiciosMes || 0) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + (ingresosPaquetesMes || 0);
-            const gananciaNetaMes = ingresosTotalesMes - (retirosMes || 0);
+            const ingresosTotalesMes = efectivoServiciosMes + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + (parseFloat(sumatoriaPaquetesMes || 0));
+            const gananciaNetaMes = ingresosTotalesMes - (deudasMes || 0);
 
             return {
                 mes: mes,
@@ -1022,25 +1062,39 @@ const obtenerReporteIngresos = async (req, res) => {
 // Obtener todos los movimientos con información detallada
 const getAllMovimientos = async (req, res) => {
     try {
-        const { page = 1, limit = 10, tipo, fecha } = req.query;
+        const { page = 1, limit = 10, tipo, fecha, month, estado } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const offset = (pageNum - 1) * limitNum;
+        const filterDate = fecha || month;
 
         // Configurar condiciones de búsqueda
         const where = {};
 
         // Filtrar por tipo de movimiento
-        if (tipo === 'retiros') where.tipo = { [Op.in]: ['retiro', 'retiro_referido'] };
-        if (tipo === 'ingresos') where.tipo = 'ingreso';
+        if (tipo) {
+            if (tipo === 'retiros') {
+                where.tipo = { [Op.in]: ['retiro', 'retiro_referido', 'retiro_referidos'] };
+            } else if (tipo === 'ingresos') {
+                where.tipo = 'ingreso';
+            } else {
+                // Permitir tipos específicos como 'ingreso_referido'
+                where.tipo = tipo;
+            }
+        }
+
+        // Filtrar por estado
+        if (estado) {
+            where.estado = estado;
+        }
 
         // Filtrar por mes y año si se proporciona fecha en formato YYYY-MM
-        if (fecha && /^\d{4}-\d{2}$/.test(fecha)) {
-            const [year, month] = fecha.split('-').map(Number);
-            const startDate = ajustarFechaLocal(new Date(year, month - 1, 1), true);
-            const endDate = ajustarFechaLocal(new Date(year, month, 0), false);
+        if (filterDate && /^\d{4}-\d{2}$/.test(filterDate)) {
+            const [year, monthVal] = filterDate.split('-').map(Number);
+            const startDate = ajustarFechaLocal(new Date(year, monthVal - 1, 1), true);
+            const endDate = ajustarFechaLocal(new Date(year, monthVal, 0), false);
 
-            where.fecha = {
+            where['$Movimiento.fecha$'] = {
                 [Op.between]: [startDate, endDate]
             };
         }
@@ -1105,7 +1159,7 @@ const getAllMovimientos = async (req, res) => {
                 descripcion: data.descripcion || null,
                 monto: monto,
                 fecha: data.fecha, // Mantener Date para ordenar, lo formatearemos al final
-                estado: estadoNormalizado === 'completado' ? 'Completado' : 'Pendiente',
+                estado: estadoNormalizado === 'completado' ? 'Completado' : (estadoNormalizado === 'rechazado' ? 'Rechazado' : 'Pendiente'),
                 tipo: data.tipo,
                 nombre_usuario: data.usuario ?
                     `${data.usuario.nombre || ''}`.trim() :
@@ -2200,8 +2254,8 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
         if (tipo) {
             if (tipo === 'retiro') {
                 where.tipo = 'retiro_referido';
-            } else if (['retiro_referido', 'ingreso_referido'].includes(tipo)) {
-                where.tipo = tipo;
+            } else if (['retiro_referido', 'retiro_referidos', 'ingreso_referido', 'ingreso_referidos'].includes(tipo)) {
+                where.tipo = tipo; // Usamos el tipo exacto que viene, o podríamos usar Op.in si quisiéramos normalizar
             }
         }
 
@@ -2245,8 +2299,8 @@ const getIngresosyRetirosdeReferidos = async (req, res) => {
                 const monto = parseFloat(mov.monto) || 0;
                 const esCompletado = mov.estado.toLowerCase() === 'completado';
 
-                if (mov.tipo === 'ingreso_referido' && esCompletado) acc.ingresosReferido += monto;
-                if (mov.tipo === 'retiro_referido' && esCompletado) acc.retiros += monto;
+                if (['ingreso_referido', 'ingreso_referidos'].includes(mov.tipo) && esCompletado) acc.ingresosReferido += monto;
+                if (['retiro_referido', 'retiro_referidos'].includes(mov.tipo) && esCompletado) acc.retiros += monto;
 
                 return acc;
             },

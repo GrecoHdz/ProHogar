@@ -484,16 +484,33 @@ const obtenerPendientesFacturacion = async (req, res) => {
             nest: true
         });
 
-        // Filtrar y unificar
+        // Filtrar y unificar con normalización de campos para el frontend
         const normalize = (items, type) => {
             return items
                 .filter(item => !item.facturaRelacion?.factura)
                 .map(item => {
                     const raw = item.toJSON ? item.toJSON() : item;
 
-                    // Si es un paquete, el monto a facturar es solo la comisión de la app
-                    if (type === 'packages') {
-                        raw.monto_total_paquete = raw.monto; // Guardamos el original por si acaso
+                    // Normalizar campos según el tipo
+                    if (type === 'membership') {
+                        raw.service = 'Membresía';
+                        raw.client = raw.usuario?.nombre || 'Cliente Desconocido';
+                    } else if (type === 'visits') {
+                        raw.service = raw.solicitud?.servicio?.nombre || 'Servicio de Visita';
+                        raw.client = raw.usuario?.nombre || 'Cliente Desconocido';
+                    } else if (type === 'services') {
+                        raw.service = raw.solicitud?.servicio?.nombre || 'Servicio Técnico';
+                        raw.client = raw.solicitud?.cliente?.nombre || 'Cliente Desconocido';
+                        // Usar el monto de comisión registrado en la base de datos
+                        const montoComision = parseFloat(raw.monto_comision_app) || 0;
+                        raw.monto = montoComision;
+                        raw.amount = montoComision;
+                        raw.monto_total = montoComision;
+                    } else if (type === 'packages') {
+                        raw.service = raw.paqueteUsuario?.paquete?.nombre || 'Paquete Adquirido';
+                        raw.client = raw.usuario?.nombre || 'Cliente Desconocido';
+                        // Para paquetes, el monto a facturar es solo la comisión de la app
+                        raw.monto_total_paquete = raw.monto;
                         raw.monto = (parseFloat(raw.monto) * porcentajeComision) / 100;
                     }
 

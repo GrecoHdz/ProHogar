@@ -421,8 +421,10 @@ const acceptPayment = async (req, res) => {
     const descMembresia = parseFloat(cotizacion.descuento_membresia) || 0;
     const credUsado = parseFloat(cotizacion.credito_usado) || 0;
 
-    const baseCalculo = Math.max(0, manoObra - descMembresia - credUsado);
-    const montoComisionApp = Math.round(((baseCalculo * porcentajeApp) / 100) * 100) / 100;
+    const baseCalculo = manoObra;
+    const comisionBrutaApp = Math.round(((baseCalculo * porcentajeApp) / 100) * 100) / 100;
+    // La App absorbe el descuento de membresía de su propia comisión (Utilidad Real)
+    const montoComisionApp = Math.max(0, comisionBrutaApp - descMembresia);
 
     // 4️⃣ Actualizar estados principales y guardar comisión
     await cotizacion.update({
@@ -442,7 +444,13 @@ const acceptPayment = async (req, res) => {
     });
 
     if (movimientoTecnico) {
-      await movimientoTecnico.update({ estado: 'completado' }, { transaction: t });
+      const porcentajeTecnico = 100 - porcentajeApp;
+      const montoTecnico = Math.round(((manoObra * porcentajeTecnico) / 100) * 100) / 100;
+
+      await movimientoTecnico.update({
+        estado: 'completado',
+        monto: montoTecnico
+      }, { transaction: t });
     } else {
       // No se muestra mensaje de log para mantener silencioso
     }
@@ -538,7 +546,7 @@ const acceptPayment = async (req, res) => {
     if (movimientoReferido) {
       const rolReferidor = movimientoReferido.usuario?.rol?.nombre_rol?.toLowerCase() || 'desconocido';
       const esUsuario = rolReferidor === 'usuario';
-      
+
       // Solo verificamos membresía para usuarios con rol 'usuario'
       if (esUsuario) {
         if (tieneProgreso) {
