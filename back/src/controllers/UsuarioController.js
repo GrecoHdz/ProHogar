@@ -1269,16 +1269,18 @@ const crearUsuario = async (req, res) => {
         if (usuarioExistente) {
             let field = 'dato';
 
-            if (usuarioExistente.email === email) field = 'correo electrónico';
-            else if (usuarioExistente.telefono === telefono) field = 'teléfono';
-            else if (usuarioExistente.identidad === identidad) field = 'número de identidad';
+            if (email && usuarioExistente.email?.toLowerCase() === email.toLowerCase()) field = 'correo electrónico';
+            else if (telefono && usuarioExistente.telefono === telefono) field = 'teléfono';
+            else if (identidad && usuarioExistente.identidad?.replace(/\D/g, '') === identidad.replace(/\D/g, '')) field = 'número de identidad';
 
             return res.status(400).json({
+                success: false,
                 status: 400,
                 error: "Error de validación",
                 message: `El ${field} ya está en uso por otro usuario`,
                 field: field === 'correo electrónico' ? 'email' :
-                    field === 'teléfono' ? 'telefono' : 'identidad'
+                    field === 'teléfono' ? 'telefono' :
+                        field === 'número de identidad' ? 'identidad' : 'dato'
             });
         }
 
