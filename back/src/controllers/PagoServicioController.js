@@ -7,6 +7,8 @@ const Config = require("../models/configModel");
 const Membresia = require("../models/membresiaModel");
 const Usuario = require("../models/usuariosModel");
 const Rol = require("../models/rolesModel");
+const Servicio = require("../models/serviciosModel");
+
 
 
 const processPayment = async (req, res) => {
@@ -41,7 +43,11 @@ const processPayment = async (req, res) => {
     const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
     if (!cotizacion) throw new Error('Cotización no encontrada');
 
-    const solicitud = await SolicitudServicio.findByPk(id_solicitud, { transaction: t });
+    const solicitud = await SolicitudServicio.findByPk(id_solicitud, {
+      include: [{ model: Servicio, as: 'servicio' }],
+      transaction: t
+    });
+
     if (!solicitud) throw new Error('Solicitud de servicio no encontrada');
 
     // Prevención: si ya está procesada
@@ -156,7 +162,7 @@ const processPayment = async (req, res) => {
                   id_referido: id_usuario,
                   tipo: 'ingreso_referido',
                   monto: comision_referido_calc,
-                  descripcion: `Comisión por referido - ${nombre || ''}`,
+                  descripcion: `Comisión ${nombre || ''} - ${solicitud?.servicio?.nombre || ''}`,
                   estado: 'pendiente',
                   fecha: new Date()
                 },
@@ -433,6 +439,29 @@ const acceptPayment = async (req, res) => {
     }, { transaction: t });
     await solicitud.update({ estado: 'finalizado' }, { transaction: t });
 
+    // 4.5️⃣ Acreditar cashback de membresía al usuario (si aplica)
+    // El descuento_membresia es un cashback que se devuelve al usuario como crédito
+    if (descMembresia > 0) {
+      const creditoActual = await CreditoUsuario.findOne({
+        where: { id_usuario: cotizacion.id_usuario || solicitud.id_usuario },
+        transaction: t
+      });
+
+      const montoAnterior = creditoActual ? parseFloat(creditoActual.monto_credito) || 0 : 0;
+      const nuevoCredito = Math.round((montoAnterior + descMembresia) * 100) / 100;
+
+      await CreditoUsuario.upsert(
+        {
+          id_usuario: cotizacion.id_usuario || solicitud.id_usuario,
+          monto_credito: nuevoCredito,
+          fecha: new Date()
+        },
+        { transaction: t }
+      );
+
+      console.log(`[AceptarPago] Cashback de membresía acreditado: L. ${descMembresia} al usuario ID ${cotizacion.id_usuario || solicitud.id_usuario}`);
+    }
+
     // 5️⃣ Actualizar movimiento del técnico (si existe) buscando por id_cotizacion
     const movimientoTecnico = await Movimiento.findOne({
       where: {
@@ -579,7 +608,8 @@ const acceptPayment = async (req, res) => {
         nuevo_estado_solicitud: 'finalizado',
         movimiento_tecnico: movimientoTecnico ? 'completado' : 'no encontrado',
         movimiento_referido: movimientoReferido ? 'completado' : 'no encontrado',
-        id_referidor: movimientoReferido ? movimientoReferido.id_usuario : null
+        id_referidor: movimientoReferido ? movimientoReferido.id_usuario : null,
+        cashback: descMembresia
       }
     });
   } catch (error) {

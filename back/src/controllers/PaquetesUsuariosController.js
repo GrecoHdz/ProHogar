@@ -912,13 +912,15 @@ const obtenerPagosPaquetes = async (req, res) => {
             };
         });
 
+        const totalMontoBruto = pagosProcesados.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0);
         const totalComisiones = pagosProcesados.reduce((sum, p) => sum + p.monto_comision, 0);
 
         res.json({
             success: true,
             data: pagosProcesados,
             estadisticas: {
-                total: totalComisiones,
+                total: totalMontoBruto,
+                comisiones: totalComisiones,
                 count: pagosProcesados.length,
                 porcentaje_config: porcentajeComision
             }

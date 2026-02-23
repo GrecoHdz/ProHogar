@@ -1142,11 +1142,9 @@ const getAllMovimientos = async (req, res) => {
             // Calcular el monto según el tipo de movimiento
             let monto;
             if (esIngreso && data.cotizacion) {
-                const cotizacion = data.cotizacion;
-                // Cálculo: (monto_manodeobra - descuento_membresia - credito_usado)
-                const montoBase = (parseFloat(cotizacion.monto_manodeobra || 0) -
-                    parseFloat(cotizacion.descuento_membresia || 0) -
-                    parseFloat(cotizacion.credito_usado || 0));
+                // Cálculo: (monto_manodeobra - credito_usado) - Refleja lo que entra al banco
+                const montoBase = (parseFloat(data.cotizacion.monto_manodeobra || 0) -
+                    parseFloat(data.cotizacion.credito_usado || 0));
                 monto = montoBase.toFixed(2);
             } else {
                 monto = parseFloat(data.monto || 0).toFixed(2);
@@ -1291,12 +1289,11 @@ const getAllMovimientos = async (req, res) => {
             const paquetesFormateados = paquetesRaw.map(p => {
                 const d = p.get({ plain: true });
                 const montoTotal = parseFloat(d.monto || 0);
-                const comision = (montoTotal * porcentajeComision) / 100;
                 return {
                     id_movimiento: `paquete_${d.id_pago_paquete}`,
                     id_pago: null,
                     id_solicitud: d.id_paquete_usuario,
-                    monto: comision.toFixed(2),
+                    monto: montoTotal.toFixed(2),
                     fecha: d.fecha,
                     estado: 'Completado',
                     tipo: 'ingreso',
@@ -1484,10 +1481,10 @@ const obtenerEstadisticasDashboard = async (req, res) => {
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
 
-        // Obtener total de retiros completados
-        const totalRetiros = await Movimiento.sum('monto', {
+        // Obtener total de comisiones por referidos (Deuda generada que resta utilidad)
+        const totalComisiones = await Movimiento.sum('monto', {
             where: {
-                tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
+                tipo: 'ingreso_referido',
                 estado: 'completado',
                 ...(fechaInicio || fechaFin ? {
                     fecha: {
@@ -1498,14 +1495,14 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             }
         }) || 0;
 
-        // Calcular el total sumando todas las fuentes de ingreso
+        // Calcular el total de ingresos brutos (Utilidad Bruta App)
         const ingresosGross = (totalCotizaciones || 0) +
             (ingresosMembresias || 0) +
             (ingresosVisitas || 0) +
             (ingresosPaquetes || 0);
 
-        // Calcular ingresos netos restando los retiros
-        const ingresosTotales = ingresosGross - totalRetiros;
+        // Calcular ingresos netos restando solo las comisiones de referidos (Utilidad Real)
+        const ingresosTotales = ingresosGross - totalComisiones;
 
         // Verificar si hay servicios pendientes (sin filtro de fecha)
         const serviciosPendientes = await SolicitudServicio.count({
@@ -1532,14 +1529,14 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             totalServiciosPendientes: serviciosPendientes || 0,
             membresiasPendiente: membresiasPendientes > 0 ? 'si' : 'no',
             totalMembresiasPendientes: membresiasPendientes || 0,
-            ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2), // Ingresos netos (después de retiros)
+            ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2), // Ingresos netos (Utilidad Real)
             desgloseIngresos: {
                 servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
                 membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 visitas: parseFloat(ingresosVisitas || 0).toFixed(2),
                 paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
-                ingresosGross: parseFloat(ingresosGross || 0).toFixed(2), // Total de ingresos brutos
-                retiros: parseFloat(totalRetiros || 0).toFixed(2) // Total de retiros
+                comisiones: parseFloat(totalComisiones || 0).toFixed(2),
+                ingresosGross: parseFloat(ingresosGross || 0).toFixed(2)
             }
         };
 
