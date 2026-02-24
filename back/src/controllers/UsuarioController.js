@@ -11,6 +11,8 @@ const { Op, fn, col, literal, Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Número de rondas de hashing
 const Referido = require('../models/referidosModel');
+const Cotizacion = require("../models/cotizacionModel");
+const SolicitudServicio = require("../models/solicitudServicioModel");
 const { cloudinary } = require('../config/cloudinary');
 
 // Verificar perfil de técnico
@@ -447,12 +449,12 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
         const saldosTotales = {};
         await Promise.all(
             tecnicosIds.map(async (id_usuario) => {
-                const [ingresos, retiros] = await Promise.all([
+                const [ingresos, retiros, creditoUsado] = await Promise.all([
                     Movimiento.sum('monto', {
                         where: {
                             id_usuario,
                             estado: 'completado',
-                            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+                            tipo: { [Op.in]: ['ingreso', 'cashback', 'retiro_referido'] }
                         }
                     }),
                     Movimiento.sum('monto', {
@@ -461,12 +463,21 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
                             estado: 'completado',
                             tipo: 'retiro'
                         }
+                    }),
+                    Cotizacion.sum('credito_usado', {
+                        where: { estado: 'confirmado' },
+                        include: [{
+                            model: SolicitudServicio,
+                            as: 'solicitud',
+                            where: { id_usuario },
+                            required: true,
+                            attributes: []
+                        }]
                     })
                 ]);
 
-                const saldoMovimientos = (ingresos || 0) - (retiros || 0);
-                const saldoCredito = mapaCreditos[id_usuario] || 0;
-                saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
+                const saldoMovimientos = (ingresos || 0) - (retiros || 0) - (creditoUsado || 0);
+                saldosTotales[id_usuario] = parseFloat(saldoMovimientos || 0);
             })
         );
 
@@ -971,12 +982,12 @@ const obtenerTecnicosYAdminsPorCiudad = async (req, res) => {
         const saldosTotales = {};
         await Promise.all(
             usuariosIds.map(async (id_usuario) => {
-                const [ingresos, retiros] = await Promise.all([
+                const [ingresos, retiros, creditoUsado] = await Promise.all([
                     Movimiento.sum('monto', {
                         where: {
                             id_usuario,
                             estado: 'completado',
-                            tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+                            tipo: { [Op.in]: ['ingreso', 'cashback', 'retiro_referido'] }
                         }
                     }),
                     Movimiento.sum('monto', {
@@ -985,12 +996,21 @@ const obtenerTecnicosYAdminsPorCiudad = async (req, res) => {
                             estado: 'completado',
                             tipo: 'retiro'
                         }
+                    }),
+                    Cotizacion.sum('credito_usado', {
+                        where: { estado: 'confirmado' },
+                        include: [{
+                            model: SolicitudServicio,
+                            as: 'solicitud',
+                            where: { id_usuario },
+                            required: true,
+                            attributes: []
+                        }]
                     })
                 ]);
 
-                const saldoMovimientos = (ingresos || 0) - (retiros || 0);
-                const saldoCredito = mapaCreditos[id_usuario] || 0;
-                saldosTotales[id_usuario] = parseFloat(saldoMovimientos + saldoCredito);
+                const saldoMovimientos = (ingresos || 0) - (retiros || 0) - (creditoUsado || 0);
+                saldosTotales[id_usuario] = parseFloat(saldoMovimientos || 0);
             })
         );
 

@@ -23,7 +23,8 @@ const {
     actualizarMovimiento,
     eliminarMovimiento,
     getTransacciones,
-    getMovimientosIngresoMes
+    getMovimientosIngresoMes,
+    getTopIngresosReferidos
 } = require("../controllers/MovimientosController");
 
 // Middleware de autenticación
@@ -95,6 +96,9 @@ router.get("/creditos/:id_usuario", [
 
 //Obtener top 5 usuarios con más crédito
 router.get("/toptecnicos/creditos", validarErrores, getTopUsuariosCredito);
+
+// Obtener top 3 usuarios con más ingresos por referidos
+router.get("/referidos/top/ingresos", validarErrores, getTopIngresosReferidos);
 
 //Obtener estadisticas generales por tecnico
 router.get("/estadisticas/:id_tecnico", [

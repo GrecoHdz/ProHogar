@@ -11,6 +11,7 @@ const Usuario = require('../models/usuariosModel');
 const Rol = require('../models/rolesModel');
 const PagoPaquete = require("../models/pagoPaqueteModel");
 const Config = require("../models/configModel");
+const Ciudad = require("../models/ciudadesModel");
 
 //Obtener transacciones con datos de cotización y suma total de montos
 const getTransacciones = async (req, res) => {
@@ -60,14 +61,27 @@ const getTransacciones = async (req, res) => {
             }
         });
 
-        const total = totalMovimientos + totalMembresiasCount;
+        // 📋 Contar cotizaciones con crédito usado
+        const whereCotizacionesCount = {
+            estado: 'confirmado',
+            credito_usado: { [Op.gt]: 0 }
+        };
+        const totalCotizacionesCount = await Cotizacion.count({
+            where: whereCotizacionesCount,
+            include: [{
+                model: SolicitudServicio,
+                as: 'solicitud',
+                where: { id_usuario },
+                required: true
+            }]
+        });
 
-        // 📦 Obtener movimientos con relación a cotización
+        const total = totalMovimientos + totalMembresiasCount + totalCotizacionesCount;
+
+        // 📦 Obtener todos los movimientos (paginación se aplica al final después de combinar)
         const movimientos = await Movimiento.findAll({
             where,
             order: [['fecha', 'DESC']],
-            limit: limitNum,
-            offset: offset,
             attributes: [
                 'id_movimiento',
                 'descripcion',
@@ -93,22 +107,106 @@ const getTransacciones = async (req, res) => {
             ]
         });
 
-        // 💰 Calcular saldo disponible total
+        // 💰 Calcular saldo disponible (crédito del usuario)
+        // Suma: solo membresías dentro de la cadena consecutiva (respetando días de gracia)
+        const configGracia = await Config.findOne({
+            where: { tipo_config: 'reset_credito' },
+            raw: true
+        });
+        const diasGracia = parseInt(configGracia?.valor || '5', 10);
+        const diasPorMes = 30 + diasGracia;
+
+        const todasMembresias = await Membresia.findAll({
+            where: {
+                id_usuario,
+                estado: { [Op.in]: ['activa', 'vencida'] }
+            },
+            attributes: ['id_membresia', 'monto', 'fecha'],
+            order: [['fecha', 'DESC']],
+            raw: true
+        });
+
+        // Replicar lógica de obtenerProgresoMembresia
+        let totalMembresias = 0;
+
+        if (todasMembresias.length > 0) {
+            const fechasOrdenadas = todasMembresias.map(m => ({
+                fecha: new Date(m.fecha),
+                monto: parseFloat(m.monto || 0)
+            })).sort((a, b) => b.fecha - a.fecha); // Más reciente primero
+
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+
+            const diffDesdeHoy = Math.floor(
+                (hoy - fechasOrdenadas[0].fecha) / (1000 * 60 * 60 * 24)
+            );
+
+            // Si el pago más reciente ya venció el período de gracia, crédito = 0
+            if (diffDesdeHoy <= diasPorMes) {
+                // El más reciente cuenta
+                totalMembresias += fechasOrdenadas[0].monto;
+
+                // Recorrer hacia atrás contando meses consecutivos
+                for (let i = 0; i < fechasOrdenadas.length - 1; i++) {
+                    const diffDias = Math.floor(
+                        (fechasOrdenadas[i].fecha - fechasOrdenadas[i + 1].fecha) / (1000 * 60 * 60 * 24)
+                    );
+                    // Si hay un gap mayor al período permitido, se rompe la cadena
+                    if (diffDias >= diasPorMes) break;
+                    totalMembresias += fechasOrdenadas[i + 1].monto;
+                }
+            }
+        }
+
+        // Suma 2: cashback recibido (tipo 'cashback') → abona al crédito
+        const totalCashback = await Movimiento.sum('monto', {
+            where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: 'cashback'
+            }
+        }) || 0;
+
+        // Suma 3: ingresos manuales (tipo 'ingreso') → abona al crédito
         const totalIngresos = await Movimiento.sum('monto', {
             where: {
                 id_usuario,
                 estado: 'completado',
-                tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] }
+                tipo: 'ingreso'
             }
-        });
+        }) || 0;
 
+        // Suma 4: retiros de referidos (tipo 'retiro_referido') → abona al crédito
+        const totalRetirosReferidos = await Movimiento.sum('monto', {
+            where: {
+                id_usuario,
+                estado: 'completado',
+                tipo: 'retiro_referido'
+            }
+        }) || 0;
+
+        // Resta 1: retiros manuales (tipo 'retiro') → resta del crédito
         const totalRetiros = await Movimiento.sum('monto', {
             where: {
                 id_usuario,
                 estado: 'completado',
-                tipo: { [Op.in]: ['retiro', 'retiro_referido'] }
+                tipo: 'retiro'
             }
+        }) || 0;
+
+        // Resta 2: crédito usado en cotizaciones de solicitudes del usuario
+        const creditoUsadoResult = await Cotizacion.sum('credito_usado', {
+            where: { estado: 'confirmado' },
+            include: [{
+                model: SolicitudServicio,
+                as: 'solicitud',
+                where: { id_usuario },
+                required: true,
+                attributes: []
+            }]
         });
+        const totalCreditoUsado = parseFloat(creditoUsadoResult || 0);
 
         // 📋 Obtener membresías activas y vencidas del usuario
         const whereMembresias = { id_usuario };
@@ -131,15 +229,45 @@ const getTransacciones = async (req, res) => {
             raw: true
         });
 
-        // 💰 Sumar montos de todas las membresías al saldo disponible (global, sin filtro de fecha)
-        const totalMembresias = await Membresia.sum('monto', {
+        // 📋 Obtener cotizaciones con crédito usado para el historial
+        const cotizacionesConCredito = await Cotizacion.findAll({
             where: {
-                id_usuario,
-                estado: { [Op.in]: ['activa', 'vencida'] }
-            }
-        }) || 0;
+                estado: 'confirmado',
+                credito_usado: { [Op.gt]: 0 }
+            },
+            include: [{
+                model: SolicitudServicio,
+                as: 'solicitud',
+                where: { id_usuario },
+                required: true,
+                include: [{
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: ['nombre']
+                }]
+            }],
+            attributes: ['id_cotizacion', 'id_solicitud', 'monto_manodeobra', 'descuento_membresia', 'credito_usado', 'fecha'],
+            order: [['fecha', 'DESC']],
+            raw: true,
+            nest: true
+        });
 
-        const saldoDisponible = parseFloat((totalIngresos || 0) - (totalRetiros || 0) + totalMembresias);
+        const transaccionesCredito = cotizacionesConCredito.map(cot => ({
+            id_movimiento: `credito_${cot.id_cotizacion}`,
+            descripcion: `Crédito usado en servicio - ${cot.solicitud?.servicio?.nombre || 'Servicio'}`,
+            monto: -parseFloat(cot.credito_usado), // Negativo porque resta
+            tipo: 'retiro',
+            fecha: cot.fecha,
+            estado: 'completado',
+            cotizacion: {
+                id_solicitud: cot.id_solicitud,
+                monto_manodeobra: parseFloat(cot.monto_manodeobra || 0),
+                descuento_membresia: parseFloat(cot.descuento_membresia || 0),
+                credito_usado: parseFloat(cot.credito_usado || 0)
+            }
+        }));
+
+        const saldoDisponible = parseFloat(totalMembresias + totalCashback + totalIngresos + totalRetirosReferidos - totalRetiros - totalCreditoUsado).toFixed(2);
 
         // 🧩 Formatear respuesta
         const transaccionesMovimientos = movimientos.map(mov => {
@@ -175,10 +303,20 @@ const getTransacciones = async (req, res) => {
         }));
 
         // 🔄 Combinar todas las transacciones
-        const transacciones = [...transaccionesMovimientos, ...transaccionesMembresias];
+        const todasTransacciones = [
+            ...transaccionesMovimientos,
+            ...transaccionesMembresias,
+            ...transaccionesCredito
+        ];
 
         // 📅 Ordenar por fecha descendente
-        transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        todasTransacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        // 📊 Calcular total real antes del recorte
+        const totalReal = todasTransacciones.length;
+
+        // ✂️ Aplicar paginación (Slice)
+        const transacciones = todasTransacciones.slice(offset, offset + limitNum);
 
         // 📤 Respuesta final
         res.json({
@@ -186,10 +324,10 @@ const getTransacciones = async (req, res) => {
             data: transacciones,
             saldoDisponible,
             pagination: {
-                total,
+                total: totalReal,
                 page: pageNum,
                 limit: limitNum,
-                totalPages: Math.ceil(total / limitNum)
+                totalPages: Math.ceil(totalReal / limitNum)
             }
         });
 
@@ -239,6 +377,53 @@ const getpaquetesadquiridos = async (req, res) => {
     }
 };
 
+
+const getTopIngresosReferidos = async (req, res) => {
+    try {
+        const topUsuarios = await Movimiento.findAll({
+            attributes: [
+                'id_usuario',
+                [Sequelize.fn('SUM', Sequelize.col('monto')), 'total_generado']
+            ],
+            where: {
+                tipo: 'ingreso_referido',
+                estado: 'completado'
+            },
+            group: ['id_usuario'],
+            order: [[Sequelize.literal('total_generado'), 'DESC']],
+            limit: 3,
+            include: [{
+                model: Usuario,
+                as: 'usuario',
+                attributes: ['nombre'],
+                include: [{
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['nombre_ciudad']
+                }]
+            }],
+            raw: true,
+            nest: true
+        });
+
+        const resultado = topUsuarios.map(item => ({
+            name: item.usuario?.nombre || 'Usuario sin nombre',
+            city: item.usuario?.ciudad?.nombre_ciudad || 'Sin ciudad',
+            total: parseFloat(item.total_generado) || 0
+        }));
+
+        res.json({
+            success: true,
+            data: resultado
+        });
+    } catch (error) {
+        console.error('Error al obtener top ingresos por referidos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener el top de ingresos por referidos'
+        });
+    }
+};
 
 const getTopUsuariosCredito = async (req, res) => {
     try {
@@ -824,7 +1009,8 @@ const obtenerReporteIngresos = async (req, res) => {
             efectivoServiciosData, // Efectivo real recibido de servicios
             totalRetiros,
             totalComisiones,
-            sumatoriaMontoPaquetes
+            sumatoriaMontoPaquetes,
+            sumatoriaCashback
         ] = await Promise.all([
             // Ingresos por membresías activadas
             Membresia.sum('monto', {
@@ -917,20 +1103,35 @@ const obtenerReporteIngresos = async (req, res) => {
                         }
                     } : {})
                 }
+            }),
+            // Obtener total de cashback acreditado (LO QUE LA APP DEBE)
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'cashback',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
             })
         ]);
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
         const efectivoServicios = parseFloat(efectivoServiciosData[0]?.total || 0);
+        const totalCashback = parseFloat(sumatoriaCashback || 0);
 
-        // Calcular saldo bancario real (Efectivo que entró - Efectivo que salió)
-        const ingresosTotales = efectivoServicios +
-            (ingresosMembresias || 0) +
-            (ingresosVisitas || 0) +
-            (parseFloat(sumatoriaMontoPaquetes || 0)); // Monto total de paquetes
+        // Calcular los Ingresos de la App (Suma de las 4 categorías principales)
+        const ingresosTotales = (parseFloat(ingresosServicios || 0)) +
+            (parseFloat(ingresosMembresias || 0)) +
+            (parseFloat(ingresosVisitas || 0)) +
+            (parseFloat(ingresosPaquetes || 0));
 
-        // Calcular ganancia neta REAL (Saldo Bruto - Retiros Técnicos - Comisiones Referidos)
-        const gananciaNeta = ingresosTotales - (totalRetiros || 0) - (totalComisiones || 0);
+        // Ganancia Neta (Lo que es mío) = Ingresos Brutos App - Cashback - Retiros
+        // Nota: Las comiisones no se restan aquí porque ingresosServicios ya lo resta.
+        const gananciaNeta = ingresosTotales - totalCashback - totalRetiros;
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -981,26 +1182,9 @@ const obtenerReporteIngresos = async (req, res) => {
                 }
             }) || 0;
 
-            // Obtener efectivo real recibido por servicios del mes
-            const efectivoServiciosMesData = await Cotizacion.findAll({
-                attributes: [[Sequelize.fn('SUM', Sequelize.literal('COALESCE(monto_manodeobra, 0) - COALESCE(descuento_membresia, 0) - COALESCE(credito_usado, 0)')), 'total']],
-                where: { estado: 'confirmado', fecha: { [Op.between]: [fechaInicio, fechaFin] } },
-                raw: true
-            });
-            const efectivoServiciosMes = parseFloat(efectivoServiciosMesData[0]?.total || 0);
-
-            // Obtener lo que se le "debió" a técnicos y referidores en ese mes (Deudas generadas)
-            const deudasMes = await Movimiento.sum('monto', {
-                where: {
-                    tipo: { [Op.in]: ['ingreso', 'ingreso_referido'] },
-                    estado: 'completado',
-                    fecha: {
-                        [Op.between]: [
-                            fechaInicio,
-                            fechaFin
-                        ]
-                    }
-                }
+            // Obtener ingresos de la app (comisiones) para servicios en este mes
+            const ingresosServiciosMes = await Cotizacion.sum('monto_comision_app', {
+                where: { estado: 'confirmado', fecha: { [Op.between]: [fechaInicio, fechaFin] } }
             }) || 0;
 
             // Obtener sumatoria de montos por paquetes del mes para calcular comisión
@@ -1016,8 +1200,28 @@ const obtenerReporteIngresos = async (req, res) => {
                 }
             }) || 0;
 
-            const ingresosTotalesMes = efectivoServiciosMes + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + (parseFloat(sumatoriaPaquetesMes || 0));
-            const gananciaNetaMes = ingresosTotalesMes - (deudasMes || 0);
+            const ingresosPaquetesMes = (parseFloat(sumatoriaPaquetesMes || 0) * porcentajeComision) / 100;
+
+            // Obtener retiros y cashback del mes para el gráfico
+            const [retirosMes, cashbackMes] = await Promise.all([
+                Movimiento.sum('monto', {
+                    where: {
+                        tipo: 'ingreso',
+                        estado: 'completado',
+                        fecha: { [Op.between]: [fechaInicio, fechaFin] }
+                    }
+                }),
+                Movimiento.sum('monto', {
+                    where: {
+                        tipo: 'cashback',
+                        estado: 'completado',
+                        fecha: { [Op.between]: [fechaInicio, fechaFin] }
+                    }
+                })
+            ]);
+
+            const ingresosTotalesMes = parseFloat(ingresosServiciosMes) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + ingresosPaquetesMes;
+            const gananciaNetaMes = ingresosTotalesMes - (parseFloat(retirosMes || 0)) - (parseFloat(cashbackMes || 0));
 
             return {
                 mes: mes,
@@ -1029,13 +1233,14 @@ const obtenerReporteIngresos = async (req, res) => {
         // Formatear respuesta
         const reporte = {
             resumen: {
-                ingresosTotales: parseFloat(ingresosTotales).toFixed(2),
                 ingresosServicios: parseFloat(ingresosServicios || 0).toFixed(2),
                 ingresosMembresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 ingresosVisitas: parseFloat(ingresosVisitas || 0).toFixed(2),
                 ingresosPaquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
+                ingresosTotales: parseFloat(ingresosTotales).toFixed(2),
                 retiros: parseFloat(totalRetiros || 0).toFixed(2),
                 comisiones: parseFloat(totalComisiones || 0).toFixed(2),
+                cashback: totalCashback.toFixed(2),
                 gananciaNeta: parseFloat(gananciaNeta).toFixed(2)
             },
             grafico: {
@@ -1437,7 +1642,10 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         const [
             ingresosMembresias,
             ingresosVisitas,
-            sumatoriaMontoPaquetes
+            sumatoriaMontoPaquetes,
+            sumatoriaComisiones,
+            sumatoriaDeudaTecnicos,
+            sumatoriaCashback
         ] = await Promise.all([
             // Ingresos por membresías activadas
             Membresia.sum('monto', {
@@ -1476,33 +1684,61 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                         }
                     } : {})
                 }
-            })
+            }),
+            // Total comisiones por referidos (Deuda generada que resta utilidad)
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'ingreso_referido',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }) || 0,
+            // Total de técnicos (Deuda generada por servicios)
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'ingreso',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }) || 0,
+            // Total cashback acreditado (Deuda generada)
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: 'cashback',
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
+            }) || 0
         ]);
 
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
+        const totalComisiones = parseFloat(sumatoriaComisiones || 0);
+        const totalDeudaTecnicos = parseFloat(sumatoriaDeudaTecnicos || 0);
+        const totalCashback = parseFloat(sumatoriaCashback || 0);
 
-        // Obtener total de comisiones por referidos (Deuda generada que resta utilidad)
-        const totalComisiones = await Movimiento.sum('monto', {
-            where: {
-                tipo: 'ingreso_referido',
-                estado: 'completado',
-                ...(fechaInicio || fechaFin ? {
-                    fecha: {
-                        ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
-                        ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
-                    }
-                } : {})
-            }
-        }) || 0;
-
-        // Calcular el total de ingresos brutos (Utilidad Bruta App)
-        const ingresosGross = (totalCotizaciones || 0) +
+        // Calcular los ingresos totales de la app (Utilidad antes de deudas)
+        const ingresosTotalesApp = (totalCotizaciones || 0) +
             (ingresosMembresias || 0) +
             (ingresosVisitas || 0) +
             (ingresosPaquetes || 0);
 
-        // Calcular ingresos netos restando solo las comisiones de referidos (Utilidad Real)
-        const ingresosTotales = ingresosGross - totalComisiones;
+        // Calcular ingresos netos (Lo que es mío = Ingresos App - Comisiones Referidos - Cashback)
+        const ingresosTotales = ingresosTotalesApp - totalComisiones - totalCashback;
 
         // Verificar si hay servicios pendientes (sin filtro de fecha)
         const serviciosPendientes = await SolicitudServicio.count({
@@ -1534,9 +1770,10 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                 servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
                 membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 visitas: parseFloat(ingresosVisitas || 0).toFixed(2),
-                paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
-                comisiones: parseFloat(totalComisiones || 0).toFixed(2),
-                ingresosGross: parseFloat(ingresosGross || 0).toFixed(2)
+                paquetes: parseFloat(sumatoriaMontoPaquetes || 0).toFixed(2),
+                comisiones: totalComisiones.toFixed(2),
+                cashback: totalCashback.toFixed(2),
+                ingresosGross: ingresosGross.toFixed(2)
             }
         };
 
@@ -2460,5 +2697,6 @@ module.exports = {
     getIngresosyRetirosdeReferidos,
     getTransacciones,
     getMovimientosIngresoMes,
-    getpaquetesadquiridos
+    getpaquetesadquiridos,
+    getTopIngresosReferidos
 };

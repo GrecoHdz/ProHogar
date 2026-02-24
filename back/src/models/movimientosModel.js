@@ -38,7 +38,7 @@ const Movimiento = sequelize.define('Movimiento', {
         onDelete: 'CASCADE'
     },
     tipo: {
-        type: DataTypes.ENUM('ingreso', 'retiro', 'ingreso_referido', 'retiro_referido'),
+        type: DataTypes.ENUM('ingreso', 'retiro', 'ingreso_referido', 'retiro_referido', 'cashback'),
         allowNull: false
     },
     monto: {

@@ -227,6 +227,37 @@ const processPayment = async (req, res) => {
       // No se muestra mensaje de log para mantener silencioso
     }
 
+    // 6️⃣ Registrar movimiento de cashback si aplica
+    const descMembresiaInput = Number.isFinite(parseFloat(descuento_membresia)) ? parseFloat(descuento_membresia) : 0;
+    if (descMembresiaInput > 0) {
+      const existeMovimientoCashback = await Movimiento.findOne({
+        where: {
+          id_cotizacion,
+          tipo: 'cashback'
+        },
+        transaction: t
+      });
+
+      if (!existeMovimientoCashback) {
+        await Movimiento.create({
+          id_usuario,
+          id_cotizacion,
+          tipo: 'cashback',
+          monto: descMembresiaInput,
+          descripcion: `Cashback por pago de servicio - ${solicitud?.servicio?.nombre || ''}`,
+          estado: 'pendiente',
+          fecha: new Date()
+        }, { transaction: t });
+      } else {
+        // Si ya existe, nos aseguramos que esté en pendiente y actualizamos el monto y fecha
+        await existeMovimientoCashback.update({
+          estado: 'pendiente',
+          monto: descMembresiaInput,
+          fecha: new Date()
+        }, { transaction: t });
+      }
+    }
+
     // ✅ Confirmar transacción
     await t.commit();
 
@@ -310,6 +341,15 @@ const denyPayment = async (req, res) => {
     }
 
     // 5️⃣ Revertir comisión de referido (si existía)
+    await Movimiento.destroy({
+      where: {
+        id_cotizacion,
+        tipo: 'cashback',
+        estado: 'pendiente'
+      },
+      transaction: t
+    });
+
     const referido = await Referido.findOne({
       where: { id_referido_usuario: id_usuario },
       transaction: t
@@ -594,6 +634,21 @@ const acceptPayment = async (req, res) => {
       }
     } else {
       console.log(`[AceptarPago] No se encontró movimiento de referido pendiente para cotización ${id_cotizacion}`);
+    }
+
+    // 7️⃣ Actualizar movimiento de cashback (si existe)
+    const movimientoCashback = await Movimiento.findOne({
+      where: {
+        id_cotizacion,
+        tipo: 'cashback',
+        estado: 'pendiente'
+      },
+      transaction: t
+    });
+
+    if (movimientoCashback) {
+      await movimientoCashback.update({ estado: 'completado' }, { transaction: t });
+      console.log(`[AceptarPago] Movimiento de cashback completado para cotización ${id_cotizacion}`);
     }
 
     // ✅ Confirmar transacción
