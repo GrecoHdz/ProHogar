@@ -1623,8 +1623,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             estado: 'confirmado',
             ...(fechaInicio || fechaFin ? {
                 fecha: {
-                    ...(fechaInicio && { [Op.gte]: new Date(fechaInicio) }),
-                    ...(fechaFin && { [Op.lte]: new Date(fechaFin) })
+                    ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                    ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
                 }
             } : {})
         };
@@ -1645,7 +1645,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             sumatoriaMontoPaquetes,
             sumatoriaComisiones,
             sumatoriaDeudaTecnicos,
-            sumatoriaCashback
+            sumatoriaCashback,
+            sumatoriaRetiros
         ] = await Promise.all([
             // Ingresos por membresías activadas
             Membresia.sum('monto', {
@@ -1723,6 +1724,18 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                         }
                     } : {})
                 }
+            }) || 0,
+            Movimiento.sum('monto', {
+                where: {
+                    tipo: { [Op.in]: ['ingreso'] },
+                    estado: 'completado',
+                    ...(fechaInicio || fechaFin ? {
+                        fecha: {
+                            ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                            ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                        }
+                    } : {})
+                }
             }) || 0
         ]);
 
@@ -1730,6 +1743,7 @@ const obtenerEstadisticasDashboard = async (req, res) => {
         const totalComisiones = parseFloat(sumatoriaComisiones || 0);
         const totalDeudaTecnicos = parseFloat(sumatoriaDeudaTecnicos || 0);
         const totalCashback = parseFloat(sumatoriaCashback || 0);
+        const retirosTotales = parseFloat(sumatoriaRetiros || 0);
 
         // Calcular los ingresos totales de la app (Utilidad antes de deudas)
         const ingresosTotalesApp = (totalCotizaciones || 0) +
@@ -1756,6 +1770,9 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             }
         });
 
+        // ingresosGross = Total Comisiones App - Cashback - Retiros Reales
+        const ingresosGross = ingresosTotalesApp - totalCashback - retirosTotales;
+
         // Formatear respuesta
         const estadisticas = {
             totalUsuarios: totalUsuarios || 0,
@@ -1766,13 +1783,15 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             membresiasPendiente: membresiasPendientes > 0 ? 'si' : 'no',
             totalMembresiasPendientes: membresiasPendientes || 0,
             ingresosTotales: parseFloat(ingresosTotales || 0).toFixed(2), // Ingresos netos (Utilidad Real)
+            ingresosGross: ingresosGross.toFixed(2),
             desgloseIngresos: {
                 servicios: parseFloat(totalCotizaciones || 0).toFixed(2),
                 membresias: parseFloat(ingresosMembresias || 0).toFixed(2),
                 visitas: parseFloat(ingresosVisitas || 0).toFixed(2),
-                paquetes: parseFloat(sumatoriaMontoPaquetes || 0).toFixed(2),
+                paquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
                 comisiones: totalComisiones.toFixed(2),
                 cashback: totalCashback.toFixed(2),
+                retiros: retirosTotales.toFixed(2),
                 ingresosGross: ingresosGross.toFixed(2)
             }
         };
