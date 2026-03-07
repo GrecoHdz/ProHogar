@@ -706,11 +706,11 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
         // Aplicar filtro de estado si existe
         if (statusFilter === 'finished') {
             whereCondition.estado = {
-                [Op.in]: ['finalizado', 'calificado']
+                [Op.in]: ['calificado', 'cancelado']
             };
         } else if (statusFilter === 'active') {
             whereCondition.estado = {
-                [Op.notIn]: ['finalizado', 'calificado']
+                [Op.notIn]: ['calificado', 'cancelado']
             };
         }
 
@@ -752,17 +752,13 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
             SolicitudServicio.count({
                 where: {
                     id_usuario: idUsuario,
-                    estado: 'finalizado'
+                    estado: { [Op.in]: ['calificado', 'cancelado'] }
                 }
             }),
             SolicitudServicio.count({
                 where: {
                     id_usuario: idUsuario,
-                    [Op.and]: [
-                        { estado: { [Op.ne]: 'finalizado' } },
-                        { estado: { [Op.ne]: 'calificado' } },
-                        { estado: { [Op.ne]: 'cancelado' } }
-                    ]
+                    estado: { [Op.notIn]: ['calificado', 'cancelado'] }
                 }
             })
         ]);
@@ -851,13 +847,27 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         });
 
         // Formatear la respuesta
-        const solicitudesFormateadas = solicitudes.map(solicitud => {
-            const { servicio, id_servicio, id_usuario, ...datosSolicitud } = solicitud.toJSON();
+        const solicitudesFormateadas = await Promise.all(solicitudes.map(async (solicitud) => {
+            const plainSolicitud = solicitud.toJSON();
+            let es_primer_viaje = false;
+
+            if (plainSolicitud.servicio && plainSolicitud.servicio.nombre === 'Taxi VIP') {
+                const count = await SolicitudServicio.count({
+                    where: {
+                        id_usuario: plainSolicitud.id_usuario,
+                        id_servicio: plainSolicitud.id_servicio,
+                        id_solicitud: { [Op.lt]: plainSolicitud.id_solicitud },
+                        estado: { [Op.notIn]: ['cancelado'] }
+                    }
+                });
+                es_primer_viaje = count === 0;
+            }
+
             return {
-                ...datosSolicitud,
-                servicio: servicio || null
+                ...plainSolicitud,
+                es_primer_viaje: es_primer_viaje
             };
-        });
+        }));
 
         // Contadores globales (siempre devuelven el total sin el filtro de 'tab' actual)
         const countBaseWhere = { id_tecnico: id_tecnico };
