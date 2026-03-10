@@ -33,6 +33,8 @@ const facturaRelacionRoutes = require("./src/routes/FacturaRelacionRoute");
 const facturaCorrelativoRoutes = require("./src/routes/FacturaCorrelativoRoute");
 const paquetesRoutes = require("./src/routes/PaquetesRoute");
 const paquetesUsuariosRoutes = require("./src/routes/PaquetesUsuariosRoute");
+const barberiaRoutes = require("./src/routes/BarberiaRoute");
+
 
 // Configurar las asociaciones de los modelos
 const setupAssociations = require('./src/models');
@@ -74,7 +76,7 @@ const corsOptions = {
 
     // Permitir todas las URLs de Vercel de tu proyecto
     const isVercelPreview = origin && origin.includes('miseguros-projects-00c1e523.vercel.app');
-    
+
     if (allowedOrigins.includes(origin) || isVercelPreview) {
       callback(null, true);
     } else {
@@ -116,6 +118,8 @@ app.use("/facturas/relaciones", facturaRelacionRoutes);
 app.use("/facturas", facturaRoutes);
 app.use("/paquetes", paquetesRoutes);
 app.use("/paquetes/usuarios", paquetesUsuariosRoutes);
+app.use("/barberias", barberiaRoutes);
+
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;

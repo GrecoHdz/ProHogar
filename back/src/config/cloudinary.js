@@ -81,5 +81,39 @@ exports.uploadPackage = multer({
   }
 });
 
+// Configuración para barberías
+const barberiaStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'MiSeguro/barberias',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{
+      width: 1200,
+      height: 800,
+      crop: 'fill',
+      gravity: 'auto',
+      quality: 'auto:best',
+      fetch_format: 'auto',
+      format: 'webp',
+      dpr: 'auto',
+      effect: 'sharpen:100',
+      flags: 'lossy',
+      secure: true
+    }],
+    resource_type: 'image'
+  }
+});
+
+exports.uploadBarberia = multer({
+  storage: barberiaStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Solo se permiten archivos de imagen (JPG, JPEG, PNG, WEBP)'), false);
+    }
+    cb(null, true);
+  }
+});
+
 // Exportar la instancia de cloudinary para operaciones directas
 exports.cloudinary = cloudinary;
