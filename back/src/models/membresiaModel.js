@@ -32,7 +32,7 @@ const Membresia = sequelize.define("Membresia", {
     allowNull: true
   },
   monto: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
   fecha: {

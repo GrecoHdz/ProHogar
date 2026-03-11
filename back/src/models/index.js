@@ -479,11 +479,13 @@ const setupAssociations = () => {
   });
 
   PaqueteUsuario.belongsTo(Usuario, {
-    foreignKey: 'id_usuario'
+    foreignKey: 'id_usuario',
+    as: 'usuario'
   });
 
   PaqueteUsuario.belongsTo(Paquete, {
-    foreignKey: 'id_paquete'
+    foreignKey: 'id_paquete',
+    as: 'paquete'
   });
 
   Usuario.hasMany(PaqueteUsuario, {

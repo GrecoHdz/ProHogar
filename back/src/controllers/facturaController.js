@@ -477,7 +477,7 @@ const obtenerPendientesFacturacion = async (req, res) => {
                 { model: Usuario, as: 'usuario', attributes: ['nombre', 'telefono'] },
                 {
                     model: PaqueteUsuario, as: 'paqueteUsuario',
-                    include: [{ model: Paquete, attributes: ['nombre'] }]
+                    include: [{ model: Paquete, as: 'paquete', attributes: ['nombre'] }]
                 },
                 { model: FacturaRelacion, as: 'facturaRelacion', include: [{ model: Factura, as: 'factura' }] }
             ],

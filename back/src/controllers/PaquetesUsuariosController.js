@@ -27,9 +27,10 @@ const obtenerPaquetesUsuario = async (req, res) => {
             where: { id_usuario },
             include: [{
                 model: Paquete,
+                as: 'paquete',
                 attributes: ['nombre', 'descripcion', 'costo']
             }],
-            order: [['fecha_actualizacion', 'DESC']]
+            order: [['fecha_compra', 'DESC']]
         });
 
         // Si no hay paquetes
@@ -99,10 +100,12 @@ const obtenerPaquetesPorEstado = async (req, res) => {
         const include = [
             {
                 model: Paquete,
+                as: 'paquete',
                 attributes: ['id_paquete', 'nombre', 'descripcion', 'costo']
             },
             {
                 model: Usuario,
+                as: 'usuario',
                 attributes: ['id_usuario', 'nombre', 'telefono', 'email', 'id_ciudad'],
                 include: [{
                     model: Ciudad,
@@ -129,6 +132,7 @@ const obtenerPaquetesPorEstado = async (req, res) => {
                     'estado',
                     'id_cuenta'
                 ],
+                order: [['fecha', 'DESC']],
                 include: [{
                     model: Cuenta,
                     as: 'cuenta',
@@ -152,7 +156,7 @@ const obtenerPaquetesPorEstado = async (req, res) => {
             include,
             limit,
             offset,
-            order: [['fecha_actualizacion', 'DESC']]
+            order: [['fecha_compra', 'DESC']]
         });
 
         const data = paquetes.map(p => {
@@ -162,7 +166,7 @@ const obtenerPaquetesPorEstado = async (req, res) => {
             if (!plain.pagos || plain.pagos.length === 0) {
                 return {
                     ...plain,
-                    fecha_solicitud: plain.fecha_actualizacion,
+                    fecha_solicitud: plain.fecha_compra,
                     origen_compra: 'membresia',
                     pagos: []
                 };
@@ -170,7 +174,7 @@ const obtenerPaquetesPorEstado = async (req, res) => {
 
             return {
                 ...plain,
-                fecha_solicitud: plain.fecha_actualizacion,
+                fecha_solicitud: plain.fecha_compra,
                 origen_compra: 'pago_directo',
                 pagos: plain.pagos.map(pago => ({
                     ...pago,
@@ -290,8 +294,13 @@ const canjearPaquete = async (req, res) => {
 
         // Si es pago con saldo, verificar crédito
         if (!esPagoTransferencia) {
-            const usuario = await Usuario.findByPk(id_usuario, { transaction: t });
-            if (usuario.credito < paquete.costo) {
+            const creditoUsuario = await CreditoUsuario.findOne({
+                where: { id_usuario },
+                transaction: t
+            });
+            const montoCredito = creditoUsuario ? parseFloat(creditoUsuario.monto_credito) : 0;
+
+            if (montoCredito < parseFloat(paquete.costo)) {
                 await t.rollback();
                 return res.status(400).json({
                     success: false,
@@ -300,8 +309,11 @@ const canjearPaquete = async (req, res) => {
             }
 
             // Descontar el crédito del usuario
-            usuario.credito = parseFloat(usuario.credito) - parseFloat(paquete.costo);
-            await usuario.save({ transaction: t });
+            const nuevoMonto = Math.round((montoCredito - parseFloat(paquete.costo)) * 100) / 100;
+            await CreditoUsuario.update(
+                { monto_credito: nuevoMonto },
+                { where: { id_usuario }, transaction: t }
+            );
         } else if (!id_cuenta || !numero_comprobante) {
             await t.rollback();
             return res.status(400).json({
@@ -316,26 +328,13 @@ const canjearPaquete = async (req, res) => {
             await paquete.save({ transaction: t });
         }
 
-        // Buscar si ya existe un registro
-        let paqueteUsuario = await PaqueteUsuario.findOne({
-            where: { id_usuario, id_paquete },
-            transaction: t
-        });
-
-        if (paqueteUsuario) {
-            // Si ya existe, lo actualizamos
-            paqueteUsuario.estado = esPagoTransferencia ? 'verificando_pago' : 'activo';
-            paqueteUsuario.fecha_actualizacion = new Date();
-            await paqueteUsuario.save({ transaction: t });
-        } else {
-            // Si no existe, lo creamos
-            paqueteUsuario = await PaqueteUsuario.create({
-                id_usuario,
-                id_paquete,
-                estado: esPagoTransferencia ? 'verificando_pago' : 'activo',
-                fecha_actualizacion: new Date()
-            }, { transaction: t });
-        }
+        // Siempre creamos un nuevo registro para mantener historial
+        const paqueteUsuario = await PaqueteUsuario.create({
+            id_usuario,
+            id_paquete,
+            estado: esPagoTransferencia ? 'verificando_pago' : 'activo',
+            fecha_compra: new Date()
+        }, { transaction: t });
 
         // Si es pago por transferencia, registrar en la tabla de pagos
         if (esPagoTransferencia) {
@@ -397,7 +396,7 @@ const canjearPaquete = async (req, res) => {
                 });
 
                 const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
-                const comision_referido_calc = Math.round(((porcentaje_comision * parseFloat(paquete.costo) / 100) * 100) / 100);
+                const comision_referido_calc = Math.round(porcentaje_comision * parseFloat(paquete.costo)) / 100;
 
                 // 4. Determinar si se registra (Para transferencia siempre se registra pendiente, para crédito depende de membresía)
                 const seDebeRegistrar = comision_referido_calc > 0 && tieneProgreso;
@@ -508,7 +507,7 @@ const marcarComoUtilizado = async (req, res) => {
         const { id_paquete_usuario } = req.params;
 
         const [updated] = await PaqueteUsuario.update(
-            { estado: 'utilizado' },
+            { estado: 'utilizado', fecha_uso: new Date() },
             {
                 where: {
                     id_paquete_usuario
@@ -544,20 +543,32 @@ const marcarComoUtilizado = async (req, res) => {
 // Obtener todos los paquetes con estado 'utilizado' incluyendo nombre de usuario y paquete
 const obtenerPaquetesUtilizados = async (req, res) => {
     try {
+        const { month } = req.query;
+        const where = { estado: 'utilizado' };
+
+        if (month) {
+            const [year, monthNum] = month.split('-').map(Number);
+            where[Op.and] = [
+                Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_uso')), year),
+                Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_uso')), monthNum)
+            ];
+        }
+
         const paquetesUtilizados = await PaqueteUsuario.findAll({
-            where: {
-                estado: 'utilizado'
-            },
+            where,
             include: [
                 {
                     model: Usuario,
+                    as: 'usuario',
                     attributes: ['nombre']
                 },
                 {
                     model: Paquete,
+                    as: 'paquete',
                     attributes: ['nombre']
                 }
-            ]
+            ],
+            order: [['fecha_uso', 'DESC']]
         });
 
         return res.status(200).json({
@@ -664,6 +675,7 @@ const aprobarPagoPaquete = async (req, res) => {
 
         if (pago.estado !== 'pendiente') {
             await t.rollback();
+            console.log(`[aprobarPagoPaquete] El pago ${id} tiene estado: ${pago.estado}`);
             return res.status(400).json({
                 success: false,
                 error: `No se puede aprobar el pago porque está en estado ${pago.estado}`
@@ -817,7 +829,7 @@ const activarPaquete = async (req, res) => {
 
         // Cambiar estado a 'utilizando'
         paqueteUsuario.estado = 'utilizando';
-        paqueteUsuario.fecha_actualizacion = new Date();
+        paqueteUsuario.fecha_uso = new Date();
         await paqueteUsuario.save();
 
         return res.json({
@@ -880,6 +892,7 @@ const obtenerPagosPaquetes = async (req, res) => {
                     as: 'paqueteUsuario',
                     include: [{
                         model: Paquete,
+                        as: 'paquete',
                         attributes: ['nombre']
                     }]
                 },

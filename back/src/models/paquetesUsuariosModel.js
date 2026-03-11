@@ -27,10 +27,14 @@ const PaqueteUsuario = sequelize.define("PaqueteUsuario", {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
     },
-    fecha_actualizacion: {
+    fecha_compra: {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: DataTypes.NOW
+    },
+    fecha_uso: {
+        type: DataTypes.DATE,
+        allowNull: true
     },
     estado: {
         type: DataTypes.ENUM('activo', 'utilizando', 'utilizado', 'verificando_pago', 'rechazado'),

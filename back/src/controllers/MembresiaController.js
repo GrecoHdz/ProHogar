@@ -303,8 +303,8 @@ const obtenerMembresiaActual = async (req, res) => {
 
 // Obtener progreso de membresía por usuario
 const obtenerProgresoMembresia = async (req, res) => {
-    try { 
-        
+    try {
+
         // Obtener configuración de membresía, descuentos, beneficios y días de gracia
         const [configs, beneficios, configMembresia, configGracia] = await Promise.all([
             Config.findAll({
@@ -318,7 +318,7 @@ const obtenerProgresoMembresia = async (req, res) => {
             MembresiaBeneficio.findAll({
                 where: {
                     tipo_beneficio: {
-                        [Op.or]: ['Descuento en todos los servicios', 'Descuento Especial en todos los Servicios']
+                        [Op.or]: ['CashBack en todos los servicios', 'CashBack Especial en todos los Servicios']
                     }
                 },
                 raw: true
@@ -331,7 +331,7 @@ const obtenerProgresoMembresia = async (req, res) => {
                 where: { tipo_config: 'reset_credito' },
                 raw: true
             })
-        ]); 
+        ]);
 
         if (!configMembresia) {
             return res.status(500).json({
@@ -342,7 +342,7 @@ const obtenerProgresoMembresia = async (req, res) => {
 
         const valorMembresia = configMembresia.valor;
         const diasGracia = parseInt(configGracia?.valor || '5', 10);
-        const diasPorMes = 30 + diasGracia; 
+        const diasPorMes = 30 + diasGracia;
 
         // Obtener membresías del usuario
         const membresias = await Membresia.findAll({
@@ -373,7 +373,7 @@ const obtenerProgresoMembresia = async (req, res) => {
         // Calcular progreso basado en la fecha actual y período de gracia
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
-        
+
         // Ordenar fechas de más reciente a más antigua
         const fechasOrdenadas = fechasMembresias.sort((a, b) => b - a);
 
@@ -430,20 +430,20 @@ const obtenerProgresoMembresia = async (req, res) => {
         // Determinar el descuento aplicable basado en el progreso
         const configDescuentoEspecial = configs.find(c => c.tipo_config === 'porcentaje_descuento_especial');
         const configDescuentoRegular = configs.find(c => c.tipo_config === 'porcentaje_descuento');
-        
-        const beneficioEspecial = beneficios.find(b => 
-            b.tipo_beneficio === 'Descuento Especial en todos los Servicios'
+
+        const beneficioEspecial = beneficios.find(b =>
+            b.tipo_beneficio === 'CashBack Especial en todos los Servicios'
         );
-        const beneficioRegular = beneficios.find(b => 
-            b.tipo_beneficio === 'Descuento en todos los servicios'
+        const beneficioRegular = beneficios.find(b =>
+            b.tipo_beneficio === 'CashBack en todos los servicios'
         );
 
         const mesRequeridoEspecial = parseInt(beneficioEspecial?.mes_requerido || '0', 10);
         const mesRequeridoRegular = parseInt(beneficioRegular?.mes_requerido || '0', 10);
-        
+
         // Determinar el descuento: prioridad al especial si ambos califican
         let porcentajeDescuento = '0';
-        
+
         if (mesesConsecutivos >= mesRequeridoEspecial && mesRequeridoEspecial > 0) {
             porcentajeDescuento = configDescuentoEspecial?.valor || '0';
         } else if (mesesConsecutivos >= mesRequeridoRegular && mesRequeridoRegular > 0) {

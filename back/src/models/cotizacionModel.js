@@ -32,19 +32,19 @@ const Cotizacion = sequelize.define("Cotizacion", {
         allowNull: true
     },
     monto_manodeobra: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: false
     },
     monto_materiales: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: false
     },
     descuento_membresia: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: true
     },
     credito_usado: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: true
     },
     monto_comision_app: {

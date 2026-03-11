@@ -138,7 +138,7 @@ const processPayment = async (req, res) => {
           });
 
           const porcentaje_comision = configComision ? parseFloat(configComision.valor) || 0 : 0;
-          const comision_referido_calc = Math.round(((porcentaje_comision * (montoManoDeObra) / 100) * 100) / 100); // 2 decimales
+          const comision_referido_calc = Math.round(porcentaje_comision * montoManoDeObra) / 100; // 2 decimales
 
           if (comision_referido_calc > 0) {
             // Evitar duplicados: comprobar si ya existe un movimiento pendiente para la misma cotización
@@ -468,7 +468,7 @@ const acceptPayment = async (req, res) => {
     const credUsado = parseFloat(cotizacion.credito_usado) || 0;
 
     const baseCalculo = manoObra;
-    const comisionBrutaApp = Math.round(((baseCalculo * porcentajeApp) / 100) * 100) / 100;
+    const comisionBrutaApp = Math.round(baseCalculo * porcentajeApp) / 100;
     // La App absorbe el descuento de membresía de su propia comisión (Utilidad Real)
     const montoComisionApp = Math.max(0, comisionBrutaApp - descMembresia);
 
@@ -514,7 +514,7 @@ const acceptPayment = async (req, res) => {
 
     if (movimientoTecnico) {
       const porcentajeTecnico = 100 - porcentajeApp;
-      const montoTecnico = Math.round(((manoObra * porcentajeTecnico) / 100) * 100) / 100;
+      const montoTecnico = Math.round(manoObra * porcentajeTecnico) / 100;
 
       await movimientoTecnico.update({
         estado: 'completado',
