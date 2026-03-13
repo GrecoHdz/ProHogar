@@ -554,6 +554,7 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
             u.email,
             u.telefono,
             u.estado,
+            u.fecha_registro,
             u.id_ciudad,
             c.nombre_ciudad,
             r.nombre_rol,
@@ -608,6 +609,7 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
             email: usuario.email,
             telefono: usuario.telefono,
             estado: usuario.estado,
+            fecha_registro: usuario.fecha_registro,
             credito: { monto: parseFloat(usuario.monto_credito) || 0 },
             ciudad: {
                 id_ciudad: usuario.id_ciudad,
@@ -751,6 +753,7 @@ const obtenerAdministradores = async (req, res) => {
                 "email",
                 "telefono",
                 "estado",
+                "fecha_registro",
                 "id_ciudad"
             ],
             where: whereCondition,
