@@ -4,7 +4,7 @@ const { body, param, validationResult, query } = require("express-validator");
 const { authMiddleware } = require("../middleware/authMiddleware");
 const { apiLimiter } = require('../middleware/rateLimiters');
 const { authLimiter } = require('../middleware/rateLimiters');
-const { uploadProfile } = require("../config/cloudinary");
+const { uploadProfile, uploadIdentity } = require("../config/cloudinary");
 
 const {
     obtenerUsuarios,
@@ -19,6 +19,8 @@ const {
     actualizarUsuario,
     actualizarImagenPerfil,
     eliminarImagenPerfil,
+    actualizarIdentidadFoto,
+    eliminarIdentidadFoto,
     verificarPerfilTecnico,
     actualizarPassword,
     verificarRTN,
@@ -159,6 +161,21 @@ router.delete(
     '/imagen-perfil/:id',
     authMiddleware,
     eliminarImagenPerfil
+);
+
+// Actualizar foto de identidad
+router.post(
+    '/identidad-foto/:id',
+    authMiddleware,
+    uploadIdentity.single('imagen'),
+    actualizarIdentidadFoto
+);
+
+// Eliminar foto de identidad
+router.delete(
+    '/identidad-foto/:id',
+    authMiddleware,
+    eliminarIdentidadFoto
 );
 
 //Eliminar Usuario

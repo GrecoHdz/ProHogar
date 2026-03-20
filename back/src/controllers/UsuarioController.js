@@ -1507,6 +1507,122 @@ const eliminarImagenPerfil = async (req, res) => {
     }
 };
 
+// Controlador para actualizar la foto de identidad
+const actualizarIdentidadFoto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const usuario = await Usuario.findByPk(id);
+
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
+        }
+
+        // Guardar el public_id de la foto anterior si existe
+        const fotoAnteriorId = usuario.identidad_public_id;
+
+        // Si se subió una nueva foto
+        if (req.file) {
+            // Actualizar con la nueva foto
+            await usuario.update({
+                identidad_url: req.file.path,
+                identidad_public_id: req.file.filename
+            });
+
+            // Si existía una foto anterior, eliminarla de Cloudinary
+            if (fotoAnteriorId) {
+                try {
+                    await cloudinary.uploader.destroy(fotoAnteriorId);
+                } catch (error) {
+                    console.error('Error al eliminar la foto de identidad anterior:', error);
+                }
+            }
+
+            return res.json({
+                success: true,
+                data: {
+                    identidad_url: req.file.path,
+                    mensaje: 'Foto de identidad actualizada correctamente'
+                }
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            error: 'No se proporcionó ninguna imagen'
+        });
+
+    } catch (error) {
+        console.error('Error al actualizar foto de identidad:', error);
+
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (e) {
+                console.error('Error al limpiar foto de identidad subida:', e);
+            }
+        }
+
+        return res.status(500).json({
+            success: false,
+            error: 'Error al actualizar la foto de identidad',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+// Controlador para eliminar la foto de identidad
+const eliminarIdentidadFoto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const usuario = await Usuario.findByPk(id);
+
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
+        }
+
+        const fotoAnteriorId = usuario.identidad_public_id;
+
+        if (!fotoAnteriorId) {
+            return res.status(400).json({
+                success: false,
+                error: 'El usuario no tiene una foto de identidad'
+            });
+        }
+
+        // Actualizar el usuario para eliminar la referencia
+        await usuario.update({
+            identidad_url: null,
+            identidad_public_id: null
+        });
+
+        // Eliminar de Cloudinary
+        try {
+            await cloudinary.uploader.destroy(fotoAnteriorId);
+        } catch (error) {
+            console.error('Error al eliminar la foto de identidad de Cloudinary:', error);
+        }
+
+        return res.json({
+            success: true,
+            mensaje: 'Foto de identidad eliminada correctamente'
+        });
+
+    } catch (error) {
+        console.error('Error al eliminar foto de identidad:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al eliminar la foto de identidad',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 //Actualizar Usuario
 const actualizarUsuario = async (req, res) => {
     const { id } = req.params;
@@ -1784,6 +1900,8 @@ module.exports = {
     actualizarPassword,
     actualizarImagenPerfil,
     eliminarImagenPerfil,
+    actualizarIdentidadFoto,
+    eliminarIdentidadFoto,
     verificarRTN,
     eliminarUsuario
 };

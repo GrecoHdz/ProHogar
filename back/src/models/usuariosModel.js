@@ -78,6 +78,14 @@ const Usuario = sequelize.define("Usuario", {
     imagen_public_id: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    identidad_url: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    identidad_public_id: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     timestamps: false,

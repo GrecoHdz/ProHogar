@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { body, param, validationResult } = require("express-validator");   
-const { authMiddleware } = require("../middleware/authMiddleware");   
-const { apiLimiter } = require('../middleware/rateLimiters'); 
-const { 
+const { body, param, validationResult } = require("express-validator");
+const { authMiddleware } = require("../middleware/authMiddleware");
+const { apiLimiter } = require('../middleware/rateLimiters');
+const {
     getAllCotizaciones,
     getCotizacionPorId,
     getCotizacionesPorUsuario,
@@ -11,7 +11,7 @@ const {
     getUltimaCotizacionPorSolicitud,
     createCotizacion,
     updateCotizacion,
-    deleteCotizacion 
+    deleteCotizacion
 } = require("../controllers/CotizacionController");
 
 // Middleware de autenticación
@@ -24,10 +24,10 @@ router.use(apiLimiter);
 const validarErrores = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errores: errors.array() });
+        return res.status(400).json({ errores: errors.array() });
     }
     next();
-  }; 
+};
 
 //Obtener todas las cotizaciones
 router.get("/", [
@@ -59,8 +59,8 @@ router.get("/solicitud/:id_solicitud", [
 ], getUltimaCotizacionPorSolicitud);
 
 //Crear Cotizacion 
-router.post("/", [ 
-    body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo"), 
+router.post("/", [
+    body("id_solicitud").isInt({ min: 1 }).withMessage("El ID de la solicitud debe ser un número entero positivo"),
     body("monto_manodeobra").isFloat({ min: 0 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
     body("monto_materiales").isFloat({ min: 0 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("comentario").isString().withMessage("El comentario debe ser una cadena de caracteres"),
@@ -70,13 +70,13 @@ router.post("/", [
 //Actualizar cotizacion
 router.put("/:id", [
     param("id").isInt({ min: 1 }).withMessage("El ID debe ser un número entero positivo"),
-    body("id_cuenta").optional().isInt({ min: 1 }).withMessage("El ID de la cuenta debe ser un número entero positivo"),
-    body("num_comprobante").optional().isString().withMessage("El número de comprobante debe ser una cadena de caracteres"),
+    body("id_cuenta").optional({ nullable: true }).isInt({ min: 1 }).withMessage("El ID de la cuenta debe ser un número entero positivo"),
+    body("num_comprobante").optional({ nullable: true }).isString().withMessage("El número de comprobante debe ser una cadena de caracteres"),
     body("monto_manodeobra").optional().isFloat({ min: 0 }).withMessage("El monto de mano de obra debe ser un número entero positivo"),
     body("monto_materiales").optional().isFloat({ min: 0 }).withMessage("El monto de materiales debe ser un número entero positivo"),
     body("descuento_membresia").optional().isFloat({ min: 0 }).withMessage("El descuento de membresia debe ser un número entero positivo"),
     body("credito_usado").optional().isFloat({ min: 0 }).withMessage("El crédito usado debe ser un número entero positivo"),
-    body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres"), 
+    body("comentario").optional().isString().withMessage("El comentario debe ser una cadena de caracteres"),
     body("estado").optional().isIn(["pendiente", "aceptado", "rechazado", "pagado", "confirmado"]).withMessage("El estado debe ser 'pendiente', 'aceptado', 'rechazado', 'pagado' o 'pago_confirmado'")
 ], validarErrores, updateCotizacion);
 

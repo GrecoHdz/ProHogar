@@ -324,7 +324,7 @@ const obtenerSolicitudesServicios = async (req, res) => {
                 {
                     model: Usuario,
                     as: 'cliente',
-                    attributes: ['id_usuario', 'nombre', 'telefono']
+                    attributes: ['id_usuario', 'nombre', 'telefono', 'imagen_url']
                 },
                 {
                     model: Ciudad,
@@ -391,7 +391,8 @@ const obtenerSolicitudesServicios = async (req, res) => {
                 cliente: plainSolicitud.cliente ? {
                     id_cliente: plainSolicitud.cliente.id_usuario,
                     nombre: plainSolicitud.cliente.nombre,
-                    telefono: plainSolicitud.cliente.telefono
+                    telefono: plainSolicitud.cliente.telefono,
+                    imagen_url: plainSolicitud.cliente.imagen_url
                 } : null,
                 ciudad: plainSolicitud.ciudad ? {
                     id_ciudad: plainSolicitud.ciudad.id_ciudad,
@@ -834,7 +835,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
             {
                 model: Usuario,
                 as: 'cliente',
-                attributes: ['id_usuario', 'nombre', 'telefono']
+                attributes: ['id_usuario', 'nombre', 'telefono', 'imagen_url']
             }],
             order: [['fecha_solicitud', 'DESC']],
             limit: parseInt(limit),

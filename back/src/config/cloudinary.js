@@ -115,5 +115,35 @@ exports.uploadBarberia = multer({
   }
 });
 
+// Configuración para identidad
+const identityStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'MiSeguro/usuarios/identidad',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    transformation: [{
+      width: 1200,
+      crop: 'limit',
+      quality: 'auto:best',
+      fetch_format: 'auto',
+      format: 'webp',
+      dpr: 'auto',
+      secure: true
+    }]
+  }
+});
+
+exports.uploadIdentity = multer({
+  storage: identityStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    // Permitir imágenes y PDFs si es necesario, aunque el usuario pidió "foto"
+    if (!file.mimetype.startsWith('image/') && file.mimetype !== 'application/pdf') {
+      return cb(new Error('Solo se permiten archivos de imagen o PDF'), false);
+    }
+    cb(null, true);
+  }
+});
+
 // Exportar la instancia de cloudinary para operaciones directas
 exports.cloudinary = cloudinary;

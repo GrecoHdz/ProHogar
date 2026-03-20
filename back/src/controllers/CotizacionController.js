@@ -11,9 +11,13 @@ const getAllCotizaciones = async (req, res) => {
         const { estado, search, month } = req.query;
 
         const whereCondition = {
-            id_cuenta: { [Op.ne]: null },
             estado: { [Op.in]: ['rechazado', 'pagado', 'confirmado'] },
         };
+        // Solo filtrar por id_cuenta cuando viene del panel de pagos (no para reportes)
+        // Los pagos en efectivo tienen id_cuenta = null y deben aparecer en reportes
+        if (req.query.soloCuentas === 'true') {
+            whereCondition.id_cuenta = { [Op.ne]: null };
+        }
         const andConditions = [];
 
         if (estado) {
@@ -361,8 +365,57 @@ const createCotizacion = async (req, res) => {
 //Actualizar cotizacion
 const updateCotizacion = async (req, res) => {
     try {
-        const cotizacion = await Cotizacion.update(req.body, { where: { id_cotizacion: req.params.id } });
-        res.json(cotizacion);
+        const { id } = req.params;
+        const cotizacion = await Cotizacion.findByPk(id);
+
+        if (!cotizacion) {
+            return res.status(404).json({ error: 'Cotización no encontrada' });
+        }
+
+        // Si el estado cambia a 'confirmado' y no se proporcionó monto_comision_app, calcularlo
+        if (req.body.estado === 'confirmado' && !req.body.monto_comision_app) {
+            try {
+                const Config = require("../models/configModel");
+                const configApp = await Config.findOne({
+                    where: { tipo_config: 'comision_por_servicio' }
+                });
+
+                const porcentajeApp = configApp ? parseFloat(configApp.valor) || 0 : 0;
+                const manoObra = parseFloat(req.body.monto_manodeobra || cotizacion.monto_manodeobra) || 0;
+                const descMembresia = parseFloat(req.body.descuento_membresia || cotizacion.descuento_membresia) || 0;
+
+                const comisionBrutaApp = Math.round(manoObra * porcentajeApp) / 100;
+                req.body.monto_comision_app = Math.max(0, comisionBrutaApp - descMembresia);
+            } catch (configError) {
+                console.error('Error al calcular comisión de la app:', configError);
+                // No bloqueamos la actualización si falla el cálculo, pero lo registramos
+            }
+        }
+
+        await cotizacion.update(req.body);
+
+        // Si se confirmó exitosamente, completar el movimiento de ingreso del técnico
+        if (req.body.estado === 'confirmado') {
+            try {
+                const Movimiento = require("../models/movimientosModel");
+                const movimiento = await Movimiento.findOne({
+                    where: {
+                        id_cotizacion: cotizacion.id_cotizacion,
+                        tipo: 'ingreso',
+                        estado: 'pendiente'
+                    }
+                });
+
+                if (movimiento) {
+                    await movimiento.update({ estado: 'completado' });
+                    console.log(`Movimiento de ingreso ${movimiento.id_movimiento} completado para cotización confirmada`);
+                }
+            } catch (movimientoError) {
+                console.error('Error al completar movimiento para cotización confirmada:', movimientoError);
+            }
+        }
+
+        res.json({ success: true, data: cotizacion });
     } catch (error) {
         console.error('Error al actualizar la cotizacion:', error);
         res.status(500).json({
