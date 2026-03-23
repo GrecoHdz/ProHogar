@@ -123,6 +123,9 @@ const obtenerUsuarios = async (req, res) => {
                 attributes: {
                     exclude: ['password_hash', 'id_ciudad', 'reset_password_token', 'reset_password_expires'],
                     include: [
+                        'imagen_url',
+                        'identidad_url',
+                        'verificado',
                         // Contar servicios solicitados como cliente
                         [
                             sequelize.literal(`(
@@ -556,6 +559,9 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
             u.estado,
             u.fecha_registro,
             u.id_ciudad,
+            u.imagen_url,
+            u.identidad_url,
+            u.verificado,
             c.nombre_ciudad,
             r.nombre_rol,
             COUNT(ref.id_referido) AS total_referidos,
@@ -610,6 +616,9 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
             telefono: usuario.telefono,
             estado: usuario.estado,
             fecha_registro: usuario.fecha_registro,
+            imagen_url: usuario.imagen_url,
+            identidad_url: usuario.identidad_url,
+            verificado: !!usuario.verificado,
             credito: { monto: parseFloat(usuario.monto_credito) || 0 },
             ciudad: {
                 id_ciudad: usuario.id_ciudad,
@@ -754,7 +763,10 @@ const obtenerAdministradores = async (req, res) => {
                 "telefono",
                 "estado",
                 "fecha_registro",
-                "id_ciudad"
+                "id_ciudad",
+                "imagen_url",
+                "identidad_url",
+                "verificado"
             ],
             where: whereCondition,
             include: [
@@ -1598,7 +1610,8 @@ const eliminarIdentidadFoto = async (req, res) => {
         // Actualizar el usuario para eliminar la referencia
         await usuario.update({
             identidad_url: null,
-            identidad_public_id: null
+            identidad_public_id: null,
+            verificado: false
         });
 
         // Eliminar de Cloudinary
@@ -1635,7 +1648,10 @@ const actualizarUsuario = async (req, res) => {
         id_rol,
         password_hash,
         activo,
-        estado
+        estado,
+        verificado,
+        identidad_url,
+        identidad_public_id
     } = req.body;
 
     if (!id) {
@@ -1670,6 +1686,9 @@ const actualizarUsuario = async (req, res) => {
 
         if (activo !== undefined) usuario.activo = activo;
         if (estado !== undefined) usuario.estado = estado;
+        if (verificado !== undefined) usuario.verificado = verificado;
+        if (identidad_url !== undefined) usuario.identidad_url = identidad_url;
+        if (identidad_public_id !== undefined) usuario.identidad_public_id = identidad_public_id;
 
         await usuario.save();
 

@@ -86,6 +86,11 @@ const Usuario = sequelize.define("Usuario", {
     identidad_public_id: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    verificado: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
     }
 }, {
     timestamps: false,
