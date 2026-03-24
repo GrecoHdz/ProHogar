@@ -1902,6 +1902,53 @@ const eliminarUsuario = async (req, res) => {
     }
 };
 
+// Obtener usuarios con foto de identidad pero no verificados
+const obtenerUsuariosPendientesVerificar = async (req, res) => {
+    try {
+        console.log("=== Ejecutando obtenerUsuariosPendientesVerificar ===");
+        const usuarios = await Usuario.findAll({
+            where: {
+                identidad_url: {
+                    [Op.and]: [
+                        { [Op.ne]: null },
+                        { [Op.ne]: '' }
+                    ]
+                },
+                verificado: false
+            },
+            attributes: ['id_usuario', 'nombre', 'identidad', 'identidad_url', 'email', 'telefono', 'fecha_registro', 'imagen_url'],
+            include: [
+                {
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['nombre_ciudad']
+                },
+                {
+                    model: Rol,
+                    as: 'rol',
+                    attributes: ['nombre_rol']
+                }
+            ],
+            order: [['fecha_registro', 'ASC']]
+        });
+
+        console.log(`Se encontraron ${usuarios.length} usuarios pendientes`);
+
+        res.json({
+            success: true,
+            data: usuarios
+        });
+    } catch (error) {
+        console.error('Error ALTO al obtener usuarios pendientes de verificar:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener usuarios pendientes de verificar',
+            message: error.message,
+            stack: error.stack
+        });
+    }
+};
+
 module.exports = {
     verificarPerfilTecnico,
     obtenerGraficaCrecimientoUsuarios,
@@ -1916,11 +1963,12 @@ module.exports = {
     obtenerUsuarioPorIdentidad,
     crearUsuario,
     actualizarUsuario,
-    actualizarPassword,
     actualizarImagenPerfil,
     eliminarImagenPerfil,
     actualizarIdentidadFoto,
     eliminarIdentidadFoto,
+    actualizarPassword,
     verificarRTN,
-    eliminarUsuario
+    eliminarUsuario,
+    obtenerUsuariosPendientesVerificar
 };

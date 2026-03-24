@@ -26,7 +26,8 @@ const {
     verificarRTN,
     eliminarUsuario,
     obtenerEstadisticasUsuarios,
-    obtenerGraficaCrecimientoUsuarios
+    obtenerGraficaCrecimientoUsuarios,
+    obtenerUsuariosPendientesVerificar
 } = require("../controllers/UsuarioController");
 
 // Middleware para validar errores
@@ -97,6 +98,9 @@ router.get("/administradores", validarErrores, authMiddleware, apiLimiter, obten
 
 // Obtener estadísticas de usuarios
 router.get("/estadisticas", validarErrores, authMiddleware, apiLimiter, obtenerEstadisticasUsuarios);
+
+// Obtener usuarios pendientes de verificar
+router.get("/pendientes-verificar", validarErrores, authMiddleware, apiLimiter, obtenerUsuariosPendientesVerificar);
 
 //Obtener Usuario por nombre
 router.get("/:nombre",
