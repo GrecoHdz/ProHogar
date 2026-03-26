@@ -435,6 +435,7 @@ const forgotPassword = async (req, res) => {
       reset_password_expires: resetTokenExpiry
     });
 
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
     console.log(`📧 Intentando enviar correo de recuperación a: ${user.email}`);
     console.log(`🔗 URL de restablecimiento generada: ${resetUrl}`);
 
