@@ -11,8 +11,16 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     },
     tls: {
-        // No fallar en certificados inválidos
         rejectUnauthorized: false
+    }
+});
+
+// Verificar conexión al inicio
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ Error en la configuración del servidor de correos:', error);
+    } else {
+        console.log('🚀 Servidor de correos listo para enviar mensajes');
     }
 });
 

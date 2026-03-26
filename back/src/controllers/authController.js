@@ -435,7 +435,8 @@ const forgotPassword = async (req, res) => {
       reset_password_expires: resetTokenExpiry
     });
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    console.log(`📧 Intentando enviar correo de recuperación a: ${user.email}`);
+    console.log(`🔗 URL de restablecimiento generada: ${resetUrl}`);
 
     const mailOptions = {
       from: `"MiSeguro" <${process.env.EMAIL_USER}>`,
@@ -464,7 +465,18 @@ const forgotPassword = async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Correo enviado exitosamente:', info.messageId);
+    } catch (mailError) {
+      console.error('❌ Error específico de Nodemailer:', {
+        message: mailError.message,
+        code: mailError.code,
+        command: mailError.command,
+        response: mailError.response
+      });
+      throw mailError; // Re-lanzar para que caiga en el catch general
+    }
 
     res.status(200).json({
       success: true,
@@ -473,11 +485,12 @@ const forgotPassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en forgotPassword:', error);
+    console.error('💥 Error crítico en forgotPassword:', error);
     res.status(500).json({
       success: false,
       message: 'Error al procesar la solicitud de restablecimiento de contraseña',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message, // Enviamos el mensaje de error para debuguear incluso si no es development por ahora
+      code: error.code
     });
   }
 };
