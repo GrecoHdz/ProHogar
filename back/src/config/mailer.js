@@ -1,38 +1,46 @@
-// mailer.js - Ahora usando Resend en lugar de Nodemailer para evitar bloqueos de puertos en Railway
-const { Resend } = require('resend');
+// mailer.js - Implementación de Brevo (Sendinblue) para evitar bloqueos de puertos SMTP en Railway
+const SibApiV3Sdk = require('sib-api-v3-sdk');
 require('dotenv').config();
 
-// 🟢 Validación de la API KEY de Resend
-if (!process.env.RESEND_API_KEY) {
-    console.error('⚠️ [MAILER] Error: RESEND_API_KEY no está configurada en las variables de entorno.');
-}
+// 🟢 Configuración de Brevo
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+const apiKey = defaultClient.authentications['api-key'];
 
-// Inicializar Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// La variable en Railway/env debe ser BREVO_API_KEY (la que empieza con xkeysib-...)
+apiKey.apiKey = process.env.BREVO_API_KEY;
+
+const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
 /**
- * Función universal para enviar correos
+ * Función universal para enviar correos vía Brevo API (Puerto 443 HTTPS)
  * @param {Object} options - Opciones del correo (to, subject, html)
  */
 const sendEmail = async ({ to, subject, html }) => {
+    if (!process.env.BREVO_API_KEY) {
+        console.error('⚠️ [MAILER] Error: BREVO_API_KEY no configurada.');
+        throw new Error('Configuración de correo incompleta.');
+    }
+
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = html;
+    
+    // IMPORTANTE: El email sender debe ser el que verificaste en Brevo
+    sendSmtpEmail.sender = { 
+        "name": "MiSeguro", 
+        "email": process.env.EMAIL_USER || "contactomisegurohn@gmail.com" 
+    };
+    
+    sendSmtpEmail.to = [{ "email": to }];
+
     try {
-        const { data, error } = await resend.emails.send({
-            from: 'MiSeguro <onboarding@resend.dev>', // Por ahora usamos el dominio de prueba, puedes cambiarlo después
-            to: [to],
-            subject: subject,
-            html: html,
-        });
-
-        if (error) {
-            console.error('❌ Error de Resend:', error);
-            throw new Error(error.message);
-        }
-
-        console.log('✅ Correo enviado exitosamente vía Resend:', data.id);
+        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log('✅ Correo enviado exitosamente vía Brevo API:', data.messageId);
         return data;
-    } catch (err) {
-        console.error('💥 Error crítico al enviar correo:', err);
-        throw err;
+    } catch (error) {
+        console.error('❌ Error enviando con Brevo:', error.response ? error.response.body : error.message);
+        throw error;
     }
 };
 
