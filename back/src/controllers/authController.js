@@ -2,7 +2,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const Usuario = require('../models/usuariosModel');
@@ -10,8 +9,8 @@ const Rol = require('../models/rolesModel');
 const RefreshToken = require('../models/refreshtokenModel');
 const Ciudad = require('../models/ciudadesModel');
 
-// Configuración del transporte de correo
-const transporter = require('../config/mailer');
+// Configuración del servicio de correo (Resend)
+const { sendEmail } = require('../config/mailer');
 
 // Generar un token de acceso
 const generateAccessToken = (user) => {
@@ -439,43 +438,34 @@ const forgotPassword = async (req, res) => {
     console.log(`📧 Intentando enviar correo de recuperación a: ${user.email}`);
     console.log(`🔗 URL de restablecimiento generada: ${resetUrl}`);
 
-    const mailOptions = {
-      from: `"MiSeguro" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: 'Restablece tu contraseña de MiSeguro',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #10B981;">Restablece tu contraseña</h2>
-          <p>Hola ${user.nombre},</p>
-          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de MiSeguro.</p>
-          <p>Por favor, haz clic en el siguiente enlace para crear una nueva contraseña:</p>
-          <p>
-            <a href="${resetUrl}" 
-               style="display: inline-block; padding: 10px 20px; background-color: #10B981; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0;">
-              Restablecer contraseña
-            </a>
-          </p>
-          <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
-          <p>Este enlace expirará en 1 hora.</p>
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-          <p style="color: #718096; font-size: 0.9em;">
-            Si el botón no funciona, copia y pega esta URL en tu navegador:<br>
-            ${resetUrl}
-          </p>
-        </div>
-      `
-    };
-
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log('✅ Correo enviado exitosamente:', info.messageId);
-    } catch (mailError) {
-      console.error('❌ Error específico de Nodemailer:', {
-        message: mailError.message,
-        code: mailError.code,
-        command: mailError.command,
-        response: mailError.response
+      await sendEmail({
+        to: user.email,
+        subject: 'Restablece tu contraseña de MiSeguro',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #10B981;">Restablece tu contraseña</h2>
+            <p>Hola ${user.nombre},</p>
+            <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de MiSeguro.</p>
+            <p>Por favor, haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+            <p>
+              <a href="${resetUrl}" 
+                 style="display: inline-block; padding: 10px 20px; background-color: #10B981; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0;">
+                Restablecer contraseña
+              </a>
+            </p>
+            <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
+            <p>Este enlace expirará en 1 hora.</p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+            <p style="color: #718096; font-size: 0.9em;">
+              Si el botón no funciona, copia y pega esta URL en tu navegador:<br>
+              ${resetUrl}
+            </p>
+          </div>
+        `
       });
+    } catch (mailError) {
+      console.error('❌ Error enviando email con Resend:', mailError);
       throw mailError; // Re-lanzar para que caiga en el catch general
     }
 

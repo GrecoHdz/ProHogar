@@ -1,42 +1,39 @@
-// mailer.js
-const nodemailer = require('nodemailer');
+// mailer.js - Ahora usando Resend en lugar de Nodemailer para evitar bloqueos de puertos en Railway
+const { Resend } = require('resend');
 require('dotenv').config();
 
-// 🟢 Validación de variables de entorno
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error('⚠️ [MAILER] Error: EMAIL_USER o EMAIL_PASS no están configurados.');
+// 🟢 Validación de la API KEY de Resend
+if (!process.env.RESEND_API_KEY) {
+    console.error('⚠️ [MAILER] Error: RESEND_API_KEY no está configurada en las variables de entorno.');
 }
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Port 465 must use secure: true
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    },
-    // ⏱️ Ajustes de tiempo para producción (evita timeouts prematuros)
-    connectionTimeout: 15000, 
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-    debug: true, // Muestra detalles adicionales en la consola
-    logger: true // Muestra el flujo completo del protocolo SMTP
-});
+// Inicializar Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verificar conexión al inicio
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('❌ Error en el servidor de correos (Asegúrate de usar puerto 465 y SSL):', {
-            message: error.message,
-            code: error.code,
-            command: error.command
+/**
+ * Función universal para enviar correos
+ * @param {Object} options - Opciones del correo (to, subject, html)
+ */
+const sendEmail = async ({ to, subject, html }) => {
+    try {
+        const { data, error } = await resend.emails.send({
+            from: 'MiSeguro <onboarding@resend.dev>', // Por ahora usamos el dominio de prueba, puedes cambiarlo después
+            to: [to],
+            subject: subject,
+            html: html,
         });
-    } else {
-        console.log('🚀 Servidor de correos listo para enviar mensajes (Puerto 465 SSL)');
-    }
-});
 
-module.exports = transporter;
+        if (error) {
+            console.error('❌ Error de Resend:', error);
+            throw new Error(error.message);
+        }
+
+        console.log('✅ Correo enviado exitosamente vía Resend:', data.id);
+        return data;
+    } catch (err) {
+        console.error('💥 Error crítico al enviar correo:', err);
+        throw err;
+    }
+};
+
+module.exports = { sendEmail };

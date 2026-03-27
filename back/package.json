@@ -31,6 +31,7 @@
     "mysql2": "^3.14.1",
     "nodemailer": "^7.0.10",
     "nodemon": "^3.1.10",
+    "resend": "^6.9.4",
     "sequelize": "^6.37.7",
     "uuid": "^11.1.0",
     "web-push": "^3.6.7"
