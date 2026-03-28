@@ -1144,8 +1144,8 @@ const obtenerReporteIngresos = async (req, res) => {
             (parseFloat(ingresosVisitas || 0)) +
             (parseFloat(ingresosPaquetes || 0));
 
-        // Ganancia Neta = Ingresos Brutos App - Cashback pagado - Retiros efectivamente pagados
-        const gananciaNeta = ingresosTotales - totalCashback - totalRetirosPagados;
+        // Ganancia Neta = Ingresos Brutos App - Cashback pagado
+        const gananciaNeta = ingresosTotales - totalCashback;
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1740,9 +1740,10 @@ const obtenerEstadisticasDashboard = async (req, res) => {
                     } : {})
                 }
             }) || 0,
+            // Total de retiros EFECTIVAMENTE PAGADOS (Monto real que salió de caja)
             Movimiento.sum('monto', {
                 where: {
-                    tipo: { [Op.in]: ['ingreso'] },
+                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                     estado: 'completado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
@@ -1785,8 +1786,8 @@ const obtenerEstadisticasDashboard = async (req, res) => {
             }
         });
 
-        // ingresosGross = Total Comisiones App - Cashback - Retiros Reales
-        const ingresosGross = ingresosTotalesApp - totalCashback - retirosTotales;
+        // ingresosGross = Total Comisiones App - Cashback
+        const ingresosGross = ingresosTotalesApp - totalCashback;
 
         // Formatear respuesta
         const estadisticas = {
