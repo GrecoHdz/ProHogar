@@ -397,7 +397,7 @@ const obtenerTecnicosPorCiudad = async (req, res) => {
             ],
             limit: limit,
             offset: offset,
-            order: [["nombre", "ASC"]],
+            order: [["fecha_registro", "DESC"]],
             subQuery: false
         });
 
@@ -573,7 +573,7 @@ const obtenerUsuariosPorCiudad = async (req, res) => {
         LEFT JOIN credito cu ON u.id_usuario = cu.id_usuario
         ${filtrosSQL}
         GROUP BY u.id_usuario, c.nombre_ciudad, r.nombre_rol, cu.monto_credito
-        ORDER BY u.nombre ASC
+        ORDER BY u.fecha_registro DESC
         LIMIT :limit OFFSET :offset
       `;
 
@@ -783,7 +783,7 @@ const obtenerAdministradores = async (req, res) => {
             ],
             limit: parseInt(limit),
             offset: parseInt(offset),
-            order: [["nombre", "ASC"]]
+            order: [["fecha_registro", "DESC"]]
         });
 
         // Obtener total de administradores
