@@ -1066,10 +1066,10 @@ const obtenerReporteIngresos = async (req, res) => {
                 },
                 raw: true
             }),
-            // Obtener el total que se le debe a los TÉCNICOS (Ingresos generados por ellos)
+            // Obtener el total de retiros EFECTIVAMENTE PAGADOS a técnicos y referidos
             Movimiento.sum('monto', {
                 where: {
-                    tipo: 'ingreso',
+                    tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                     estado: 'completado',
                     ...(fechaInicio || fechaFin ? {
                         fecha: {
@@ -1122,6 +1122,21 @@ const obtenerReporteIngresos = async (req, res) => {
         const ingresosPaquetes = (parseFloat(sumatoriaMontoPaquetes || 0) * porcentajeComision) / 100;
         const efectivoServicios = parseFloat(efectivoServiciosData[0]?.total || 0);
         const totalCashback = parseFloat(sumatoriaCashback || 0);
+        const totalRetirosPagados = parseFloat(totalRetiros || 0); // retiros/retiro_referido completados
+
+        // Calcular lo que la app AUN LE DEBE a los técnicos (ingreso acumulado pendiente de retiro)
+        const deudasTecnicos = await Movimiento.sum('monto', {
+            where: {
+                tipo: 'ingreso',
+                estado: 'completado',
+                ...(fechaInicio || fechaFin ? {
+                    fecha: {
+                        ...(fechaInicio && { [Op.gte]: ajustarFechaLocal(fechaInicio, true) }),
+                        ...(fechaFin && { [Op.lte]: ajustarFechaLocal(fechaFin) })
+                    }
+                } : {})
+            }
+        }) || 0;
 
         // Calcular los Ingresos de la App (Suma de las 4 categorías principales)
         const ingresosTotales = (parseFloat(ingresosServicios || 0)) +
@@ -1129,9 +1144,8 @@ const obtenerReporteIngresos = async (req, res) => {
             (parseFloat(ingresosVisitas || 0)) +
             (parseFloat(ingresosPaquetes || 0));
 
-        // Ganancia Neta (Lo que es mío) = Ingresos Brutos App - Cashback - Retiros
-        // Nota: Las comiisones no se restan aquí porque ingresosServicios ya lo resta.
-        const gananciaNeta = ingresosTotales - totalCashback - totalRetiros;
+        // Ganancia Neta = Ingresos Brutos App - Cashback pagado - Retiros efectivamente pagados
+        const gananciaNeta = ingresosTotales - totalCashback - totalRetirosPagados;
 
         // 2. Obtener datos para el gráfico de los 12 meses anteriores al mes actual o al mes proporcionado
         const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1202,11 +1216,11 @@ const obtenerReporteIngresos = async (req, res) => {
 
             const ingresosPaquetesMes = (parseFloat(sumatoriaPaquetesMes || 0) * porcentajeComision) / 100;
 
-            // Obtener retiros y cashback del mes para el gráfico
+            // Obtener retiros efectivamente pagados y cashback del mes para el gráfico
             const [retirosMes, cashbackMes] = await Promise.all([
                 Movimiento.sum('monto', {
                     where: {
-                        tipo: 'ingreso',
+                        tipo: { [Op.in]: ['retiro', 'retiro_referido'] },
                         estado: 'completado',
                         fecha: { [Op.between]: [fechaInicio, fechaFin] }
                     }
@@ -1238,7 +1252,8 @@ const obtenerReporteIngresos = async (req, res) => {
                 ingresosVisitas: parseFloat(ingresosVisitas || 0).toFixed(2),
                 ingresosPaquetes: parseFloat(ingresosPaquetes || 0).toFixed(2),
                 ingresosTotales: parseFloat(ingresosTotales).toFixed(2),
-                retiros: parseFloat(totalRetiros || 0).toFixed(2),
+                retiros: parseFloat(totalRetirosPagados || 0).toFixed(2),       // Retiros efectivamente pagados
+                deudasTecnicos: parseFloat(deudasTecnicos || 0).toFixed(2),     // Deuda pendiente con técnicos
                 comisiones: parseFloat(totalComisiones || 0).toFixed(2),
                 cashback: totalCashback.toFixed(2),
                 gananciaNeta: parseFloat(gananciaNeta).toFixed(2)
