@@ -1235,7 +1235,7 @@ const obtenerReporteIngresos = async (req, res) => {
             ]);
 
             const ingresosTotalesMes = parseFloat(ingresosServiciosMes) + (ingresosMembresiasMes || 0) + (ingresosVisitasMes || 0) + ingresosPaquetesMes;
-            const gananciaNetaMes = ingresosTotalesMes - (parseFloat(retirosMes || 0)) - (parseFloat(cashbackMes || 0));
+            const gananciaNetaMes = ingresosTotalesMes - (parseFloat(cashbackMes || 0));
 
             return {
                 mes: mes,
