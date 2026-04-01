@@ -164,8 +164,12 @@ const refreshToken = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     const accessToken = req.cookies.token || req.headers.authorization?.split(' ')[1];
 
+    console.log('🔄 [AuthBack] Intento de refresh-token');
+    console.log('📦 [AuthBack] Cookies presentes:', req.cookies ? Object.keys(req.cookies) : 'Ninguna');
+
     // Si no hay refresh token pero hay access token, intentar regenerar el refresh token
     if (!refreshToken && accessToken) {
+      console.log('⚠️ [AuthBack] Sin refreshToken, intentando recuperar desde accessToken...');
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET, { ignoreExpiration: true });
 
@@ -267,6 +271,7 @@ const refreshToken = async (req, res) => {
     });
 
     if (!storedToken) {
+      console.warn('❌ [AuthBack] RefreshToken no existe en DB');
       clearAllAuthCookies(res);
       await t.rollback();
       return res.status(403).json({

@@ -1083,6 +1083,8 @@ const obtenerTecnicosYAdminsPorCiudad = async (req, res) => {
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
     const { id } = req.params;
+    
+    console.log(`👤 [UserBack] Solicitando perfil para ID: ${id}`);
 
     if (!id) {
         return res.status(400).json({ error: "Se requiere el ID del usuario" });
