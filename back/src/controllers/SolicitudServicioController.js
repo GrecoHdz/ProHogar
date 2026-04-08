@@ -848,16 +848,7 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         });
 
         // Formatear la respuesta
-        const solicitudesFormateadas = await Promise.all(solicitudes.map(async (solicitud) => {
-            const plainSolicitud = solicitud.toJSON();
-            // La promoción de primer viaje gratis ya caducó
-            const es_primer_viaje = false;
-
-            return {
-                ...plainSolicitud,
-                es_primer_viaje: es_primer_viaje
-            };
-        }));
+        const solicitudesFormateadas = solicitudes.map((solicitud) => solicitud.toJSON());
 
         // Contadores globales (siempre devuelven el total sin el filtro de 'tab' actual)
         const countBaseWhere = { id_tecnico: id_tecnico };
