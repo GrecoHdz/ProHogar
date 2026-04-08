@@ -850,19 +850,8 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
         // Formatear la respuesta
         const solicitudesFormateadas = await Promise.all(solicitudes.map(async (solicitud) => {
             const plainSolicitud = solicitud.toJSON();
-            let es_primer_viaje = false;
-
-            if (plainSolicitud.servicio && plainSolicitud.servicio.nombre === 'Taxi VIP') {
-                const count = await SolicitudServicio.count({
-                    where: {
-                        id_usuario: plainSolicitud.id_usuario,
-                        id_servicio: plainSolicitud.id_servicio,
-                        id_solicitud: { [Op.lt]: plainSolicitud.id_solicitud },
-                        estado: { [Op.notIn]: ['cancelado'] }
-                    }
-                });
-                es_primer_viaje = count === 0;
-            }
+            // La promoción de primer viaje gratis ya caducó
+            const es_primer_viaje = false;
 
             return {
                 ...plainSolicitud,

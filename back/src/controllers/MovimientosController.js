@@ -2046,6 +2046,7 @@ const getIngresosMensuales = async (req, res) => {
                 }]
             }],
             where: {
+                id_usuario: id_tecnico,
                 tipo: 'ingreso',
                 estado: 'completado'
             },
@@ -2096,6 +2097,7 @@ const getServiciosPorMes = async (req, res) => {
                     }]
                 }],
                 where: {
+                    id_usuario: id_tecnico,
                     tipo: 'ingreso',
                     estado: 'completado'
                 },
@@ -2280,9 +2282,12 @@ const getEstadisticasGenerales = async (req, res) => {
             order: [['fecha', 'DESC']]
         });
 
-        // 🔹 Último retiro
         const ultimoRetiro = await Movimiento.findOne({
-            where: { tipo: 'retiro' || 'retiro_referido', estado: 'completado', id_usuario: id_tecnico },
+            where: { 
+                tipo: { [Op.in]: ['retiro', 'retiro_referido'] }, 
+                estado: 'completado', 
+                id_usuario: id_tecnico 
+            },
             order: [['fecha', 'DESC']]
         });
 
