@@ -44,11 +44,10 @@ const asignarServicioATecnico = async (req, res) => {
     try {
         const { id_tecnico, id_servicio } = req.body;
         
-        // Verificar si el técnico existe y es realmente técnico
+        // Verificar si el técnico existe y es realmente técnico (sin importar su disponibilidad activo/inactivo)
         const tecnico = await Usuario.findOne({
             where: { 
-                id_usuario: id_tecnico,
-                estado: 'activo'
+                id_usuario: id_tecnico
             },
             include: [
                 {
@@ -62,7 +61,7 @@ const asignarServicioATecnico = async (req, res) => {
         if (!tecnico) {
             return res.status(404).json({ 
                 success: false,
-                error: "Técnico no encontrado o no está activo" 
+                error: "Técnico no encontrado" 
             });
         }
         
