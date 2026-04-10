@@ -30,7 +30,12 @@ const authMiddleware = async (req, res, next) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (jwtError) {
-      console.error('Error al verificar el token JWT:', jwtError);
+      // Usar warn en lugar de error: el interceptor del frontend maneja el refresh automáticamente
+      if (jwtError.name === 'TokenExpiredError') {
+        console.warn('Token JWT expirado:', jwtError.expiredAt);
+      } else {
+        console.error('Error al verificar el token JWT:', jwtError);
+      }
       return res.status(401).json({ 
         success: false,
         message: 'Token inválido o expirado',
