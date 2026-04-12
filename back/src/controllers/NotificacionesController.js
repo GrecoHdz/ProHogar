@@ -254,7 +254,6 @@ const enviarNotificacion = async (req, res) => {
       });
 
       if (!notificacion) {
-        console.warn(`⚠️ [Notificaciones] Intento de enviar notificación con título inexistente: "${titulo}"`);
         await t.rollback();
         return res.status(404).json({
           success: false,
