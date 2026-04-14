@@ -136,6 +136,8 @@ const login = async (req, res) => {
       res.status(200).json({
         success: true,
         token: accessToken,
+        // Devolver refresh token en el body para que la PWA lo almacene en localStorage
+        refreshToken: refreshToken,
         user: userForCookie,
       });
     } catch (error) {
@@ -161,11 +163,14 @@ const login = async (req, res) => {
 const refreshToken = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const refreshToken = req.cookies.refreshToken;
+    // Aceptar refresh token desde cookie (web) o header X-Refresh-Token (PWA standalone)
+    const refreshToken = req.cookies.refreshToken || req.headers['x-refresh-token'];
     const accessToken = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    const isPWA = !!req.headers['x-refresh-token'] && !req.cookies.refreshToken;
 
     console.log('🔄 [AuthBack] Intento de refresh-token');
     console.log('📦 [AuthBack] Cookies presentes:', req.cookies ? Object.keys(req.cookies) : 'Ninguna');
+    if (isPWA) console.log('📱 [AuthBack] Modo PWA: refresh token recibido por header');
 
     // Si no hay refresh token pero hay access token, intentar regenerar el refresh token
     if (!refreshToken && accessToken) {
@@ -346,6 +351,8 @@ const refreshToken = async (req, res) => {
       success: true,
       message: 'Token actualizado correctamente',
       token: newAccessToken,
+      // Devolver el nuevo refresh token en el body para que la PWA lo guarde en localStorage
+      refreshToken: newRefreshToken,
       user: userForCookie,
     });
   } catch (error) {
