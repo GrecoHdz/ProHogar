@@ -91,6 +91,14 @@ const Usuario = sequelize.define("Usuario", {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false
+    },
+    device_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+    ip_registro: {
+        type: DataTypes.STRING(45),
+        allowNull: true
     }
 }, {
     timestamps: false,

@@ -1321,6 +1321,110 @@ const crearUsuario = async (req, res) => {
             });
         }
 
+        // --- VALIDACIONES DE DATOS FALSOS ---
+        
+        // 1. Validar nombre falso (ej. Fulano de Tal)
+        const nombreLower = nombre.toLowerCase().trim();
+        const nombresFalsosExactos = ['fulano de tal', 'fulano detalt', 'test user', 'dummy user'];
+        
+        if (nombresFalsosExactos.includes(nombreLower) || nombreLower.includes('prueba')) {
+            return res.status(400).json({
+                success: false,
+                status: 400,
+                error: "Error de validación",
+                message: "Por favor utiliza un nombre real para tu registro",
+                field: "nombre"
+            });
+        }
+
+        // 2. Validar números repetidos (6+ seguidos) en identidad y teléfono
+        const repeatedDigitsRegex = /(.)\1{5,}/;
+        const cleanIdentidad = identidad.replace(/\D/g, '');
+        const cleanTelefono = telefono.replace(/\D/g, '');
+
+        if (repeatedDigitsRegex.test(cleanIdentidad)) {
+            return res.status(400).json({
+                success: false,
+                status: 400,
+                error: "Error de validación",
+                message: "El número de identidad parece ser falso",
+                field: "identidad"
+            });
+        }
+
+        if (repeatedDigitsRegex.test(cleanTelefono)) {
+            return res.status(400).json({
+                success: false,
+                status: 400,
+                error: "Error de validación",
+                message: "El número de teléfono parece ser falso",
+                field: "telefono"
+            });
+        }
+
+        // 3. Validar prefijos de Honduras (+504)
+        if (telefono.includes('504')) {
+            // El número después del 504 en Honduras debe empezar con 2, 3, 7, 8 o 9
+            const match = cleanTelefono.match(/504([0-9])/);
+            if (match && !['2', '3', '7', '8', '9'].includes(match[1])) {
+                return res.status(400).json({
+                    success: false,
+                    status: 400,
+                    error: "Error de validación",
+                    message: "Prefijo de teléfono no válido para Honduras",
+                    field: "telefono"
+                });
+            }
+        }
+
+        // 4. Restricción por Dispositivo (Blacklist de Device ID)
+        const device_id = req.body.device_id;
+        const ip_registro = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+        if (device_id) {
+            // Buscar si este dispositivo ya está asociado a alguna cuenta
+            const usuarioDispositivo = await Usuario.findOne({
+                where: { device_id }
+            });
+
+            if (usuarioDispositivo) {
+                if (usuarioDispositivo.estado === 'deshabilitado') {
+                    return res.status(403).json({
+                        success: false,
+                        status: 403,
+                        error: "Dispositivo restringido",
+                        message: "Este dispositivo tiene restringido el acceso por comportamiento sospechoso."
+                    });
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        status: 400,
+                        error: "Dispositivo en uso",
+                        message: "Ya existe una cuenta vinculada a este dispositivo. Solo se permite una cuenta por dispositivo."
+                    });
+                }
+            }
+        }
+
+        // 5. Rate Limit por IP (Evitar múltiples registros seguidos desde la misma IP)
+        const registrosRecientesIP = await Usuario.count({
+            where: {
+                ip_registro,
+                fecha_registro: {
+                    [Op.gt]: new Date(Date.now() - 10 * 60 * 1000) // últimos 10 minutos
+                }
+            }
+        });
+
+        if (registrosRecientesIP >= 3) {
+            return res.status(429).json({
+                success: false,
+                status: 429,
+                error: "Límite excedido",
+                message: "Demasiados intentos de registro desde esta conexión. Por favor intenta más tarde."
+            });
+        }
+
         // Hashear la contraseña
         const hashedPassword = await bcrypt.hash(password_hash, saltRounds);
 
@@ -1333,7 +1437,9 @@ const crearUsuario = async (req, res) => {
             telefono,
             password_hash: hashedPassword,
             id_ciudad,
-            estado: es_tecnico ? 'deshabilitado' : 'activo'
+            estado: es_tecnico ? 'deshabilitado' : 'activo',
+            device_id,
+            ip_registro
         });
 
         // No devolver la contraseña en la respuesta
