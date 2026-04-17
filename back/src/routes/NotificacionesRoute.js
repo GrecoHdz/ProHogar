@@ -15,7 +15,8 @@ const {
   obtenerCreadasManualmente,
   guardarSuscripcionPush,
   eliminarSuscripcionPush,
-  obtenerVapidKey
+  obtenerVapidKey,
+  enviarWhatsAppTecnico
 } = require("../controllers/NotificacionesController");
 
 // ============================================================
@@ -144,6 +145,26 @@ router.get("/manuales", authMiddleware, apiLimiter, obtenerCreadasManualmente);
 router.get("/vapid-key", obtenerVapidKey);
 router.post("/suscripcion", authMiddleware, guardarSuscripcionPush);
 router.delete("/suscripcion", authMiddleware, eliminarSuscripcionPush);
+
+// 🟢 WhatsApp Business: Notificar al técnico asignado
+router.post(
+  "/whatsapp-tecnico",
+  [
+    body("telefono")
+      .notEmpty()
+      .withMessage("El teléfono del técnico es requerido"),
+    body("nombre").optional().isString(),
+    body("servicio").optional().isString(),
+    body("cliente").optional().isString(),
+    body("colonia").optional().isString(),
+    body("id_solicitud").optional(),
+    body("fecha").optional().isString(),
+  ],
+  validarErrores,
+  authMiddleware,
+  apiLimiter,
+  enviarWhatsAppTecnico
+);
 
 // 6️⃣ Eliminar una notificación
 router.delete(

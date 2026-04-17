@@ -7,6 +7,7 @@ const Rol = require("../models/rolesModel");
 const Ciudad = require("../models/ciudadesModel");
 const webpush = require("web-push");
 const SuscripcionNotificacion = require("../models/suscripcionesNotificacionesModel");
+const { sendWhatsAppBusinessMessage } = require("../utils/whatsappBusiness");
 
 // Configurar Web Push
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -778,6 +779,45 @@ const obtenerVapidKey = (req, res) => {
 };
 
 // ============================================================
+// 🟢 Enviar notificación WhatsApp Business al técnico asignado
+// ============================================================
+const enviarWhatsAppTecnico = async (req, res) => {
+  const { telefono, nombre, servicio, cliente, colonia, id_solicitud, fecha } = req.body;
+
+  if (!telefono) {
+    return res.status(400).json({
+      success: false,
+      message: "El teléfono del técnico es requerido"
+    });
+  }
+
+  const mensaje =
+    `*Nuevo Servicio Asignado* 🔧\n\n` +
+    `Hola *${nombre || 'Técnico'}*,\n` +
+    `Se te ha asignado un nuevo servicio en *MiSeguro*.\n\n` +
+    `*ID:* ${fecha}-${id_solicitud}\n` +
+    `*Servicio:* ${servicio || 'No especificado'}\n` +
+    `*Cliente:* ${cliente || 'No especificado'}\n` +
+    `*Colonia:* ${colonia || 'No especificada'}\n\n` +
+    `Por favor, ingresa a la plataforma para ver los detalles. ✅`;
+
+  const result = await sendWhatsAppBusinessMessage(telefono, mensaje);
+
+  if (result.success) {
+    return res.json({
+      success: true,
+      message: "Mensaje de WhatsApp enviado correctamente al técnico"
+    });
+  } else {
+    return res.status(500).json({
+      success: false,
+      message: result.error || "Error al enviar el mensaje de WhatsApp",
+      details: process.env.NODE_ENV === 'development' ? result.details : undefined
+    });
+  }
+};
+
+// ============================================================
 // EXPORTS
 // ============================================================
 module.exports = {
@@ -792,6 +832,6 @@ module.exports = {
   eliminarLeidas,
   guardarSuscripcionPush,
   eliminarSuscripcionPush,
-  obtenerVapidKey
-
+  obtenerVapidKey,
+  enviarWhatsAppTecnico
 };
