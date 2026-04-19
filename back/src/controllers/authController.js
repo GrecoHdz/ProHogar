@@ -371,7 +371,7 @@ const refreshToken = async (req, res) => {
 
 // LOGOUT
 const logout = async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const refreshToken = req.cookies.refreshToken || req.headers['x-refresh-token'];
   if (refreshToken) {
     try {
       await RefreshToken.destroy({ where: { token: refreshToken } });
