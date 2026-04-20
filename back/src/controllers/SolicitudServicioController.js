@@ -890,6 +890,39 @@ const obtenerSolicitudesPorTecnico = async (req, res) => {
 //Crear una solicitud de servicio
 const crearSolicitudServicio = async (req, res) => {
     try {
+        const { id_usuario, id_servicio } = req.body;
+
+        if (!id_usuario || !id_servicio) {
+            return res.status(400).json({ error: "Faltan datos obligatorios (usuario o servicio)" });
+        }
+
+        // Obtener información del usuario y del servicio para validar
+        const [usuario, servicio] = await Promise.all([
+            Usuario.findByPk(id_usuario),
+            Servicio.findByPk(id_servicio)
+        ]);
+
+        if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+        if (!servicio) return res.status(404).json({ error: "Servicio no encontrado" });
+
+        // Validación de Perfil (Foto de perfil requerida para TODOS los servicios)
+        if (!usuario.imagen_url) {
+            return res.status(403).json({
+                success: false,
+                error: "Foto de perfil requerida",
+                message: "Debes subir una foto de perfil antes de solicitar cualquier servicio."
+            });
+        }
+
+        // Validación específica para Viaje Privado (Requiere Identidad adicionalmente)
+        if (servicio.nombre === 'Viaje Privado' && !usuario.identidad_url) {
+            return res.status(403).json({ 
+                success: false,
+                error: "Verificación de identidad requerida",
+                message: "Para solicitar un viaje privado, también debes subir una foto de tu documento de identidad."
+            });
+        }
+
         const solicitud = await SolicitudServicio.create(req.body);
         res.json(solicitud);
     } catch (error) {
