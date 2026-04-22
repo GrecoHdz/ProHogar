@@ -221,14 +221,14 @@ const setupAssociations = () => {
     foreignKey: 'id_cotizacion',
     as: 'movimientos',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   Movimiento.belongsTo(Cotizacion, {
     foreignKey: 'id_cotizacion',
     as: 'cotizacion',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   // Relación PagoVisita - SolicitudServicio
@@ -236,14 +236,14 @@ const setupAssociations = () => {
     foreignKey: 'id_solicitud',
     as: 'solicitud',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   SolicitudServicio.hasOne(PagoVisita, {
     foreignKey: 'id_solicitud',
     as: 'pagoVisita',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   // Relación PagoVisita - Cuenta
@@ -296,7 +296,7 @@ const setupAssociations = () => {
     foreignKey: 'id_solicitud',
     as: 'calificacionsolicitud',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   // Relación Calificación - Usuario calificador
@@ -320,7 +320,7 @@ const setupAssociations = () => {
     foreignKey: 'id_solicitud',
     as: 'calificacion',
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'CASCADE'
   });
 
   // Relación Credito - Usuario
