@@ -967,11 +967,46 @@ const actualizarSolicitudServicio = async (req, res) => {
 //Eliminar una solicitud de servicio
 const eliminarSolicitudServicio = async (req, res) => {
     try {
-        const solicitud = await SolicitudServicio.findByPk(req.params.id);
+        const id_solicitud = req.params.id;
+        const solicitud = await SolicitudServicio.findByPk(id_solicitud, {
+            include: [{
+                model: Cotizacion,
+                as: 'cotizacion'
+            }]
+        });
+        
         if (!solicitud) {
             return res.status(404).json({ error: "Solicitud de servicio no encontrada" });
         }
+
+        // 1. Eliminar Movimientos relacionados con la cotización
+        if (solicitud.cotizacion) {
+            const Movimiento = require("../models/movimientosModel");
+            const idCotizacion = solicitud.cotizacion.id_cotizacion || solicitud.cotizacion.id;
+            if (idCotizacion) {
+                await Movimiento.destroy({
+                    where: { id_cotizacion: idCotizacion }
+                });
+            }
+            
+            // 2. Eliminar la cotización en sí misma
+            await Cotizacion.destroy({
+                where: { id_solicitud: id_solicitud }
+            });
+        }
+
+        // 3. Eliminar otros elementos dependientes que puedan tener restricciones FK en MySQL
+        await Pagovisita.destroy({
+            where: { id_solicitud: id_solicitud }
+        });
+
+        await Calificacion.destroy({
+            where: { id_solicitud: id_solicitud }
+        });
+
+        // 4. Finalmente, borrar la solicitud
         await solicitud.destroy();
+        
         res.json({ message: "Solicitud de servicio eliminada correctamente" });
     } catch (error) {
         console.error(error);
