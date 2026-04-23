@@ -26,6 +26,7 @@ const PagoPaquete = require('./pagoPaqueteModel');
 const ServicioCiudad = require('./serviciosCiudadesModel');
 const PaqueteCiudad = require('./paquetesCiudadesModel');
 const Barberia = require('./barberiaModel');
+const VehiculoConductor = require('./vehiculoConductorModel');
 
 
 // Función para configurar las asociaciones
@@ -549,6 +550,16 @@ const setupAssociations = () => {
   Usuario.hasOne(Barberia, {
     foreignKey: 'id_tecnico',
     as: 'barberia'
+  });
+
+  // Relación VehiculoConductor - Usuario (Conductor dueño del vehículo)
+  VehiculoConductor.belongsTo(Usuario, {
+    foreignKey: 'id_tecnico',
+    as: 'conductor'
+  });
+  Usuario.hasOne(VehiculoConductor, {
+    foreignKey: 'id_tecnico',
+    as: 'vehiculo'
   });
 
   console.log('Asociaciones configuradas correctamente');
