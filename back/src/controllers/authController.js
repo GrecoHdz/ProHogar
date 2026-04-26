@@ -390,7 +390,7 @@ const getCurrentUser = async (req, res) => {
   try {
     const user = await Usuario.findByPk(req.user.id_usuario, {
       attributes: {
-        exclude: ['password_hash', 'id_rol']
+        exclude: ['password_hash']
       },
       include: [
         { model: Rol, as: 'rol', attributes: ['nombre_rol'] },
@@ -405,6 +405,12 @@ const getCurrentUser = async (req, res) => {
     }
 
     const userData = user.get({ plain: true });
+    
+    // Asignar explícitamente el role igual que en el login/cookie
+    userData.role = user.rol && user.rol.nombre_rol 
+      ? user.rol.nombre_rol.toLowerCase() 
+      : 'usuario';
+
     if (userData.rol) {
       userData.rol = { nombre_rol: user.rol.nombre_rol };
     }
