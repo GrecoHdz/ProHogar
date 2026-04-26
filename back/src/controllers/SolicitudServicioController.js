@@ -651,9 +651,9 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
             }],
             attributes: [
                 'id_ciudad',
-                [Sequelize.fn('COUNT', Sequelize.col('SolicitudServicio.id_solicitud')), 'total']
+                [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'total']
             ],
-            group: ['SolicitudServicio.id_ciudad', 'ciudad.nombre_ciudad'],
+            group: ['solicitudservicio.id_ciudad', 'ciudad.nombre_ciudad'],
             order: [[Sequelize.literal('total'), 'DESC']],
             raw: true,
             nest: true
@@ -676,7 +676,7 @@ const obtenerGraficaServiciosPorCiudad = async (req, res) => {
         res.json({
             success: true,
             data: datosGrafico,
-            total: serviciosPorCiudad.reduce((sum, item) => sum + (item.nombre_ciudad ? parseInt(item.total) : 0), 0)
+            total: serviciosPorCiudad.reduce((sum, item) => sum + (item.ciudad?.nombre_ciudad ? parseInt(item.total) : 0), 0)
         });
 
     } catch (error) {
