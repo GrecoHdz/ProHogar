@@ -16,7 +16,9 @@ const {
     actualizarSolicitudServicio, 
     eliminarSolicitudServicio,
     obtenerSolicitudesPorTecnico,
-    verificarPagosPendientes
+    verificarPagosPendientes,
+    obtenerGraficaServiciosTipoPorCiudad,
+    obtenerGraficaTecnicosServiciosPorCiudad
 } = require("../controllers/SolicitudServicioController");
 
 // Middleware de autenticación
@@ -63,6 +65,12 @@ router.get("/grafica/servicios-por-ciudad", [
     query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
     query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
 ], validarErrores, obtenerGraficaServiciosPorCiudad);
+ 
+// Obtener datos para Gráfico de servicios por tipo agrupados por ciudad
+router.get("/grafica/servicios-tipo-ciudad", validarErrores, obtenerGraficaServiciosTipoPorCiudad);
+ 
+// Obtener datos para Gráfico de servicios de técnicos por ciudad
+router.get("/grafica/servicios-tecnicos-ciudad", validarErrores, obtenerGraficaTecnicosServiciosPorCiudad);
 
 // Obtener todas las solicitudes asignadas a un técnico
 router.get("/tecnico/:id_tecnico", [

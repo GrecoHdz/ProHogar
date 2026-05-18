@@ -1018,6 +1018,137 @@ const eliminarSolicitudServicio = async (req, res) => {
 };
 
 
+// Obtener datos para Gráfico de solicitudes de servicios por tipo agrupados por ciudad
+const obtenerGraficaServiciosTipoPorCiudad = async (req, res) => {
+    try {
+        const { id_ciudad } = req.query;
+        const whereCondition = {};
+        if (id_ciudad && id_ciudad !== 'all') {
+            whereCondition.id_ciudad = id_ciudad;
+        }
+
+        const data = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Ciudad,
+                    as: 'ciudad',
+                    attributes: ['nombre_ciudad'],
+                    required: true
+                },
+                {
+                    model: Servicio,
+                    as: 'servicio',
+                    attributes: ['nombre'],
+                    required: true
+                }
+            ],
+            attributes: [
+                [Sequelize.col('ciudad.nombre_ciudad'), 'nombre_ciudad'],
+                [Sequelize.col('servicio.nombre'), 'nombre_servicio'],
+                [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total']
+            ],
+            group: ['ciudad.nombre_ciudad', 'servicio.nombre'],
+            raw: true
+        });
+
+        if (id_ciudad && id_ciudad !== 'all') {
+            // Formatear para dona (una sola ciudad)
+            const labels = data.map(item => item.nombre_servicio);
+            const values = data.map(item => parseInt(item.total));
+            return res.json({
+                success: true,
+                isDoughnut: true,
+                data: {
+                    labels: labels,
+                    data: values
+                }
+            });
+        }
+
+        // Formatear para barras agrupadas (todas las ciudades)
+        const cities = [...new Set(data.map(item => item.nombre_ciudad))];
+        const serviceTypes = [...new Set(data.map(item => item.nombre_servicio))];
+
+        const datasets = serviceTypes.map((type, index) => {
+            const colors = ['#3B82F6', '#EF4444', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4', '#71717A'];
+            return {
+                label: type,
+                data: cities.map(city => {
+                    const match = data.find(item => item.nombre_ciudad === city && item.nombre_servicio === type);
+                    return match ? parseInt(match.total) : 0;
+                }),
+                backgroundColor: colors[index % colors.length]
+            };
+        });
+
+        res.json({
+            success: true,
+            isDoughnut: false,
+            data: {
+                labels: cities,
+                datasets: datasets
+            }
+        });
+    } catch (error) {
+        console.error('Error en obtenerGraficaServiciosTipoPorCiudad:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener datos del gráfico' });
+    }
+};
+
+// Obtener datos para Gráfico de servicios de técnicos por ciudad (Ciudad del técnico)
+const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
+    try {
+        const { id_ciudad } = req.query;
+        const whereCondition = {
+            id_tecnico: { [Op.not]: null }
+        };
+        
+        if (id_ciudad && id_ciudad !== 'all') {
+            whereCondition.id_ciudad = id_ciudad;
+        }
+
+        const data = await SolicitudServicio.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Usuario,
+                    as: 'tecnico',
+                    attributes: ['id_usuario'],
+                    required: true,
+                    include: [{
+                        model: Ciudad,
+                        as: 'ciudad',
+                        attributes: ['nombre_ciudad'],
+                        required: true
+                    }]
+                }
+            ],
+            attributes: [
+                [Sequelize.col('tecnico.ciudad.nombre_ciudad'), 'nombre_ciudad'],
+                [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total']
+            ],
+            group: ['tecnico.ciudad.nombre_ciudad'],
+            raw: true
+        });
+
+        const labels = data.map(item => item.nombre_ciudad);
+        const totals = data.map(item => parseInt(item.total));
+
+        res.json({
+            success: true,
+            data: {
+                labels: labels,
+                data: totals
+            }
+        });
+    } catch (error) {
+        console.error('Error en obtenerGraficaTecnicosServiciosPorCiudad:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener datos del gráfico' });
+    }
+};
+
+
 module.exports = {
     obtenerEstadisticasPagos,
     obtenerSolicitudesPorTecnico,
@@ -1030,5 +1161,7 @@ module.exports = {
     crearSolicitudServicio,
     actualizarSolicitudServicio,
     eliminarSolicitudServicio,
-    verificarPagosPendientes
+    verificarPagosPendientes,
+    obtenerGraficaServiciosTipoPorCiudad,
+    obtenerGraficaTecnicosServiciosPorCiudad
 };
