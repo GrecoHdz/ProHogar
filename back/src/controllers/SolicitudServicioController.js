@@ -1033,13 +1033,13 @@ const obtenerGraficaServiciosTipoPorCiudad = async (req, res) => {
                 {
                     model: Ciudad,
                     as: 'ciudad',
-                    attributes: ['nombre_ciudad'],
+                    attributes: [],
                     required: true
                 },
                 {
                     model: Servicio,
                     as: 'servicio',
-                    attributes: ['nombre'],
+                    attributes: [],
                     required: true
                 }
             ],
@@ -1114,12 +1114,12 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
                 {
                     model: Usuario,
                     as: 'tecnico',
-                    attributes: ['id_usuario'],
+                    attributes: [],
                     required: true,
                     include: [{
                         model: Ciudad,
                         as: 'ciudad',
-                        attributes: ['nombre_ciudad'],
+                        attributes: [],
                         required: true
                     }]
                 }
