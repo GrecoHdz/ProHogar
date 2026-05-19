@@ -1108,6 +1108,8 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
             whereCondition.id_ciudad = id_ciudad;
         }
 
+        const isSpecificCity = id_ciudad && id_ciudad !== 'all';
+
         const data = await SolicitudServicio.findAll({
             where: whereCondition,
             include: [
@@ -1116,7 +1118,7 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
                     as: 'tecnico',
                     attributes: [],
                     required: true,
-                    include: [{
+                    include: isSpecificCity ? [] : [{
                         model: Ciudad,
                         as: 'ciudad',
                         attributes: [],
@@ -1125,14 +1127,17 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
                 }
             ],
             attributes: [
-                [Sequelize.col('tecnico.ciudad.nombre_ciudad'), 'nombre_ciudad'],
+                isSpecificCity 
+                    ? [Sequelize.col('tecnico.nombre'), 'label']
+                    : [Sequelize.col('tecnico.ciudad.nombre_ciudad'), 'label'],
                 [Sequelize.fn('COUNT', Sequelize.col('id_solicitud')), 'total']
             ],
-            group: ['tecnico.ciudad.nombre_ciudad'],
+            group: [isSpecificCity ? 'tecnico.nombre' : 'tecnico.ciudad.nombre_ciudad'],
+            order: [[Sequelize.literal('total'), 'DESC']],
             raw: true
         });
 
-        const labels = data.map(item => item.nombre_ciudad);
+        const labels = data.map(item => item.label);
         const totals = data.map(item => parseInt(item.total));
 
         res.json({
