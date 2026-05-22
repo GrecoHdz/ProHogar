@@ -33,7 +33,7 @@ const Soporte = sequelize.define("Soporte", {
         allowNull: false
     },
     mensaje: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false
     },
     estado: {

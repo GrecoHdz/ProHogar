@@ -52,7 +52,7 @@ const Cotizacion = sequelize.define("Cotizacion", {
         allowNull: true,
     },
     comentario: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false
     },
     fecha: {
