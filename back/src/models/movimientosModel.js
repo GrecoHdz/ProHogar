@@ -50,7 +50,7 @@ const Movimiento = sequelize.define('Movimiento', {
         allowNull: true
     },
     descripcion: {
-        type: DataTypes.STRING(255),
+        type: DataTypes.TEXT,
         allowNull: true
     },
     fecha: {
