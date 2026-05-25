@@ -363,7 +363,8 @@ const obtenerSolicitudesServicios = async (req, res) => {
                         'num_comprobante',
                         'monto_manodeobra',
                         'descuento_membresia',
-                        'credito_usado'
+                        'credito_usado',
+                        'comentario'
                     ]
                 }
             ],
@@ -418,6 +419,7 @@ const obtenerSolicitudesServicios = async (req, res) => {
                     monto_manodeobra: plainSolicitud.cotizacion.monto_manodeobra,
                     descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
                     credito_usado: plainSolicitud.cotizacion.credito_usado,
+                    comentario: plainSolicitud.cotizacion.comentario,
                     total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
                         (plainSolicitud.cotizacion.descuento_membresia || 0) -
                         (plainSolicitud.cotizacion.credito_usado || 0),
