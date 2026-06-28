@@ -9,7 +9,7 @@ const app = express();
 //Rutas
 const userRoutes = require("./src/routes/UsuarioRoute");
 const authRoutes = require("./src/routes/authRoute");
-//const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters"); 
+const { authLimiter, apiLimiter } = require("./src/middleware/rateLimiters");
 const rolRoutes = require("./src/routes/RolRoute");
 const ciudadRoutes = require("./src/routes/CiudadRoute");
 const serviciosRoutes = require("./src/routes/ServiciosRoute");
@@ -94,33 +94,33 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Importar Rutas 
-app.use("/usuarios", userRoutes);
-app.use("/auth", authRoutes);
-app.use("/roles", rolRoutes);
-app.use("/ciudad", ciudadRoutes);
-app.use("/servicios", serviciosRoutes);
-app.use("/solicitudservicio", solicitudServicioRoutes);
-app.use("/soporte", soporteRoutes);
-app.use("/membresia", membresiaRoutes);
-app.use("/cuentas", cuentasRoutes);
-app.use("/config", configRoutes);
-app.use("/membresiabeneficios", membresiaBeneficiosRoutes);
-app.use("/pagovisita", pagoVisitaRoutes);
-app.use("/cotizacion", cotizacionRoutes);
-app.use("/movimientos", movimientosRoutes);
-app.use("/calificaciones", calificacionesRoutes);
-app.use("/credito", creditoRoutes);
-app.use("/referidos", referidoRoutes);
-app.use("/pagoservicio", pagoServicioRoutes);
-app.use("/notificaciones", notificacionesRoutes);
-app.use("/tecnicoServicio", tecnicoServicioRoutes);
-app.use("/facturas/correlativos", facturaCorrelativoRoutes);
-app.use("/facturas/relaciones", facturaRelacionRoutes);
-app.use("/facturas", facturaRoutes);
-app.use("/paquetes", paquetesRoutes);
-app.use("/paquetes/usuarios", paquetesUsuariosRoutes);
-app.use("/barberias", barberiaRoutes);
-app.use("/vehiculos", vehiculosRoutes);
+app.use("/usuarios", apiLimiter, userRoutes);
+app.use("/auth", authLimiter, authRoutes);
+app.use("/roles", apiLimiter, rolRoutes);
+app.use("/ciudad", apiLimiter, ciudadRoutes);
+app.use("/servicios", apiLimiter, serviciosRoutes);
+app.use("/solicitudservicio", apiLimiter, solicitudServicioRoutes);
+app.use("/soporte", apiLimiter, soporteRoutes);
+app.use("/membresia", apiLimiter, membresiaRoutes);
+app.use("/cuentas", apiLimiter, cuentasRoutes);
+app.use("/config", apiLimiter, configRoutes);
+app.use("/membresiabeneficios", apiLimiter, membresiaBeneficiosRoutes);
+app.use("/pagovisita", apiLimiter, pagoVisitaRoutes);
+app.use("/cotizacion", apiLimiter, cotizacionRoutes);
+app.use("/movimientos", apiLimiter, movimientosRoutes);
+app.use("/calificaciones", apiLimiter, calificacionesRoutes);
+app.use("/credito", apiLimiter, creditoRoutes);
+app.use("/referidos", apiLimiter, referidoRoutes);
+app.use("/pagoservicio", apiLimiter, pagoServicioRoutes);
+app.use("/notificaciones", apiLimiter, notificacionesRoutes);
+app.use("/tecnicoServicio", apiLimiter, tecnicoServicioRoutes);
+app.use("/facturas/correlativos", apiLimiter, facturaCorrelativoRoutes);
+app.use("/facturas/relaciones", apiLimiter, facturaRelacionRoutes);
+app.use("/facturas", apiLimiter, facturaRoutes);
+app.use("/paquetes", apiLimiter, paquetesRoutes);
+app.use("/paquetes/usuarios", apiLimiter, paquetesUsuariosRoutes);
+app.use("/barberias", apiLimiter, barberiaRoutes);
+app.use("/vehiculos", apiLimiter, vehiculosRoutes);
 
 
 // Iniciar servidor
