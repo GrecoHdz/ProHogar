@@ -160,7 +160,8 @@ const getTopTecnicosMejorCalificados = async (req, res) => {
             HAVING 
                 COUNT(c.id_calificacion) > 0  -- Asegurar que tenga al menos una calificación
             ORDER BY 
-                promedio_calificacion DESC
+                promedio_calificacion DESC,
+                total_calificaciones DESC
             LIMIT 5;
         `);
 
@@ -174,6 +175,7 @@ const getTopTecnicosMejorCalificados = async (req, res) => {
 
         // Formatear la respuesta
         const resultado = results.map(tecnico => ({
+            id_usuario: tecnico.id_usuario_calificado,
             nombre: tecnico.nombre || 'Técnico',
             ciudad: tecnico.ciudad || 'Sin ciudad',
             promedio_calificacion: parseFloat(tecnico.promedio_calificacion).toFixed(2),
