@@ -5,13 +5,20 @@ const { cloudinary } = require('../config/cloudinary');
 // Obtener todas las barberías
 const obtenerBarberias = async (req, res) => {
     try {
-        const barberias = await Barberia.findAll({
+        const { id_ciudad } = req.query;
+        const options = {
             include: [{
                 model: Usuario,
                 as: 'tecnico',
-                attributes: ['nombre']
+                attributes: ['nombre', 'id_ciudad']
             }]
-        });
+        };
+
+        if (id_ciudad) {
+            options.include[0].where = { id_ciudad };
+        }
+
+        const barberias = await Barberia.findAll(options);
         res.json(barberias);
     } catch (error) {
         console.error('Error al obtener barberías:', error);
