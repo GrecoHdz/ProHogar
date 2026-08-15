@@ -1263,6 +1263,7 @@ const crearUsuario = async (req, res) => {
         id_ciudad,
         es_tecnico
     } = req.body;
+    // identidad es opcional: puede ser undefined/null
 
     let rolAsignado;
     try {
@@ -1293,14 +1294,17 @@ const crearUsuario = async (req, res) => {
 
     try {
         // Verificar si ya existe un usuario con el mismo email, teléfono o identidad
+        const orConditions = [
+            { email },
+            { telefono }
+        ];
+        // Solo verificar identidad si se proporcionó
+        if (identidad) {
+            orConditions.push({ identidad });
+        }
+
         const usuarioExistente = await Usuario.findOne({
-            where: {
-                [Op.or]: [
-                    { email },
-                    { telefono },
-                    { identidad }
-                ]
-            }
+            where: { [Op.or]: orConditions }
         });
 
         if (usuarioExistente) {
@@ -1339,10 +1343,10 @@ const crearUsuario = async (req, res) => {
 
         // 2. Validar números repetidos (6+ seguidos) en identidad y teléfono
         const repeatedDigitsRegex = /(.)\1{5,}/;
-        const cleanIdentidad = identidad.replace(/\D/g, '');
+        const cleanIdentidad = identidad ? identidad.replace(/\D/g, '') : null;
         const cleanTelefono = telefono.replace(/\D/g, '');
 
-        if (repeatedDigitsRegex.test(cleanIdentidad)) {
+        if (cleanIdentidad && repeatedDigitsRegex.test(cleanIdentidad)) {
             return res.status(400).json({
                 success: false,
                 status: 400,
@@ -1631,6 +1635,7 @@ const eliminarImagenPerfil = async (req, res) => {
 const actualizarIdentidadFoto = async (req, res) => {
     try {
         const { id } = req.params;
+        const { identidad } = req.body;
         const usuario = await Usuario.findByPk(id);
 
         if (!usuario) {
@@ -1640,6 +1645,44 @@ const actualizarIdentidadFoto = async (req, res) => {
             });
         }
 
+        // Si se envió un número de identidad, validarlo
+        if (identidad) {
+            const repeatedDigitsRegex = /(.)\1{5,}/;
+            const cleanIdentidad = identidad.replace(/\D/g, '');
+
+            if (cleanIdentidad.length < 12 || cleanIdentidad.length > 17) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'El número de identidad debe tener entre 12 y 17 dígitos'
+                });
+            }
+
+            if (repeatedDigitsRegex.test(cleanIdentidad)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'El número de identidad parece ser falso'
+                });
+            }
+
+            // Verificar que no esté en uso por otro usuario
+            const usuarioExistente = await Usuario.findOne({
+                where: {
+                    identidad: cleanIdentidad,
+                    id_usuario: { [Op.ne]: id }
+                }
+            });
+
+            if (usuarioExistente) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'El número de identidad ya está en uso por otro usuario'
+                });
+            }
+
+            // Asignar identidad al usuario
+            usuario.identidad = cleanIdentidad;
+        }
+
         // Guardar el public_id de la foto anterior si existe
         const fotoAnteriorId = usuario.identidad_public_id;
 
@@ -1647,6 +1690,7 @@ const actualizarIdentidadFoto = async (req, res) => {
         if (req.file) {
             // Actualizar con la nueva foto
             await usuario.update({
+                identidad: usuario.identidad,
                 identidad_url: req.file.path,
                 identidad_public_id: req.file.filename
             });
@@ -1664,7 +1708,8 @@ const actualizarIdentidadFoto = async (req, res) => {
                 success: true,
                 data: {
                     identidad_url: req.file.path,
-                    mensaje: 'Foto de identidad actualizada correctamente'
+                    identidad: usuario.identidad,
+                    mensaje: 'Foto de identidad y número de identidad actualizados correctamente'
                 }
             });
         }

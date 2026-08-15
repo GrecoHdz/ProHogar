@@ -120,7 +120,7 @@ router.get("/identidad/:identidad",
 router.post("/nuevo",
     [
         body("nombre").isString().withMessage("El nombre debe ser una cadena de caracteres"),
-        body("identidad").isString().withMessage("La identidad debe ser una cadena de caracteres"),
+        body("identidad").optional({ nullable: true, checkFalsy: true }).isString().withMessage("La identidad debe ser una cadena de caracteres"),
         body("email").isString().withMessage("El email debe ser una cadena de caracteres"),
         body("telefono").isString().withMessage("El telefono debe ser una cadena de caracteres"),
         body("id_ciudad").isInt().withMessage("El id_ciudad debe ser un numero entero"),

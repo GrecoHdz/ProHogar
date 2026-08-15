@@ -61,15 +61,60 @@ const clearAllAuthCookies = (res) => {
   res.clearCookie('user', { ...cookieOptions, httpOnly: false });
 };
 
+// Normalizar número de teléfono para búsqueda (quita espacios, guiones, código de país)
+const normalizarTelefono = (phone) => {
+  if (!phone) return '';
+  // Quitar espacios, guiones y paréntesis
+  let clean = phone.replace(/[\s\-()]/g, '');
+  // Quitar el +
+  if (clean.startsWith('+')) clean = clean.substring(1);
+  // Manejar variantes comunes
+  const variantes = [clean];
+  // Si empieza con 504 y tiene más de 8 dígitos, agregar versión sin 504
+  if (clean.startsWith('504') && clean.length > 8) {
+    variantes.push(clean.substring(3));
+  }
+  // Si empieza con 00504, quitarlo
+  if (clean.startsWith('00504') && clean.length > 9) {
+    variantes.push(clean.substring(5));
+  }
+  // Si no tiene código de país, agregar versión con 504
+  if (!clean.startsWith('504') && clean.length <= 8) {
+    variantes.push('504' + clean);
+  }
+  return variantes;
+};
+
 // LOGIN
 const login = async (req, res) => {
-  const { identidad, password } = req.body;
+  const { telefono, password } = req.body;
 
   try {
-    const user = await Usuario.findOne({
-      where: { identidad },
-      include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] }],
-    });
+    // Generar todas las variantes del teléfono para búsqueda flexible
+    const variantesPhone = normalizarTelefono(telefono);
+    
+    // Buscar usuario por teléfono en cualquiera de sus variantes
+    let user = null;
+    for (const variant of variantesPhone) {
+      user = await Usuario.findOne({
+        where: { telefono: { [Op.like]: `%${variant}%` } },
+        include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] }],
+      });
+      if (user) break;
+    }
+    // Si aún no encontramos, buscar limpiando el campo telefono de la DB (quitar +, espacios, guiones)
+    // Esto cubre casos donde el formato en DB y el ingresado no coinciden exactamente
+    if (!user) {
+      const cleanDigits = (telefono || '').replace(/\D/g, '');
+      if (cleanDigits.length >= 7) {
+        // Buscar los últimos 8 dígitos del número en todas las variantes posibles  
+        const lastEight = cleanDigits.slice(-8);
+        user = await Usuario.findOne({
+          where: { telefono: { [Op.like]: `%${lastEight}%` } },
+          include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] }],
+        });
+      }
+    }
 
     if (!user) {
       return res.status(400).json({ message: 'Credenciales Incorrectas.' });
