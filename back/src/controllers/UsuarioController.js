@@ -15,6 +15,29 @@ const Cotizacion = require("../models/cotizacionModel");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const { cloudinary } = require('../config/cloudinary');
 
+// Helper HMAC y WhatsApp para el registro asistido
+const { generarFirmaPerfil } = require('../utils/hmacUtil');
+const { sendWhatsAppBusinessMessage } = require('../utils/whatsappBusiness');
+
+// Normalización de teléfono (reutiliza la lógica de authController para búsqueda consistente)
+const normalizarTelefono = (phone) => {
+  if (!phone) return [];
+  let clean = phone.replace(/[\s\-()]/g, '');
+  if (clean.startsWith('+')) clean = clean.substring(1);
+  const variantes = [clean];
+  if (clean.startsWith('504') && clean.length > 8) variantes.push(clean.substring(3));
+  if (clean.startsWith('00504') && clean.length > 9) variantes.push(clean.substring(5));
+  if (!clean.startsWith('504') && clean.length <= 8) variantes.push('504' + clean);
+  return variantes;
+};
+
+// Limpia el teléfono solo con dígitos, asegurando prefijo 504 HN si son 8 dígitos
+const limpiarTelefono = (phone) => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 8 ? `504${digits}` : digits;
+};
+
 // Verificar perfil de técnico
 const verificarPerfilTecnico = async (req, res) => {
     try {
@@ -2102,6 +2125,135 @@ const obtenerUsuariosPendientesVerificar = async (req, res) => {
     }
 };
 
+// POST /usuarios/registro-asistido (Técnico). Busca por teléfono, si no existe lo crea
+// sin email, sin foto, sin DNI, sin password_hash. Devuelve enlace HMAC para completar perfil.
+const registroAsistido = async (req, res) => {
+    try {
+        const { nombre, telefono } = req.body || {};
+
+        const rolUsuarioReq = (req.user && req.user.rol) ? req.user.rol.toLowerCase() : '';
+        if (rolUsuarioReq !== 'tecnico' && rolUsuarioReq !== 'administrador') {
+            return res.status(403).json({ success: false, error: 'Solo un técnico o administrador puede usar este endpoint.' });
+        }
+
+        if (!nombre || typeof nombre !== 'string' || nombre.trim().length < 2) {
+            return res.status(400).json({ success: false, error: 'El nombre es obligatorio (mínimo 2 caracteres).' });
+        }
+        if (!telefono || typeof telefono !== 'string' || telefono.replace(/\D/g, '').length < 7) {
+            return res.status(400).json({ success: false, error: 'El teléfono es obligatorio (mínimo 7 dígitos).' });
+        }
+
+        const nombreLimpio = nombre.trim();
+        const telefonoLimpio = limpiarTelefono(telefono);
+        const variantesPhone = normalizarTelefono(telefono);
+
+        // 1) Buscar primero por teléfono (múltiples variantes)
+        let usuarioExistente = null;
+        for (const variant of variantesPhone) {
+            usuarioExistente = await Usuario.findOne({
+                where: { telefono: { [Op.like]: `%${variant}%` } },
+                attributes: { exclude: ['password_hash'] }
+            });
+            if (usuarioExistente) break;
+        }
+        if (!usuarioExistente) {
+            const lastEight = telefonoLimpio.slice(-8);
+            if (lastEight.length >= 7) {
+                usuarioExistente = await Usuario.findOne({
+                    where: { telefono: { [Op.like]: `%${lastEight}%` } },
+                    attributes: { exclude: ['password_hash'] }
+                });
+            }
+        }
+
+        if (usuarioExistente) {
+            const firma = generarFirmaPerfil(usuarioExistente.id_usuario);
+            const enlaceCompletar = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/completar-perfil/${usuarioExistente.id_usuario}/${firma}`;
+            return res.status(200).json({
+                success: true,
+                usuarioExistente: true,
+                usuario: usuarioExistente,
+                enlaceCompletar,
+                necesitaPassword: !usuarioExistente.password_hash,
+                whatsapp_enviado: null,
+                mensaje: 'Cliente ya existente. Enlace de completar perfil devuelto.'
+            });
+        }
+
+        // 2) No existe → crear nuevo cliente sin contraseña, sin foto, sin email, sin DNI
+        // Ciudad del técnico autenticado; si no la trae, fallback a 1
+        const idCiudadTecnico = req.user.id_ciudad || 1;
+
+        const rolUsuario = await Rol.findOne({
+            where: { nombre_rol: 'Usuario' },
+            attributes: ['id_rol'],
+            raw: true
+        });
+        if (!rolUsuario) {
+            return res.status(500).json({ success: false, error: 'No se pudo resolver el rol de Usuario.' });
+        }
+
+        const nuevoUsuario = await Usuario.create({
+            nombre: nombreLimpio,
+            telefono: telefonoLimpio,
+            id_ciudad: idCiudadTecnico,
+            id_rol: rolUsuario.id_rol,
+            password_hash: null,
+            email: null,
+            identidad: null,
+            imagen_url: null,
+            imagen_public_id: null,
+            identidad_url: null,
+            identidad_public_id: null,
+            verificado: false,
+            estado: 'activo'
+        });
+
+        const usuarioPlain = nuevoUsuario.get({ plain: true });
+        delete usuarioPlain.password_hash;
+
+        const firma = generarFirmaPerfil(nuevoUsuario.id_usuario);
+        const enlaceCompletar = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/completar-perfil/${nuevoUsuario.id_usuario}/${firma}`;
+
+        const nombreTecnico = req.user.nombre ? req.user.nombre.trim() : 'un técnico';
+        const mensaje = `¡Hola ${nombreLimpio}! ${nombreTecnico} (técnico de ProHogar) ya registró tu servicio. Para completar tu perfil y gestionar tus servicios entra a: ${enlaceCompletar}`;
+
+        let whatsapp_enviado = null;
+        let wa_me = null;
+        try {
+            const waRes = await sendWhatsAppBusinessMessage(telefonoLimpio, mensaje);
+            whatsapp_enviado = !!(waRes && waRes.success);
+            if (!whatsapp_enviado) {
+                wa_me = `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`;
+            }
+        } catch (waErr) {
+            console.warn('[registroAsistido] WhatsApp falló:', waErr && waErr.message ? waErr.message : waErr);
+            whatsapp_enviado = false;
+            wa_me = `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`;
+        }
+
+        return res.status(201).json({
+            success: true,
+            usuarioExistente: false,
+            usuario: usuarioPlain,
+            enlaceCompletar,
+            necesitaPassword: true,
+            whatsapp_enviado,
+            wa_me,
+            mensaje: whatsapp_enviado
+                ? 'Cliente creado. Enlace enviado por WhatsApp.'
+                : 'Cliente creado. WhatsApp no disponible, envía manualmente el enlace con wa_me.'
+        });
+    } catch (error) {
+        console.error('[ERROR] registroAsistido:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al procesar el registro asistido.',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 module.exports = {
     verificarPerfilTecnico,
     obtenerGraficaCrecimientoUsuarios,
@@ -2123,5 +2275,6 @@ module.exports = {
     actualizarPassword,
     verificarRTN,
     eliminarUsuario,
-    obtenerUsuariosPendientesVerificar
+    obtenerUsuariosPendientesVerificar,
+    registroAsistido
 };

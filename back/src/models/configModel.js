@@ -18,6 +18,20 @@ const Config = sequelize.define("config", {
 }, {
     timestamps: false,
     tableName: "config",
+    hooks: {
+        afterSync: async () => {
+            const configs = [
+                { tipo_config: "visita_tecnico", valor: "150" }
+            ];
+
+            for (const cfg of configs) {
+                await Config.findOrCreate({
+                    where: { tipo_config: cfg.tipo_config },
+                    defaults: { valor: cfg.valor },
+                });
+            }
+        },
+    },
 });
 
 module.exports = Config;

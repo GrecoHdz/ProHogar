@@ -38,7 +38,7 @@ const Usuario = sequelize.define("Usuario", {
     },
     email: {
         type: DataTypes.STRING(100),
-        allowNull: false,
+        allowNull: true,
         unique: 'uk_usuario_email',
         validate: {
             isEmail: true
@@ -51,7 +51,7 @@ const Usuario = sequelize.define("Usuario", {
     },
     password_hash: {
         type: DataTypes.STRING(255),
-        allowNull: false
+        allowNull: true
     },
     fecha_registro: {
         type: DataTypes.DATE,

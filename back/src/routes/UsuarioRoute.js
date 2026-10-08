@@ -27,8 +27,10 @@ const {
     eliminarUsuario,
     obtenerEstadisticasUsuarios,
     obtenerGraficaCrecimientoUsuarios,
-    obtenerUsuariosPendientesVerificar
+    obtenerUsuariosPendientesVerificar,
+    registroAsistido
 } = require("../controllers/UsuarioController");
+const { checkRole } = require("../middleware/authMiddleware");
 
 // Middleware para validar errores
 const validarErrores = (req, res, next) => {
@@ -128,6 +130,19 @@ router.post("/nuevo",
         body("es_tecnico").isBoolean().withMessage("El es_tecnico debe ser un booleano")
     ],
     validarErrores, authLimiter, crearUsuario);
+
+// Registro asistido por técnico (crea o recupera cliente por teléfono, sin contraseña, sin foto)
+// Devuelve enlace HMAC de completar perfil y reintento WA con wa_me fallback.
+router.post("/registro-asistido",
+    [
+        body("nombre").isString().isLength({ min: 2 }).withMessage("El nombre debe ser una cadena de al menos 2 caracteres"),
+        body("telefono").isString().withMessage("El teléfono debe ser una cadena de caracteres")
+    ],
+    validarErrores,
+    authMiddleware,
+    apiLimiter,
+    checkRole(['Tecnico', 'tecnico', 'Administrador', 'admin', 'administrador']),
+    registroAsistido);
 
 // En UsuarioRoute.js
 router.put("/:id",

@@ -18,8 +18,10 @@ const {
     obtenerSolicitudesPorTecnico,
     verificarPagosPendientes,
     obtenerGraficaServiciosTipoPorCiudad,
-    obtenerGraficaTecnicosServiciosPorCiudad
+    obtenerGraficaTecnicosServiciosPorCiudad,
+    crearSolicitudAsistida
 } = require("../controllers/SolicitudServicioController");
+const { checkRole } = require("../middleware/authMiddleware");
 
 // Middleware de autenticación
 router.use(authMiddleware);
@@ -93,6 +95,15 @@ router.post("/", [
     body("pagar_visita").isBoolean().withMessage("La visita pagada debe ser un booleano"),
     body("estado").isIn(["pendiente_pagovisita", "pendiente_asignacion", "verificando_pagovisita", "verificando_pagoservicio", "asignado", "en_proceso", "finalizado", "calificado", "pendiente_pagoservicio","cancelado"]).withMessage("Estado no válido")
 ], validarErrores, crearSolicitudServicio);
+
+// Crear solicitud ASISTIDA por técnico (sin hasProfilePhoto, sin pago externo, estado 'asignado' + PagoVisita 'aprobado')
+router.post("/asistida", [
+    body("id_cliente").isInt({ min: 1 }).withMessage("El id_cliente debe ser un número entero positivo"),
+    body("id_servicio").isInt({ min: 1 }).withMessage("El id_servicio debe ser un número entero positivo"),
+    body("descripcion").isString().withMessage("La descripción debe ser una cadena de caracteres"),
+    body("colonia").isString().withMessage("La colonia debe ser una cadena de caracteres"),
+    body("direccion_precisa").isString().withMessage("La dirección precisa debe ser una cadena de caracteres")
+], validarErrores, checkRole(['Tecnico', 'tecnico', 'Administrador', 'admin', 'administrador']), crearSolicitudAsistida);
 
 //Actualizar una solicitud de servicio
 router.put("/:id", [

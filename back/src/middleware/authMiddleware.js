@@ -77,6 +77,7 @@ const authMiddleware = async (req, res, next) => {
       identidad: user.identidad,
       nombre: user.nombre,
       email: user.email,
+      id_ciudad: user.id_ciudad,
       id_rol: user.id_rol,
       rol: user.rol ? user.rol.nombre_rol : 'usuario'
     };

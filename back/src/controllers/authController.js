@@ -12,6 +12,67 @@ const Ciudad = require('../models/ciudadesModel');
 // Configuración del servicio de correo (Resend)
 const { sendEmail } = require('../config/mailer');
 
+// Firma HMAC para enlaces públicos sin expiración
+const { validarFirmaPerfil } = require('../utils/hmacUtil');
+
+// Helper auxiliar para emitir tokens + cookies de sesión (reutiliza la misma lógica del login)
+const emitirSesionCookies = async (res, user) => {
+  const t = await sequelize.transaction();
+  try {
+    await RefreshToken.destroy({
+      where: { usuario_id: user.id_usuario },
+      transaction: t
+    });
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = await generateRefreshToken(user, t);
+
+    const userData = user.get({ plain: true });
+    delete userData.password_hash;
+
+    let nombreRol = 'usuario';
+    if (user.rol && user.rol.nombre_rol) nombreRol = user.rol.nombre_rol;
+
+    const userForCookie = {
+      id_usuario: userData.id_usuario,
+      nombre: userData.nombre,
+      role: nombreRol,
+      id_ciudad: userData.id_ciudad || 1
+    };
+
+    const cookieOptions = {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+      partitioned: !!process.env.NODE_ENV && process.env.NODE_ENV === 'production'
+    };
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      ...cookieOptions
+    });
+
+    res.cookie('token', accessToken, {
+      httpOnly: false,
+      maxAge: 15 * 60 * 1000,
+      ...cookieOptions
+    });
+
+    res.cookie('user', JSON.stringify(userForCookie), {
+      httpOnly: false,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      ...cookieOptions
+    });
+
+    await t.commit();
+    return { accessToken, refreshToken, userForCookie };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+};
+
 // Generar un token de acceso
 const generateAccessToken = (user) => {
   return jwt.sign(
@@ -643,6 +704,103 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// GET /auth/completar-perfil/:id/:firma — endpoint público. 404 silencioso si la firma no es válida.
+const getCompletarPerfil = async (req, res) => {
+  try {
+    const { id, firma } = req.params;
+    const idNum = Number(id);
+
+    if (!idNum || !Number.isInteger(idNum) || idNum < 1) {
+      return res.status(404).send();
+    }
+
+    if (!validarFirmaPerfil(idNum, firma)) {
+      return res.status(404).send();
+    }
+
+    const user = await Usuario.findByPk(idNum);
+    if (!user) {
+      return res.status(404).send();
+    }
+
+    const necesitaPassword = user.password_hash === null || user.password_hash === '' || user.password_hash === undefined;
+    console.log(`🔑 [getCompletarPerfil] Usuario ID: ${idNum} | password_hash: ${user.password_hash ? 'EXISTE' : 'NULL'} | necesita_password: ${necesitaPassword}`);
+
+    return res.status(200).json({
+      nombre: user.nombre,
+      necesita_password: necesitaPassword
+    });
+  } catch (error) {
+    console.error('Error en getCompletarPerfil:', error);
+    return res.status(404).send();
+  }
+};
+
+// POST /auth/completar-perfil/:id/:firma — endpoint público. Guarda password_hash y devuelve sesión iniciada.
+const postCompletarPerfil = async (req, res) => {
+  try {
+    const { id, firma } = req.params;
+    const { password } = req.body || {};
+    const idNum = Number(id);
+
+    if (!idNum || !Number.isInteger(idNum) || idNum < 1) {
+      return res.status(404).send();
+    }
+
+    if (!validarFirmaPerfil(idNum, firma)) {
+      return res.status(404).send();
+    }
+
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'La contraseña debe tener al menos 6 caracteres.'
+      });
+    }
+
+    const user = await Usuario.findByPk(idNum, {
+      include: [
+        { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre_rol'] },
+        { model: Ciudad, as: 'ciudad', attributes: ['id_ciudad', 'nombre_ciudad'] }
+      ]
+    });
+    if (!user) {
+      return res.status(404).send();
+    }
+
+    if (user.password_hash) {
+      return res.status(400).json({
+        success: false,
+        message: 'Perfil ya completado. El usuario ya tiene una contraseña asignada.'
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    await user.update({ password_hash: hashedPassword });
+
+    const { accessToken, refreshToken, userForCookie } = await emitirSesionCookies(res, user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Contraseña guardada exitosamente. Sesión iniciada.',
+      token: accessToken,
+      refreshToken: refreshToken,
+      user: userForCookie
+    });
+  } catch (error) {
+    console.error('Error en postCompletarPerfil:', error);
+    if (error && error.message && error.message.includes('cookie')) {
+      return res.status(500).json({ success: false, message: 'Error al emitir la sesión.' });
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Error al completar el perfil.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   login,
   refreshToken,
@@ -650,5 +808,7 @@ module.exports = {
   getCurrentUser,
   forgotPassword,
   resetPassword,
-  verifyResetToken
+  verifyResetToken,
+  getCompletarPerfil,
+  postCompletarPerfil
 };

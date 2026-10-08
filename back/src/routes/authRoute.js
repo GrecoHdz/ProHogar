@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, refreshToken, logout, getCurrentUser, forgotPassword, resetPassword, verifyResetToken } = require('../controllers/authController');
+const { login, refreshToken, logout, getCurrentUser, forgotPassword, resetPassword, verifyResetToken, getCompletarPerfil, postCompletarPerfil } = require('../controllers/authController');
 const { body } = require("express-validator");
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { authLimiter } = require('../middleware/rateLimiters');
@@ -48,6 +48,22 @@ router.post('/reset-password/:token',
         body('password', 'La contraseña debe tener al menos 6 caracteres').isLength({ min: 6 })
     ],
     authLimiter,resetPassword
+);
+
+// --- Enlaces públicos sin autenticación para completar perfil (firma HMAC) ---
+// Validar enlace y obtener nombre + si requiere password (404 silencioso si la firma no es válida)
+router.get('/completar-perfil/:id/:firma',
+    authLimiter,
+    getCompletarPerfil
+);
+
+// Guardar password nuevo y emitir sesión iniciada (mismo mecanismo que auth.login)
+router.post('/completar-perfil/:id/:firma',
+    [
+        body('password', 'La contraseña debe tener al menos 6 caracteres').isLength({ min: 6 })
+    ],
+    authLimiter,
+    postCompletarPerfil
 );
 
 module.exports = router;

@@ -6,6 +6,8 @@ const Calificacion = require("../models/calificacionesModels");
 const Pagovisita = require("../models/pagoVisitaModel");
 const Cuenta = require("../models/cuentasModel");
 const Cotizacion = require("../models/cotizacionModel");
+const Config = require("../models/configModel");
+const { sequelize } = require("../config/database");
 const { Op, Sequelize } = require("sequelize");
 
 // Obtener estadísticas de pagos con filtros
@@ -1156,6 +1158,142 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
 };
 
 
+// POST /solicitudservicio/asistida (Técnico).
+// Crea la solicitud con estado 'asignado' al técnico autenticado, sin hasProfilePhoto ni pago_visita externo.
+// En la misma transacción registra PagoVisita con estado 'aprobado' usando el costo actual.
+const crearSolicitudAsistida = async (req, res) => {
+    try {
+        const { id_cliente, id_servicio, descripcion, colonia, direccion_precisa } = req.body || {};
+
+        const rolUsuarioReq = (req.user && req.user.rol) ? req.user.rol.toLowerCase() : '';
+        if (rolUsuarioReq !== 'tecnico' && rolUsuarioReq !== 'administrador') {
+            return res.status(403).json({ success: false, error: 'Solo un técnico o administrador puede usar este endpoint.' });
+        }
+
+        if (!id_cliente || !Number.isInteger(Number(id_cliente)) || Number(id_cliente) < 1) {
+            return res.status(400).json({ success: false, error: 'id_cliente es obligatorio (entero positivo).' });
+        }
+        if (!id_servicio || !Number.isInteger(Number(id_servicio)) || Number(id_servicio) < 1) {
+            return res.status(400).json({ success: false, error: 'id_servicio es obligatorio (entero positivo).' });
+        }
+        if (!descripcion || typeof descripcion !== 'string' || descripcion.trim().length < 3) {
+            return res.status(400).json({ success: false, error: 'La descripción es obligatoria (mínimo 3 caracteres).' });
+        }
+        if (!colonia || typeof colonia !== 'string' || colonia.trim().length < 2) {
+            return res.status(400).json({ success: false, error: 'La colonia es obligatoria (mínimo 2 caracteres).' });
+        }
+        if (!direccion_precisa || typeof direccion_precisa !== 'string' || direccion_precisa.trim().length < 5) {
+            return res.status(400).json({ success: false, error: 'La dirección precisa es obligatoria (mínimo 5 caracteres).' });
+        }
+
+        const idCliente = Number(id_cliente);
+        const idServicio = Number(id_servicio);
+        const idCiudad = req.user.id_ciudad || 1;
+        const idTecnico = req.user.id_usuario;
+
+        const cliente = await Usuario.findByPk(idCliente, { attributes: { exclude: ['password_hash'] } });
+        if (!cliente) {
+            return res.status(404).json({ success: false, error: 'Cliente no encontrado.' });
+        }
+
+        const servicio = await Servicio.findByPk(idServicio);
+        if (!servicio) {
+            return res.status(404).json({ success: false, error: 'Servicio no encontrado.' });
+        }
+
+        // Resolver costo de visita desde config
+        let costoVisita = 150;
+        try {
+            const cfg = await Config.findOne({ where: { tipo_config: 'visita_tecnico' } });
+            if (cfg && cfg.valor && !isNaN(Number(cfg.valor))) {
+                costoVisita = Number(cfg.valor);
+            }
+        } catch (cfgErr) {
+            console.warn('[crearSolicitudAsistida] Error obteniendo config visita_tecnico, usando default 150:', cfgErr.message);
+        }
+
+        // Resolver id_cuenta para PagoVisita. Primera cuenta disponible; si no hay, crear una placeholder.
+        let cuenta = null;
+        try {
+            cuenta = await Cuenta.findOne({ order: [['id_cuenta', 'ASC']], raw: true });
+            if (!cuenta) {
+                console.warn('[crearSolicitudAsistida] No hay cuentas registradas; creando cuenta placeholder interna.');
+                const idCuentaPlaceholder = req.user.id_ciudad || 1;
+                const placeholder = await Cuenta.create({
+                    banco: 'Cuenta Interna ProHogar',
+                    beneficiario: 'ProHogar',
+                    num_cuenta: '0000000000',
+                    tipo: 'Interna',
+                    activo: 1,
+                    id_ciudad: idCuentaPlaceholder
+                }).catch(err => {
+                    console.warn('[crearSolicitudAsistida] Fallo creando cuenta placeholder; intentamos con id_cuenta=1', err.message);
+                    return null;
+                });
+                if (placeholder) {
+                    cuenta = placeholder.get({ plain: true });
+                }
+            }
+        } catch (cuentaErr) {
+            console.warn('[crearSolicitudAsistida] Error resolviendo cuenta:', cuentaErr.message);
+        }
+        const idCuentaFinal = (cuenta && cuenta.id_cuenta) ? cuenta.id_cuenta : 1;
+
+        const t = await sequelize.transaction();
+        try {
+            const solicitudCreada = await SolicitudServicio.create({
+                id_usuario: idCliente,
+                id_servicio: idServicio,
+                id_ciudad: idCiudad,
+                id_tecnico: idTecnico,
+                colonia: colonia.trim(),
+                direccion_precisa: direccion_precisa.trim(),
+                descripcion: descripcion.trim(),
+                estado: 'asignado',
+                pagar_visita: true
+            }, { transaction: t });
+
+            const comprobante = `ASISTIDO-${solicitudCreada.id_solicitud}`;
+            const pagoVisitaCreado = await Pagovisita.create({
+                id_usuario: idCliente,
+                id_solicitud: solicitudCreada.id_solicitud,
+                id_cuenta: idCuentaFinal,
+                monto: costoVisita,
+                num_comprobante: comprobante,
+                fecha: new Date(),
+                estado: 'aprobado'
+            }, { transaction: t });
+
+            await t.commit();
+
+            return res.status(201).json({
+                success: true,
+                solicitud: solicitudCreada,
+                pagoVisita: pagoVisitaCreado,
+                cliente,
+                servicio,
+                costoVisita,
+                mensaje: 'Solicitud asistida creada y pago de visita marcado como aprobado.'
+            });
+        } catch (txErr) {
+            await t.rollback();
+            console.error('[crearSolicitudAsistida] Error en transacción:', txErr);
+            return res.status(500).json({
+                success: false,
+                error: 'Error al guardar la solicitud asistida.',
+                details: process.env.NODE_ENV === 'development' ? txErr.message : undefined
+            });
+        }
+    } catch (error) {
+        console.error('[ERROR] crearSolicitudAsistida:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error interno en crearSolicitudAsistida.',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 module.exports = {
     obtenerEstadisticasPagos,
     obtenerSolicitudesPorTecnico,
@@ -1170,5 +1308,6 @@ module.exports = {
     eliminarSolicitudServicio,
     verificarPagosPendientes,
     obtenerGraficaServiciosTipoPorCiudad,
-    obtenerGraficaTecnicosServiciosPorCiudad
+    obtenerGraficaTecnicosServiciosPorCiudad,
+    crearSolicitudAsistida
 };
