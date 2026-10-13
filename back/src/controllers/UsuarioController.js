@@ -21,21 +21,21 @@ const { sendWhatsAppBusinessMessage } = require('../utils/whatsappBusiness');
 
 // Normalización de teléfono (reutiliza la lógica de authController para búsqueda consistente)
 const normalizarTelefono = (phone) => {
-  if (!phone) return [];
-  let clean = phone.replace(/[\s\-()]/g, '');
-  if (clean.startsWith('+')) clean = clean.substring(1);
-  const variantes = [clean];
-  if (clean.startsWith('504') && clean.length > 8) variantes.push(clean.substring(3));
-  if (clean.startsWith('00504') && clean.length > 9) variantes.push(clean.substring(5));
-  if (!clean.startsWith('504') && clean.length <= 8) variantes.push('504' + clean);
-  return variantes;
+    if (!phone) return [];
+    let clean = phone.replace(/[\s\-()]/g, '');
+    if (clean.startsWith('+')) clean = clean.substring(1);
+    const variantes = [clean];
+    if (clean.startsWith('504') && clean.length > 8) variantes.push(clean.substring(3));
+    if (clean.startsWith('00504') && clean.length > 9) variantes.push(clean.substring(5));
+    if (!clean.startsWith('504') && clean.length <= 8) variantes.push('504' + clean);
+    return variantes;
 };
 
 // Limpia el teléfono solo con dígitos, asegurando prefijo 504 HN si son 8 dígitos
 const limpiarTelefono = (phone) => {
-  if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
-  return digits.length === 8 ? `504${digits}` : digits;
+    if (!phone) return '';
+    const digits = phone.replace(/\D/g, '');
+    return digits.length === 8 ? `504${digits}` : digits;
 };
 
 // Verificar perfil de técnico
@@ -1106,7 +1106,7 @@ const obtenerTecnicosYAdminsPorCiudad = async (req, res) => {
 //Obtener Usuario por ID
 const obtenerUsuarioPorId = async (req, res) => {
     const { id } = req.params;
-    
+
     console.log(`👤 [UserBack] Solicitando perfil para ID: ${id}`);
 
     if (!id) {
@@ -1349,11 +1349,11 @@ const crearUsuario = async (req, res) => {
         }
 
         // --- VALIDACIONES DE DATOS FALSOS ---
-        
+
         // 1. Validar nombre falso (ej. Fulano de Tal)
         const nombreLower = nombre.toLowerCase().trim();
         const nombresFalsosExactos = ['fulano de tal', 'fulano detalt', 'test user', 'dummy user'];
-        
+
         if (nombresFalsosExactos.includes(nombreLower) || nombreLower.includes('prueba')) {
             return res.status(400).json({
                 success: false,
@@ -2216,7 +2216,7 @@ const registroAsistido = async (req, res) => {
         const enlaceCompletar = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/completar-perfil/${nuevoUsuario.id_usuario}/${firma}`;
 
         const nombreTecnico = req.user.nombre ? req.user.nombre.trim() : 'un técnico';
-        const mensaje = `¡Hola ${nombreLimpio}! ${nombreTecnico} (técnico de ProHogar) ya registró tu servicio. Para completar tu perfil y gestionar tus servicios entra a: ${enlaceCompletar}`;
+        const mensaje = `¡Hola ${nombreLimpio}! Soy ${nombreTecnico} (técnico de MiSeguro). Su servicio ha sido registrado ✅ Para completar su perfil y ver el seguimiento de clic aquí: ${enlaceCompletar}`;
 
         let whatsapp_enviado = null;
         let wa_me = null;
