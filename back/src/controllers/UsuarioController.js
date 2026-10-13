@@ -2216,7 +2216,7 @@ const registroAsistido = async (req, res) => {
         const enlaceCompletar = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/completar-perfil/${nuevoUsuario.id_usuario}/${firma}`;
 
         const nombreTecnico = req.user.nombre ? req.user.nombre.trim() : 'un técnico';
-        const mensaje = `¡Hola ${nombreLimpio}! Soy ${nombreTecnico} (técnico de MiSeguro). Su servicio ha sido registrado ✅ Para completar su perfil y ver el seguimiento de clic aquí: ${enlaceCompletar}`;
+        const mensaje = `¡Hola ${nombreLimpio}! Soy ${nombreTecnico} (técnico de MiSeguro). Su servicio ha sido registrado existosamente. Para completar su perfil y ver el seguimiento del mismo haga clic aquí: ${enlaceCompletar}`;
 
         let whatsapp_enviado = null;
         let wa_me = null;
