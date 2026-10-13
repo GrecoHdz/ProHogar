@@ -2147,7 +2147,7 @@ const registroAsistido = async (req, res) => {
         const telefonoLimpio = limpiarTelefono(telefono);
         const variantesPhone = normalizarTelefono(telefono);
 
-        // 1) Buscar primero por teléfono (múltiples variantes)
+        // 1) Buscar primero por teléfono (múltiples variantes: con/sin prefijo 504)
         let usuarioExistente = null;
         for (const variant of variantesPhone) {
             usuarioExistente = await Usuario.findOne({
@@ -2156,11 +2156,34 @@ const registroAsistido = async (req, res) => {
             });
             if (usuarioExistente) break;
         }
+
+        // 2) Fallback: buscar por los últimos 8 dígitos (maneja prefijo extra)
         if (!usuarioExistente) {
             const lastEight = telefonoLimpio.slice(-8);
             if (lastEight.length >= 7) {
                 usuarioExistente = await Usuario.findOne({
                     where: { telefono: { [Op.like]: `%${lastEight}%` } },
+                    attributes: { exclude: ['password_hash'] }
+                });
+            }
+        }
+
+        // 3) Fallback SQL: normalizar el teléfono almacenado quitando espacios/guiones/paréntesis
+        //    Esto encuentra clientes antiguos cuyo teléfono se guardó con formato (ej: "9988-7766" o "9988 7766")
+        if (!usuarioExistente) {
+            const lastEight = telefonoLimpio.slice(-8);
+            const searchDigits = lastEight.length >= 7 ? lastEight : telefonoLimpio;
+            // Buscar normalizando el campo almacenado en DB via REPLACE
+            const [rows] = await sequelize.query(
+                `SELECT * FROM usuario
+                 WHERE REPLACE(REPLACE(REPLACE(REPLACE(telefono, ' ', ''), '-', ''), '(', ''), ')', '')
+                       LIKE :pattern
+                 LIMIT 1`,
+                { replacements: { pattern: `%${searchDigits}%` } }
+            );
+            if (rows && rows.length > 0) {
+                // Cargar el modelo Sequelize para obtener el objeto completo sin password_hash
+                usuarioExistente = await Usuario.findByPk(rows[0].id_usuario, {
                     attributes: { exclude: ['password_hash'] }
                 });
             }
