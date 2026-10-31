@@ -19,6 +19,7 @@ const {
     verificarPagosPendientes,
     obtenerGraficaServiciosTipoPorCiudad,
     obtenerGraficaTecnicosServiciosPorCiudad,
+    obtenerGraficaDineroTecnicosPorCiudad,
     crearSolicitudAsistida
 } = require("../controllers/SolicitudServicioController");
 const { checkRole } = require("../middleware/authMiddleware");
@@ -59,7 +60,9 @@ router.get("/grafica/servicios", validarErrores, obtenerGraficaServiciosPorTipo)
 
 // Obtener datos para Gráfico de servicios por mes
 router.get("/grafica/servicios-por-mes", [
-    query('fechaActual').optional().isISO8601().withMessage('La fecha debe tener un formato válido (YYYY-MM-DD)')
+    query('fechaActual').optional().isISO8601().withMessage('La fecha debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
 ], validarErrores, obtenerGraficaServiciosPorMes);
 
 // Obtener datos para Gráfico de servicios por ciudad
@@ -69,10 +72,22 @@ router.get("/grafica/servicios-por-ciudad", [
 ], validarErrores, obtenerGraficaServiciosPorCiudad);
  
 // Obtener datos para Gráfico de servicios por tipo agrupados por ciudad
-router.get("/grafica/servicios-tipo-ciudad", validarErrores, obtenerGraficaServiciosTipoPorCiudad);
+router.get("/grafica/servicios-tipo-ciudad", [
+    query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, obtenerGraficaServiciosTipoPorCiudad);
  
 // Obtener datos para Gráfico de servicios de técnicos por ciudad
-router.get("/grafica/servicios-tecnicos-ciudad", validarErrores, obtenerGraficaTecnicosServiciosPorCiudad);
+router.get("/grafica/servicios-tecnicos-ciudad", [
+    query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, obtenerGraficaTecnicosServiciosPorCiudad);
+
+// Obtener datos para Gráfico de dinero generado por técnicos según ciudad (mano de obra)
+router.get("/grafica/dinero-tecnicos-ciudad", [
+    query('fechaInicio').optional().isISO8601().withMessage('La fecha de inicio debe tener un formato válido (YYYY-MM-DD)'),
+    query('fechaFin').optional().isISO8601().withMessage('La fecha de fin debe tener un formato válido (YYYY-MM-DD)')
+], validarErrores, obtenerGraficaDineroTecnicosPorCiudad);
 
 // Obtener todas las solicitudes asignadas a un técnico
 router.get("/tecnico/:id_tecnico", [

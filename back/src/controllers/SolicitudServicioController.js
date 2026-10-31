@@ -364,6 +364,7 @@ const obtenerSolicitudesServicios = async (req, res) => {
                         'id_cotizacion',
                         'num_comprobante',
                         'monto_manodeobra',
+                        'monto_materiales',
                         'descuento_membresia',
                         'credito_usado',
                         'comentario'
@@ -419,12 +420,14 @@ const obtenerSolicitudesServicios = async (req, res) => {
                     id_cotizacion: plainSolicitud.cotizacion.id_cotizacion,
                     num_comprobante: plainSolicitud.cotizacion.num_comprobante,
                     monto_manodeobra: plainSolicitud.cotizacion.monto_manodeobra,
+                    monto_materiales: plainSolicitud.cotizacion.monto_materiales,
                     descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
                     credito_usado: plainSolicitud.cotizacion.credito_usado,
                     comentario: plainSolicitud.cotizacion.comentario,
-                    total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
-                        (plainSolicitud.cotizacion.descuento_membresia || 0) -
-                        (plainSolicitud.cotizacion.credito_usado || 0),
+                    total: (Number(plainSolicitud.cotizacion.monto_manodeobra) || 0) +
+                        (Number(plainSolicitud.cotizacion.monto_materiales) || 0) -
+                        (Number(plainSolicitud.cotizacion.descuento_membresia) || 0) -
+                        (Number(plainSolicitud.cotizacion.credito_usado) || 0),
                     cuenta: plainSolicitud.cotizacion.cuenta ? {
                         banco: plainSolicitud.cotizacion.cuenta.banco,
                         num_cuenta: plainSolicitud.cotizacion.cuenta.num_cuenta,
@@ -543,12 +546,14 @@ const obtenerGraficaServiciosPorTipo = async (req, res) => {
 // Obtener datos para Gráfico de servicios por mes
 const obtenerGraficaServiciosPorMes = async (req, res) => {
     try {
-        const { fechaActual } = req.query;
-        const endDate = fechaActual ? new Date(fechaActual) : new Date();
+        const { fechaActual, fechaInicio, fechaFin } = req.query;
+        const endDate = fechaFin ? new Date(fechaFin) : (fechaActual ? new Date(fechaActual) : new Date());
 
-        // Calcular la fecha de inicio (12 meses atrás)
-        const startDate = new Date(endDate);
-        startDate.setMonth(startDate.getMonth() - 11); // 11 meses + el mes actual = 12 meses
+        // Calcular la fecha de inicio: rango elegido o 12 meses atrás por defecto
+        const startDate = fechaInicio ? new Date(fechaInicio) : new Date(endDate);
+        if (!fechaInicio) {
+            startDate.setMonth(startDate.getMonth() - 11); // 11 meses + el mes actual = 12 meses
+        }
         startDate.setDate(1); // Primer día del mes
         startDate.setHours(0, 0, 0, 0);
 
@@ -1025,10 +1030,23 @@ const eliminarSolicitudServicio = async (req, res) => {
 // Obtener datos para Gráfico de solicitudes de servicios por tipo agrupados por ciudad
 const obtenerGraficaServiciosTipoPorCiudad = async (req, res) => {
     try {
-        const { id_ciudad } = req.query;
+        const { id_ciudad, fechaInicio, fechaFin } = req.query;
         const whereCondition = {};
         if (id_ciudad && id_ciudad !== 'all') {
             whereCondition.id_ciudad = id_ciudad;
+        }
+
+        // Filtro por rango de fechas
+        if (fechaInicio || fechaFin) {
+            whereCondition.fecha_solicitud = {};
+            if (fechaInicio) {
+                whereCondition.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereCondition.fecha_solicitud[Op.lte] = finDia;
+            }
         }
 
         const data = await SolicitudServicio.findAll({
@@ -1103,13 +1121,26 @@ const obtenerGraficaServiciosTipoPorCiudad = async (req, res) => {
 // Obtener datos para Gráfico de servicios de técnicos por ciudad (Ciudad del técnico)
 const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
     try {
-        const { id_ciudad } = req.query;
+        const { id_ciudad, fechaInicio, fechaFin } = req.query;
         const whereCondition = {
             id_tecnico: { [Op.not]: null }
         };
         
         if (id_ciudad && id_ciudad !== 'all') {
             whereCondition.id_ciudad = id_ciudad;
+        }
+
+        // Filtro por rango de fechas
+        if (fechaInicio || fechaFin) {
+            whereCondition.fecha_solicitud = {};
+            if (fechaInicio) {
+                whereCondition.fecha_solicitud[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereCondition.fecha_solicitud[Op.lte] = finDia;
+            }
         }
 
         const isSpecificCity = id_ciudad && id_ciudad !== 'all';
@@ -1153,6 +1184,82 @@ const obtenerGraficaTecnicosServiciosPorCiudad = async (req, res) => {
         });
     } catch (error) {
         console.error('Error en obtenerGraficaTecnicosServiciosPorCiudad:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener datos del gráfico' });
+    }
+};
+
+// Obtener datos para Gráfico de dinero generado por técnicos (mano de obra) según la ciudad del técnico
+const obtenerGraficaDineroTecnicosPorCiudad = async (req, res) => {
+    try {
+        const { id_ciudad, fechaInicio, fechaFin } = req.query;
+        const isSpecificCity = id_ciudad && id_ciudad !== 'all';
+
+        // Condición de la cotización (solo confirmadas = dinero efectivamente generado)
+        const whereCotizacion = { estado: 'confirmado' };
+        if (fechaInicio || fechaFin) {
+            whereCotizacion.fecha = {};
+            if (fechaInicio) {
+                whereCotizacion.fecha[Op.gte] = new Date(fechaInicio);
+            }
+            if (fechaFin) {
+                const finDia = new Date(fechaFin);
+                finDia.setHours(23, 59, 59, 999);
+                whereCotizacion.fecha[Op.lte] = finDia;
+            }
+        }
+
+        // Condición de la solicitud (con técnico asignado y opcionalmente por ciudad)
+        const whereSolicitud = { id_tecnico: { [Op.not]: null } };
+        if (isSpecificCity) {
+            whereSolicitud.id_ciudad = id_ciudad;
+        }
+
+        const labelAttribute = isSpecificCity
+            ? [Sequelize.col('solicitud.tecnico.nombre'), 'label']
+            : [Sequelize.col('solicitud.tecnico.ciudad.nombre_ciudad'), 'label'];
+
+        const data = await Cotizacion.findAll({
+            where: whereCotizacion,
+            include: [{
+                model: SolicitudServicio,
+                as: 'solicitud',
+                required: true,
+                attributes: [],
+                where: whereSolicitud,
+                include: [{
+                    model: Usuario,
+                    as: 'tecnico',
+                    required: true,
+                    attributes: [],
+                    include: isSpecificCity ? [] : [{
+                        model: Ciudad,
+                        as: 'ciudad',
+                        required: true,
+                        attributes: []
+                    }]
+                }]
+            }],
+            attributes: [
+                labelAttribute,
+                [Sequelize.fn('SUM', Sequelize.col('Cotizacion.monto_manodeobra')), 'total']
+            ],
+            group: [isSpecificCity ? 'solicitud.tecnico.nombre' : 'solicitud.tecnico.ciudad.nombre_ciudad'],
+            order: [[Sequelize.literal('total'), 'DESC']],
+            raw: true
+        });
+
+        const labels = data.map(item => item.label);
+        const totals = data.map(item => parseFloat(item.total || 0));
+
+        res.json({
+            success: true,
+            data: {
+                labels: labels,
+                data: totals
+            }
+        });
+    } catch (error) {
+        console.error('Error en obtenerGraficaDineroTecnicosPorCiudad:', error);
         res.status(500).json({ success: false, error: 'Error al obtener datos del gráfico' });
     }
 };
@@ -1309,5 +1416,6 @@ module.exports = {
     verificarPagosPendientes,
     obtenerGraficaServiciosTipoPorCiudad,
     obtenerGraficaTecnicosServiciosPorCiudad,
+    obtenerGraficaDineroTecnicosPorCiudad,
     crearSolicitudAsistida
 };

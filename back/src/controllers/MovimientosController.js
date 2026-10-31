@@ -2166,61 +2166,35 @@ const getServiciosPorTipo = async (req, res) => {
     try {
         const { id_tecnico } = req.params;
 
-        // Obtener servicios por tipo para el técnico
-        const [serviciosPorTipo, movimientosIngreso] = await Promise.all([
-            // Consulta original para servicios
-            SolicitudServicio.findAll({
-                attributes: [
-                    [Sequelize.col('servicio.nombre'), 'tipo_servicio'],
-                    [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'cantidad']
-                ],
-                include: [{
-                    model: Servicio,
-                    as: 'servicio',
-                    attributes: [],
-                    required: true
-                }],
-                where: {
-                    id_tecnico: id_tecnico,
-                    estado: {
-                        [Op.in]: ['finalizado', 'calificado']
-                    }
-                },
-                group: ['servicio.nombre'],
-                order: [[Sequelize.literal('cantidad'), 'DESC']],
-                raw: true
-            }),
-            // Consulta para movimientos de ingreso completados
-            Movimiento.findAll({
-                attributes: [
-                    [Sequelize.literal("REPLACE(descripcion, 'Ingreso por ', '')"), 'descripcion'],
-                    [Sequelize.fn('COUNT', Sequelize.col('id_movimiento')), 'cantidad']
-                ],
-                where: {
-                    id_usuario: id_tecnico,
-                    tipo: 'ingreso',
-                    estado: 'completado',
-                    descripcion: { [Op.not]: null }
-                },
-                group: ['descripcion'],
-                order: [[Sequelize.literal('cantidad'), 'DESC']],
-                raw: true
-            })
-        ]);
+        // Obtener servicios por tipo real para el técnico
+        // (solo tipos de servicio, no descripciones de movimientos)
+        const serviciosPorTipo = await SolicitudServicio.findAll({
+            attributes: [
+                [Sequelize.col('servicio.nombre'), 'tipo_servicio'],
+                [Sequelize.fn('COUNT', Sequelize.col('solicitudservicio.id_solicitud')), 'cantidad']
+            ],
+            include: [{
+                model: Servicio,
+                as: 'servicio',
+                attributes: [],
+                required: true
+            }],
+            where: {
+                id_tecnico: id_tecnico,
+                estado: {
+                    [Op.in]: ['finalizado', 'calificado']
+                }
+            },
+            group: ['servicio.nombre'],
+            order: [[Sequelize.literal('cantidad'), 'DESC']],
+            raw: true
+        });
 
         // Formatear el resultado de servicios
         const resultado = serviciosPorTipo.map(item => ({
             tipo: item.tipo_servicio,
             cantidad: parseInt(item.cantidad)
         }));
-
-        // Agregar movimientos de ingreso al resultado
-        movimientosIngreso.forEach(movimiento => {
-            resultado.push({
-                tipo: movimiento.descripcion,
-                cantidad: parseInt(movimiento.cantidad)
-            });
-        });
 
         res.json(resultado);
     } catch (error) {
