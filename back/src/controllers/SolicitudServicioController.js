@@ -1240,7 +1240,8 @@ const obtenerGraficaDineroTecnicosPorCiudad = async (req, res) => {
             }],
             attributes: [
                 labelAttribute,
-                [Sequelize.fn('SUM', Sequelize.col('Cotizacion.monto_manodeobra')), 'total']
+                // Dinero generado = mano de obra menos la comisión que se queda la app
+                [Sequelize.literal('SUM(COALESCE(Cotizacion.monto_manodeobra, 0) - COALESCE(Cotizacion.monto_comision_app, 0))'), 'total']
             ],
             group: [isSpecificCity ? 'solicitud.tecnico.nombre' : 'solicitud.tecnico.ciudad.nombre_ciudad'],
             order: [[Sequelize.literal('total'), 'DESC']],
