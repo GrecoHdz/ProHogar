@@ -1316,11 +1316,20 @@ const crearUsuario = async (req, res) => {
     const id_rol = rolAsignado.id_rol;
 
     try {
+        // Normalizar el teléfono para detectar duplicados aunque el formato varíe
+        // (ej: el técnico lo guardó como "50499998888" y el cliente escribe "9999-8888")
+        const telefonoLimpio = telefono ? limpiarTelefono(telefono) : '';
+        const telefonoDigitos = telefono ? telefono.replace(/\D/g, '') : '';
+        const telefonoUltimos8 = telefonoDigitos.length >= 8 ? telefonoDigitos.slice(-8) : telefonoDigitos;
+
         // Verificar si ya existe un usuario con el mismo email, teléfono o identidad
         const orConditions = [
             { email },
             { telefono }
         ];
+        // Variantes de teléfono para detectar coincidencias con distinto formato
+        if (telefonoLimpio) orConditions.push({ telefono: telefonoLimpio });
+        if (telefonoUltimos8.length >= 7) orConditions.push({ telefono: { [Op.like]: `%${telefonoUltimos8}` } });
         // Solo verificar identidad si se proporcionó
         if (identidad) {
             orConditions.push({ identidad });
@@ -1331,10 +1340,73 @@ const crearUsuario = async (req, res) => {
         });
 
         if (usuarioExistente) {
+            // Coincidencia de teléfono tolerante al formato (con/sin prefijo 504, guiones, etc.)
+            const telefonoExistenteDigitos = (usuarioExistente.telefono || '').replace(/\D/g, '');
+            const telefonoCoincide = !!telefono && telefonoUltimos8.length >= 7 &&
+                telefonoExistenteDigitos.slice(-8) === telefonoUltimos8;
+            const esCliente = !es_tecnico && Number(usuarioExistente.id_rol) === Number(id_rol);
+            const sinPassword = !usuarioExistente.password_hash;
+            const noDeshabilitado = usuarioExistente.estado !== 'deshabilitado';
+
+            // Caso: cliente pre-registrado por un técnico (registro asistido, sin contraseña).
+            // El cliente se registra por su cuenta con el mismo teléfono. En lugar de
+            // bloquearlo con "el teléfono ya está en uso", completamos su perfil existente.
+            if (telefonoCoincide && esCliente && sinPassword && noDeshabilitado) {
+                // El email nuevo no debe pertenecer a otro usuario
+                if (email) {
+                    const emailEnUso = await Usuario.findOne({ where: { email } });
+                    if (emailEnUso && emailEnUso.id_usuario !== usuarioExistente.id_usuario) {
+                        return res.status(400).json({
+                            success: false,
+                            status: 400,
+                            error: "Error de validación",
+                            message: "El correo electrónico ya está en uso por otro usuario",
+                            field: "email"
+                        });
+                    }
+                }
+
+                const hashedPasswordCompletar = await bcrypt.hash(password_hash, saltRounds);
+                const ipRegistroCompletar = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+                // La identidad nueva no debe pertenecer a otro usuario
+                if (identidad) {
+                    const identidadEnUso = await Usuario.findOne({ where: { identidad } });
+                    if (identidadEnUso && identidadEnUso.id_usuario !== usuarioExistente.id_usuario) {
+                        return res.status(400).json({
+                            success: false,
+                            status: 400,
+                            error: "Error de validación",
+                            message: "El número de identidad ya está en uso por otro usuario",
+                            field: "identidad"
+                        });
+                    }
+                }
+
+                await usuarioExistente.update({
+                    nombre: nombre || usuarioExistente.nombre,
+                    identidad: identidad || usuarioExistente.identidad,
+                    email: email || usuarioExistente.email,
+                    password_hash: hashedPasswordCompletar,
+                    id_ciudad: id_ciudad || usuarioExistente.id_ciudad,
+                    // Conservar el device_id original si ya tenía uno
+                    device_id: usuarioExistente.device_id || req.body.device_id || null,
+                    ip_registro: ipRegistroCompletar
+                });
+
+                return res.status(200).json({
+                    status: 200,
+                    message: 'Perfil completado exitosamente',
+                    id_usuario: usuarioExistente.id_usuario,
+                    rol: 'Usuario',
+                    perfil_completado: true
+                });
+            }
+
             let field = 'dato';
 
             if (email && usuarioExistente.email?.toLowerCase() === email.toLowerCase()) field = 'correo electrónico';
-            else if (telefono && usuarioExistente.telefono === telefono) field = 'teléfono';
+            else if (telefonoCoincide) field = 'teléfono';
             else if (identidad && usuarioExistente.identidad?.replace(/\D/g, '') === identidad.replace(/\D/g, '')) field = 'número de identidad';
 
             return res.status(400).json({

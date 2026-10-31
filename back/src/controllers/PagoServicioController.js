@@ -1,6 +1,7 @@
 const Cotizacion = require("../models/cotizacionModel");
 const SolicitudServicio = require("../models/solicitudServicioModel");
 const Movimiento = require("../models/movimientosModel");
+const PagoVisita = require("../models/pagoVisitaModel");
 const CreditoUsuario = require("../models/creditoUsuariosModel");
 const Referido = require("../models/referidosModel");
 const Config = require("../models/configModel");
@@ -21,6 +22,7 @@ const processPayment = async (req, res) => {
       id_cuenta,
       num_comprobante,
       monto_manodeobra,
+      monto_visita,
       descuento_membresia,
       id_usuario,
       monto_credito,
@@ -38,6 +40,7 @@ const processPayment = async (req, res) => {
     // normalizar montos
     const montoManoDeObra = Number.isFinite(parseFloat(monto_manodeobra)) ? parseFloat(monto_manodeobra) : 0;
     const creditoUsadoInput = Number.isFinite(parseFloat(monto_credito)) ? parseFloat(monto_credito) : 0;
+    const montoVisitaInput = Number.isFinite(parseFloat(monto_visita)) ? parseFloat(monto_visita) : 0;
 
     // 0️⃣ Obtener cotización y solicitud y validarlas
     const cotizacion = await Cotizacion.findByPk(id_cotizacion, { transaction: t });
@@ -70,6 +73,28 @@ const processPayment = async (req, res) => {
 
     // 2️⃣ Actualizar solicitud a "verificando_pagoservicio"
     await solicitud.update({ estado: 'verificando_pagoservicio' }, { transaction: t });
+
+    // 2.1️⃣ Si el servicio lo inició el técnico, la visita se registró automáticamente
+    //       con el comprobante "ASISTIDO-". Guardar el comprobante real con el que el
+    //       cliente pagó la visita incluida en el monto total.
+    if (montoVisitaInput > 0) {
+      const pagoVisita = await PagoVisita.findOne({
+        where: { id_solicitud },
+        order: [['id_pagovisita', 'DESC']],
+        transaction: t
+      });
+
+      if (pagoVisita && String(pagoVisita.num_comprobante || '').startsWith('ASISTIDO-')) {
+        await pagoVisita.update(
+          {
+            id_cuenta,
+            num_comprobante,
+            fecha: new Date()
+          },
+          { transaction: t }
+        );
+      }
+    }
 
     // 3️⃣ Buscar si el usuario tiene un referido (no obligatorio)
     const referido = await Referido.findOne({

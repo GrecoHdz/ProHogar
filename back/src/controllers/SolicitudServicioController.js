@@ -735,6 +735,11 @@ const obtenerSolicitudServicioPorUsuario = async (req, res) => {
                 model: Usuario,
                 as: 'tecnico',
                 attributes: ['nombre', 'imagen_url']
+            },
+            {
+                model: Pagovisita,
+                as: 'pagoVisita',
+                attributes: ['monto', 'num_comprobante']
             }
             ],
             order: [['fecha_solicitud', 'DESC']],
