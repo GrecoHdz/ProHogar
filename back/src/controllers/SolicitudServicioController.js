@@ -424,10 +424,9 @@ const obtenerSolicitudesServicios = async (req, res) => {
                     descuento_membresia: plainSolicitud.cotizacion.descuento_membresia,
                     credito_usado: plainSolicitud.cotizacion.credito_usado,
                     comentario: plainSolicitud.cotizacion.comentario,
-                    total: (Number(plainSolicitud.cotizacion.monto_manodeobra) || 0) +
-                        (Number(plainSolicitud.cotizacion.monto_materiales) || 0) -
-                        (Number(plainSolicitud.cotizacion.descuento_membresia) || 0) -
-                        (Number(plainSolicitud.cotizacion.credito_usado) || 0),
+                    total: (plainSolicitud.cotizacion.monto_manodeobra || 0) -
+                        (plainSolicitud.cotizacion.descuento_membresia || 0) -
+                        (plainSolicitud.cotizacion.credito_usado || 0),
                     cuenta: plainSolicitud.cotizacion.cuenta ? {
                         banco: plainSolicitud.cotizacion.cuenta.banco,
                         num_cuenta: plainSolicitud.cotizacion.cuenta.num_cuenta,
