@@ -1324,6 +1324,13 @@ const crearSolicitudAsistida = async (req, res) => {
             console.warn('[crearSolicitudAsistida] Error obteniendo config visita_tecnico, usando default 150:', cfgErr.message);
         }
 
+        // Viaje Privado y Barbería no cobran visita: su flujo no incluye ese costo
+        const nombreServicio = (servicio.nombre || '').trim().toLowerCase();
+        const servicioSinVisita = ['viaje privado', 'barbería', 'barberia'].includes(nombreServicio);
+        if (servicioSinVisita) {
+            costoVisita = 0;
+        }
+
         // Resolver id_cuenta para PagoVisita. Primera cuenta disponible; si no hay, crear una placeholder.
         let cuenta = null;
         try {
@@ -1362,19 +1369,23 @@ const crearSolicitudAsistida = async (req, res) => {
                 direccion_precisa: direccion_precisa.trim(),
                 descripcion: descripcion.trim(),
                 estado: 'asignado',
-                pagar_visita: true
+                pagar_visita: !servicioSinVisita
             }, { transaction: t });
 
-            const comprobante = `ASISTIDO-${solicitudCreada.id_solicitud}`;
-            const pagoVisitaCreado = await Pagovisita.create({
-                id_usuario: idCliente,
-                id_solicitud: solicitudCreada.id_solicitud,
-                id_cuenta: idCuentaFinal,
-                monto: costoVisita,
-                num_comprobante: comprobante,
-                fecha: new Date(),
-                estado: 'aprobado'
-            }, { transaction: t });
+            // Solo se registra el pago de visita si el servicio lo cobra
+            let pagoVisitaCreado = null;
+            if (!servicioSinVisita) {
+                const comprobante = `ASISTIDO-${solicitudCreada.id_solicitud}`;
+                pagoVisitaCreado = await Pagovisita.create({
+                    id_usuario: idCliente,
+                    id_solicitud: solicitudCreada.id_solicitud,
+                    id_cuenta: idCuentaFinal,
+                    monto: costoVisita,
+                    num_comprobante: comprobante,
+                    fecha: new Date(),
+                    estado: 'aprobado'
+                }, { transaction: t });
+            }
 
             await t.commit();
 
@@ -1385,7 +1396,9 @@ const crearSolicitudAsistida = async (req, res) => {
                 cliente,
                 servicio,
                 costoVisita,
-                mensaje: 'Solicitud asistida creada y pago de visita marcado como aprobado.'
+                mensaje: servicioSinVisita
+                    ? 'Solicitud asistida creada (servicio sin cobro de visita).'
+                    : 'Solicitud asistida creada y pago de visita marcado como aprobado.'
             });
         } catch (txErr) {
             await t.rollback();
