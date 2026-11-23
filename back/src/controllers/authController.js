@@ -553,10 +553,12 @@ const forgotPassword = async (req, res) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
+    // Se almacena únicamente el hash SHA-256 del token; el token en claro solo viaja en el correo
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
 
     await user.update({
-      reset_password_token: resetToken,
+      reset_password_token: resetTokenHash,
       reset_password_expires: resetTokenExpiry
     });
 
@@ -597,8 +599,7 @@ const forgotPassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Se ha enviado un enlace de restablecimiento a tu correo electrónico',
-      resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined
+      message: 'Se ha enviado un enlace de restablecimiento a tu correo electrónico'
     });
 
   } catch (error) {
@@ -606,8 +607,8 @@ const forgotPassword = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error al procesar la solicitud de restablecimiento de contraseña',
-      details: error.message, // Enviamos el mensaje de error para debuguear incluso si no es development por ahora
-      code: error.code
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      code: process.env.NODE_ENV === 'development' ? error.code : undefined
     });
   }
 };
@@ -624,9 +625,12 @@ const verifyResetToken = async (req, res) => {
   }
 
   try {
+    // El token recibido se hashea para compararlo con el hash almacenado
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
     const user = await Usuario.findOne({
       where: {
-        reset_password_token: token
+        reset_password_token: tokenHash
       },
       attributes: ['id_usuario', 'email', 'reset_password_expires']
     });
@@ -666,9 +670,12 @@ const resetPassword = async (req, res) => {
   const { password } = req.body;
 
   try {
+    // El token recibido se hashea para compararlo con el hash almacenado
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
     const user = await Usuario.findOne({
       where: {
-        reset_password_token: token,
+        reset_password_token: tokenHash,
         reset_password_expires: { [Op.gt]: new Date() }
       }
     });
@@ -687,6 +694,11 @@ const resetPassword = async (req, res) => {
       password_hash: hashedPassword,
       reset_password_token: null,
       reset_password_expires: null
+    });
+
+    // Revocar todas las sesiones activas del usuario al cambiar la contraseña
+    await RefreshToken.destroy({
+      where: { usuario_id: user.id_usuario }
     });
 
     res.status(200).json({
